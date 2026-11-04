@@ -83,6 +83,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .tbtn.shield { right: calc(98px + env(safe-area-inset-right, 0px)); bottom: calc(214px + env(safe-area-inset-bottom, 0px)); width: 62px; height: 62px; background: rgba(120,140,255,.35); font-size: 11px; }
 .boosts { font-size: 12px; opacity: .9; } .stats.god { background: #b8233a; color: #fff; font-weight: 700; }
 .touch-on .boosts { display: none; }
+.hud-btns { display: flex; gap: 6px; pointer-events: auto; } .hud-chip { font-size: 11px; padding: 5px 10px; background: rgba(11,13,31,.7); }
 .prof-chip { align-self: flex-start; margin-bottom: 6px; } .prof-chip b { color: var(--taxi); }
 .gate { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: radial-gradient(ellipse at 50% 30%, rgba(30,24,70,.55), rgba(5,6,16,.9)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .gate-card { width: min(480px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: rgba(18,20,44,.92); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.5), 0 0 40px rgba(255,196,61,.12); }
@@ -245,6 +246,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
     <div class="stats"><b id="coins">0</b> монет · <b id="kills">0</b> сбито</div>
     <div id="boosts" class="stats boosts"></div>
     <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
+    <div class="hud-btns"><button id="btnView" class="chip hud-chip" type="button">Вид</button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
     <button id="mute" class="mute" type="button">Звук: вкл</button>
   </div>
   <div id="bars" class="bars" hidden></div>
@@ -334,6 +336,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
@@ -396,7 +399,8 @@ const FinalShader = {
     '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
     '  c = mix(c, c * vec3(0.86, 0.98, 1.14), (1.0 - smoothstep(0.0, 0.45, l)) * 0.35);',  // cool, teal-blue shadows
     '  c = mix(c, c * vec3(1.08, 1.0, 0.88), smoothstep(0.45, 1.0, l) * 0.3);',          // warm highlights
-    '  c = mix(vec3(l), c, 1.08);',                                                       // a touch more saturation
+    '  c = mix(vec3(l), c, 0.92);',                                                       // slightly muted colours: less cartoon
+    '  c = mix(c, c * c * (3.0 - 2.0 * c), 0.22);',                                       // a gentle S-curve for contrast
     '  c *= 1.0 - r2 * 0.65;',
     '  vec3 o = toSRGB(c) + (hash(vUv * 900.0 + fract(time * 7.0)) - 0.5) * 0.028;',     // fine film grain
     '  gl_FragColor = vec4(o, 1.0);',
@@ -819,7 +823,7 @@ function buildWorld() {
   const bld = {}; BT.forEach((t) => { bld[t] = [[], [], [], []]; });
   const putBld = (t, x, z, ry, sy, S, collide) => {
     const v = Math.floor(srand() * 4);
-    if (inBankBlock(x, z) || inSquare(x, z) || inCanalBand(x, z, 9)) return;
+    if (inBankBlock(x, z) || inSquare(x, z) || inCanalBand(x, z, 9) || isTowerSite(x, z) || isFactorySite(x, z) || (Math.abs(x - EXPRESS.x) < 14 && z < -180)) return;
     bld[t][v].push({ x, y: -0.4, z, ry, sx: S, sy: S * sy, sz: S });
     if (!collide) return;
     const hw = (WIDE[t] ? 1.0 : 0.62) * S, z0 = -0.66 * S, z1 = 0.82 * S, c = Math.round(Math.cos(ry)), sn = Math.round(Math.sin(ry));
@@ -888,7 +892,7 @@ function buildWorld() {
   kitInstances('streetlight', lamps, KIT.prop, true);
   kitInstances('trafficlight_A', tlights, KIT.prop, true);
 
-  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks();
+  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale();
 
   // one material per batch: a few draw calls for the whole city
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -904,7 +908,7 @@ function buildWorld() {
   meshB(B.water, new THREE.MeshStandardMaterial({ color: 0x0b2236, roughness: 0.08, metalness: 0.2, envMapIntensity: 1.8, vertexColors: true }), false);
   KIT.bankLight = meshB(B.bankL, new THREE.MeshBasicMaterial({ vertexColors: true }), false).material;
   const alarm = meshB(B.bankA, new THREE.MeshBasicMaterial({ vertexColors: true }), false); alarm.visible = false; KIT.bankAlarm = alarm;
-  buildAtmosphere();
+  buildAtmosphere(); finishCityScale();
   makeEnvironment();
 }
 
@@ -1416,6 +1420,136 @@ function atmoMood(m) {
   ATMO.clouds.material.color.setRGB(1.1, 1.0, 1.25).multiplyScalar(m === 'dawn' ? 1.6 : m === 'blackout' ? 0.6 : 1);
 }
 
+// ---------------- city scale: downtown towers, industrial zone, the expressway with a bay bridge, a far skyline ----------------
+const TOWERS = [[120, 40, 78], [40, 120, 104], [120, 120, 128]];   // block centre x, z and height
+const FACTORIES = [[-40, -120], [40, -120]];
+const EXPRESS = { x: 80, y: 11.2, w: 16 };
+const isTowerSite = (x, z) => TOWERS.some(([tx, tz]) => Math.abs(x - tx) < 1 && Math.abs(z - tz) < 1);
+const isFactorySite = (x, z) => FACTORIES.some(([tx, tz]) => Math.abs(x - tx) < 1 && Math.abs(z - tz) < 1);
+let towerMat = null, skyMatFar = null;
+function windowTextures() {
+  // a facade grid: dark glass with randomly lit offices (emissive map) and mullions (colour map)
+  const W = 256, H = 512, cols = 8, rows = 16, cw = W / cols, ch = H / rows;
+  const lit = []; for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) lit.push(Math.random() < 0.42 ? (Math.random() < 0.2 ? 2 : 1) : 0);
+  const map = canvasTex(W, H, (g) => {
+    g.fillStyle = '#1c2230'; g.fillRect(0, 0, W, H);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const gr = g.createLinearGradient(0, r * ch, 0, r * ch + ch); gr.addColorStop(0, '#3a4a62'); gr.addColorStop(1, '#202a3a'); g.fillStyle = gr; g.fillRect(c * cw + 2, r * ch + 3, cw - 4, ch - 6); }
+    g.fillStyle = '#5a6272'; for (let c = 0; c <= cols; c++) g.fillRect(c * cw - 1, 0, 2, H); for (let r = 0; r <= rows; r++) g.fillRect(0, r * ch - 1, W, 3);
+  });
+  const em = canvasTex(W, H, (g) => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    lit.forEach((v, i) => { if (!v) return; const r = Math.floor(i / cols), c = i % cols; g.fillStyle = v === 2 ? '#bcd8ff' : pick(['#ffd9a0', '#ffe6b8', '#ffc880']); g.fillRect(c * cw + 3, r * ch + 4, cw - 6, ch - 8); });
+  });
+  for (const t of [map, em]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+  return { map, em };
+}
+function buildCityScale() {
+  const tex = windowTextures();
+  towerMat = new THREE.MeshStandardMaterial({ map: tex.map, emissiveMap: tex.em, emissive: new THREE.Color(1, 0.92, 0.8), emissiveIntensity: 1.4, roughness: 0.18, metalness: 0.6, envMapIntensity: 1.4 });
+  B.tower = batch();
+  const facade = (x0, y0, z0, x1, y1, z1) => boxB(B.tower, x0, y0, z0, x1, y1, z1, { us: 1 / 22, vs: 1 / 44, top: false });
+  // downtown towers: a lit podium, setbacks, a crown with aviation lights and an antenna
+  for (const [bx, bz, h] of TOWERS) {
+    boxB(B.trim, bx - 13, 0.15, bz - 13, bx + 13, 7, bz + 13, { col: col(0x3a3a44) });
+    boxB(B.bankL, bx - 13.05, 0.6, bz - 13.05, bx + 13.05, 5.6, bz + 13.05, { col: HDR(0xffe0b0, 1.1), top: false });
+    const s1 = h * 0.62, s2 = h * 0.86;
+    facade(bx - 10, 7, bz - 10, bx + 10, s1, bz + 10);
+    boxB(B.trim, bx - 10.4, s1, bz - 10.4, bx + 10.4, s1 + 0.8, bz + 10.4, { col: col(0x6a7080) });
+    facade(bx - 8, s1 + 0.8, bz - 8, bx + 8, s2, bz + 8);
+    boxB(B.trim, bx - 8.4, s2, bz - 8.4, bx + 8.4, s2 + 0.8, bz + 8.4, { col: col(0x6a7080) });
+    facade(bx - 6, s2 + 0.8, bz - 6, bx + 6, h, bz + 6);
+    boxB(B.roof, bx - 6.2, h, bz - 6.2, bx + 6.2, h + 1.2, bz + 6.2, { col: col(0x2a2e38) });
+    putB(B.neon, G.box, bx, h + 0.7, bz - 6.25, 11, 0.25, 0.05, 0, HDR(0x7ad8ff, 2.4)); putB(B.neon, G.box, bx, h + 0.7, bz + 6.25, 11, 0.25, 0.05, 0, HDR(0x7ad8ff, 2.4));
+    putB(B.metal, G.cyl, bx, h + 8, bz, 0.25, 14, 0.25, 0, col(0x8a8a90));
+    for (const [dx, dz] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) putB(B.neon, G.sph, bx + dx, h + 1.5, bz + dz, 0.35, 0.35, 0.35, 0, HDR(0xff2030, 6));
+    putB(B.neon, G.sph, bx, h + 15.2, bz, 0.45, 0.45, 0.45, 0, HDR(0xff2030, 8));
+    addBox(bx, bz, 26, 26, h);
+  }
+  // industrial zone: a ribbed hall, a striped chimney with smoke, gas holders and floodlights
+  for (const [bx, bz] of FACTORIES) {
+    boxB(B.container, bx - 14, 0.15, bz - 9, bx + 6, 10, bz + 9, { us: 1 / 3, vs: 1 / 10, col: col(0x8a8e94) });
+    for (let k = 0; k < 4; k++) putB(B.roof, G.box, bx - 11.5 + k * 5, 11.2, bz, 5, 2.6, 18, 0, col(0x4a4e56), 0, 0.5);
+    boxB(B.trim, bx - 14.2, 0.15, bz - 9.2, bx + 6.2, 1.2, bz + 9.2, { col: col(0x3a3a40), top: false });
+    putB(B.bankL, G.box, bx - 4, 3.5, bz - 9.08, 10, 3.2, 0.05, 0, HDR(0xffb060, 1.2));
+    for (let k = 0; k < 8; k++) putB(B.trim, G.cyl, bx + 10, 2 + k * 4.6, bz - 6, 3.4 - k * 0.12, 4.6, 3.4 - k * 0.12, 0, col(k % 2 ? 0xd8d8d8 : 0xb8322e));
+    putB(B.neon, G.sph, bx + 10, 39, bz - 6, 0.4, 0.4, 0.4, 0, HDR(0xff2030, 6));
+    for (const [dx, dz] of [[9, 6], [-8, 12]]) {
+      putB(B.metal, G.cyl, bx + dx, 5.2, bz + dz, 10, 10, 10, 0, col(0x6a7078));
+      putB(B.metal, G.cone, bx + dx, 10.9, bz + dz, 10.2, 1.4, 10.2, 0, col(0x5a6068));
+      for (let k = 0; k < 6; k++) putB(B.metal, G.box, bx + dx + Math.cos(k) * 5.1, 5.2, bz + dz + Math.sin(k) * 5.1, 0.25, 10.4, 0.25, 0, col(0x3a3e44));
+    }
+    putB(B.neon, G.box, bx - 4, 10.6, bz + 9.2, 1.2, 0.5, 0.4, 0, HDR(0xffc070, 5)); putB(B.neon, G.box, bx - 4, 10.6, bz - 9.2, 1.2, 0.5, 0.4, 0, HDR(0xffc070, 5));
+    addBox(bx - 4, bz, 20, 18, 10); addBox(bx + 10, bz - 6, 3.4, 3.4, 38); addBox(bx + 9, bz + 6, 10, 10, 10); addBox(bx - 8, bz + 12, 10, 10, 10);
+  }
+  // the expressway over the street x = 80: pillars on the pavements, a deck with lamps; it runs out of town and over the bay
+  const X = EXPRESS.x, Y = EXPRESS.y, hw = EXPRESS.w / 2, conc = col(0x8a8a92), concD = col(0x5a5a62);
+  putB(B.trim, G.box, X, Y + 0.5, 130, EXPRESS.w, 1.0, 860, 0, concD);   // a closed box: the underside is visible from the street
+  boxB(B.mark, X - hw + 0.2, Y + 1.0, -300, X + hw - 0.2, Y + 1.02, 560, { col: col(0x2a2a30), sides: false });
+  for (let z = -300; z < 560; z += 6) putB(B.mark, G.box, X, Y + 1.04, z, 0.18, 0.02, 3, 0, col(0xe8e8ec));
+  for (const s of [-1, 1]) {
+    boxB(B.trim, X + s * hw - (s > 0 ? 0.4 : 0), Y + 1, -300, X + s * hw + (s > 0 ? 0 : 0.4), Y + 2.1, 560, { col: conc });
+    for (let z = -296; z < 560; z += 24) {
+      putB(B.metal, G.cyl, X + s * (hw - 0.3), Y + 4.6, z, 0.2, 7, 0.2, 0, col(0x3a3a40));
+      putB(B.neon, G.box, X + s * (hw - 1.4), Y + 8.0, z, 2.4, 0.15, 0.4, 0, HDR(0xffd9a0, 4));
+    }
+  }
+  for (let z = -296; z < 176; z += 26) {
+    if (ROADS.some((r) => Math.abs(z - r) < 13)) continue;
+    for (const s of [-1, 1]) { putB(B.trim, G.box, X + s * 9.8, Y / 2, z, 1.6, Y, 1.6, 0, conc); addBox(X + s * 9.8, z, 1.6, 1.6, Y); }
+    putB(B.trim, G.box, X, Y - 0.5, z, 21, 1, 1.8, 0, conc);
+  }
+  // over the water: tall piers and two cable-stayed pylons
+  for (let z = 190; z < 560; z += 40) putB(B.trim, G.box, X, (Y - 6) / 2, z, 6, Y + 6, 4, 0, conc);
+  for (const pz of [300, 460]) {
+    for (const s of [-1, 1]) putB(B.trim, G.box, X + s * (hw + 1.2), 36, pz, 2.2, 72, 3, 0, col(0xa8a8b0));
+    putB(B.trim, G.box, X, 66, pz, EXPRESS.w + 5, 2.4, 3, 0, col(0xa8a8b0));
+    putB(B.neon, G.sph, X - hw - 1.2, 73, pz, 0.6, 0.6, 0.6, 0, HDR(0xff2030, 8)); putB(B.neon, G.sph, X + hw + 1.2, 73, pz, 0.6, 0.6, 0.6, 0, HDR(0xff2030, 8));
+  }
+  const cablePts = [];
+  for (const pz of [300, 460]) for (const s of [-1, 1]) for (let k = 1; k <= 9; k++) for (const dir of [-1, 1]) {
+    cablePts.push(new V3(X + s * (hw + 1.2), 64 - k * 2.6, pz), new V3(X + s * (hw - 0.2), Y + 2.1, pz + dir * k * 8.5));
+  }
+  const cables = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(cablePts), new THREE.LineBasicMaterial({ color: new THREE.Color(1.4, 1.4, 1.6), transparent: true, opacity: 0.7 }));
+  scene.add(cables);
+  // a far skyline beyond the bay and around the city: one mesh, not fogged, lit windows
+  const far = batch();
+  const tower = (x, z, w, d, h) => boxB(far, x - w / 2, -1, z - d / 2, x + w / 2, h, z + d / 2, { us: 1 / 22, vs: 1 / 44, top: false });
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  for (let i = 0; i < 70; i++) { const x = rnd(-560, 640), z = rnd(470, 720); tower(x, z, rnd(16, 40), rnd(16, 40), rnd(40, 190)); }
+  for (let i = 0; i < 90; i++) {
+    const a = rnd(0, PI * 2), r = rnd(330, 620), x = Math.cos(a) * r, z = Math.sin(a) * r * 0.9 - 40;
+    if (z > 160 && z < 470) continue;   // keep the bay open
+    tower(x, z, rnd(14, 34), rnd(14, 34), rnd(25, 120));
+  }
+  skyMatFar = new THREE.MeshBasicMaterial({ map: tex.em, color: new THREE.Color(0.75, 0.68, 0.6), fog: false });
+  const farMesh = meshB(far, skyMatFar, false); farMesh.renderOrder = -5;
+  // traffic on the expressway
+  EXPRESS.cars = [];
+  for (let i = 0; i < 8; i++) {
+    const m = makeCar(pick(CIV_COLORS), 'civ'), dir = i % 2 ? 1 : -1;
+    EXPRESS.cars.push(Object.assign(m, { z: rnd(-300, 560), dir, v: rnd(18, 26), lane: dir > 0 ? 3.6 : -3.6 }));
+  }
+}
+function updateCityScale(dt) {
+  if (!EXPRESS.cars) return;
+  for (const c of EXPRESS.cars) {
+    c.z += c.dir * c.v * dt; if (c.z > 560) c.z = -300; if (c.z < -300) c.z = 560;
+    c.g.position.set(EXPRESS.x - c.lane, EXPRESS.y + 1.05, c.z); c.g.rotation.y = c.dir > 0 ? 0 : PI;
+  }
+  // smoke from the factory chimneys when they are close
+  for (const [bx, bz] of FACTORIES) if (Math.abs(focus.x - bx) < 120 && Math.abs(focus.z - bz) < 120 && Math.random() < dt * 8) spawnP(new V3(bx + 10 + rand(-0.8, 0.8), 39.5, bz - 6 + rand(-0.8, 0.8)), { color: 0x5a5a64, size: 2.2, vel: new V3(rand(0.5, 2), 2.2, rand(-0.5, 0.5)), life: 5, grow: 3, opacity: 0.35 });
+}
+function cityScaleMood(m) {
+  if (!towerMat) return;
+  towerMat.emissiveIntensity = m === 'blackout' ? 0.25 : m === 'dawn' ? 0.5 : 1.4;
+  skyMatFar.color.setRGB(0.75, 0.68, 0.6).multiplyScalar(m === 'dawn' ? 0.55 : 1);
+}
+
+function finishCityScale() {
+  meshB(B.tower, towerMat, true);
+  KIT.bld.forEach((m) => m.color.setRGB(0.8, 0.82, 0.9));   // calmer, less candy-coloured houses
+}
+
 // ---- city landmarks (for future stories): central square with the city hall, metro, canal with bridges, the tunnel, bus stops ----
 const SQUARE = { x: 40, z: 40 };            // block between roads x 0..80, z 0..80
 const CANAL = { x: -120, hw: 4.5, segs: [[-185, -168], [-152, -88], [-72, -8], [8, 71]] }; // flows north from the southern edge
@@ -1526,11 +1660,22 @@ function buildLandmarks() {
   // ---- tunnel on the southern road: portals, walls, a roof and lamp strips inside ----
   const tz = TUNNEL.z, t0 = TUNNEL.x0, t1 = TUNNEL.x1, conc = col(0x8a8a90);
   for (const s of [-1, 1]) { boxB(B.trim, t0, 0, tz + s * 8.6 - (s > 0 ? 0 : 0.9), t1, 9.2, tz + s * 8.6 + (s > 0 ? 0.9 : 0), { col: conc }); addBox((t0 + t1) / 2, tz + s * 9.05, t1 - t0, 0.9, 9.2); }
-  boxB(B.roof, t0, 9.2, tz - 9.6, t1, 10.2, tz + 9.6, { col: col(0x55575e) });
+  putB(B.roof, G.box, (t0 + t1) / 2, 9.7, tz, t1 - t0, 1.0, 19.2, 0, col(0x55575e));            // the vault, closed from below
+  boxB(B.trim, t0 - 0.5, 10.2, tz - 11, t1 + 0.5, 11.4, tz + 11, { col: col(0x6a5a44) });               // earth
+  boxB(B.grass, t0 - 0.4, 11.4, tz - 10.8, t1 + 0.4, 11.5, tz + 10.8, { topWorld: 1 / 8, sides: false });
+  for (const s of [-1, 1]) boxB(B.grass, t0 + 2, 10.2, tz + s * 11 - (s > 0 ? 0 : 3), t1 - 2, 10.9, tz + s * 11 + (s > 0 ? 3 : 0), { topWorld: 1 / 8 });
+  for (let x = t0 + 5; x < t1 - 3; x += 9) for (const s of [-1, 1]) {
+    const tx = x + (s > 0 ? 4 : 0), tz2 = tz + s * 5.5, lc = col(pick([0x2f5a32, 0x3a6a34, 0x2a4d34]));
+    putB(B.wood, G.cyl6, tx, 13, tz2, 0.35, 3.2, 0.35, 0, col(0x5a3a26)); putB(B.leaf, G.sph, tx, 15.4, tz2, 2.2, 1.9, 2.2, 1, lc); putB(B.leaf, G.sph, tx + 0.4, 16.6, tz2 - 0.3, 1.5, 1.3, 1.5, 2, lc.clone().multiplyScalar(1.15));
+  }
+  for (const x of [t0, t1]) for (const s of [-1, 1]) putB(B.metal, G.box, x + (x === t0 ? -0.6 : 0.6), 12.2, tz + s * 10.4, 0.1, 1.4, 0.1, 0, col(0x3a3a40));
+  for (let z = tz - 10; z <= tz + 10; z += 2) for (const x of [t0 - 0.6, t1 + 0.6]) putB(B.metal, G.box, x, 12.6, z, 0.08, 0.08, 2, 0, col(0x3a3a40));
   for (let x = t0 + 2; x < t1; x += 4) for (const s of [-1, 1]) putB(B.neon, G.box, x, 9.05, tz + s * 4, 2.4, 0.1, 0.25, 0, HDR(0xffc070, 3));
   for (const s of [-1, 1]) for (let x = t0 + 1; x < t1; x += 2) putB(B.metal, G.box, x, 1.0, tz + s * 8.1, 1.6, 0.2, 0.06, 0, col(0x3a3a40));
   const tSign = cityText(512, 128, (g, w, h) => { g.fillStyle = '#1a3a6a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(8, 8, w - 16, h - 16); g.fillStyle = '#fff'; g.font = 'bold 64px Arial, sans-serif'; g.fillText('ТОННЕЛЬ', w / 2, h / 2 + 3); });
   for (const [x, ry] of [[t0, -PI / 2], [t1, PI / 2]]) {
+    const arch = new THREE.Mesh(new THREE.RingGeometry(8.3, 9.6, 28, 1, 0, PI), new THREE.MeshStandardMaterial({ color: 0x9a968e, roughness: 0.9, side: THREE.DoubleSide }));
+    arch.position.set(x + (ry > 0 ? 0.86 : -0.86), 0.2, tz); arch.rotation.y = ry; arch.scale.set(1, 0.98, 1); scene.add(arch);
     boxB(B.trim, x - 0.8, 9.2, tz - 10, x + 0.8, 12.2, tz + 10, { col: col(0xb0aca4) });
     for (let k = -4; k <= 4; k++) putB(B.neon, G.box, x + (ry > 0 ? 0.82 : -0.82), 9.6, tz + k * 2, 0.04, 0.5, 1.0, 0, HDR(k % 2 ? 0x1a1a1a : 0xffc020, 1.2));
     textPlane(tSign, 7, 1.75, x + (ry > 0 ? 0.84 : -0.84), 10.9, tz, ry);
@@ -1997,6 +2142,8 @@ window.addEventListener('keydown', (e) => {
   if (state.mode === 'dialog' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) advanceDialog();
   if (!e.repeat && e.code === 'KeyN') useBoost('nitro');
   if (!e.repeat && e.code === 'KeyB') useBoost('shield');
+  if (!e.repeat && e.code === 'KeyV' && (state.mode === 'foot' || state.mode === 'drive')) cycleView();
+  if (!e.repeat && (e.code === 'Escape' || e.code === 'KeyP') && (state.mode === 'drive' || state.mode === 'foot')) { e.preventDefault(); pauseGame(); }
 });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.down = false; });
@@ -2459,13 +2606,16 @@ const aimPlane = new THREE.Plane(new V3(0, 1, 0), -1.0), ray = new THREE.Raycast
 function updateFoot(dt) {
   const mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.x;
   const mz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + joy.y;
-  const mv = new V3(mx, 0, mz); if (mv.length() > 1) mv.normalize();
+  const look3 = footView !== 'top';
+  if (look3) viewTurnFallback(dt);
+  const mv = look3 ? viewMove(mx, mz) : new V3(mx, 0, mz); if (mv.length() > 1) mv.normalize();
   const vel = mv.clone().multiplyScalar(9);
   hero.pos.addScaledVector(vel, dt); collideCircle(hero.pos, vel, 0.6);
   if (state.ep >= 2 && MIS && MIS.arena) { const A = MIS.arena; hero.pos.x = clamp(hero.pos.x, A.x0, A.x1); hero.pos.z = clamp(hero.pos.z, A.z0, A.z1); }
   // aim
   let aim = null;
-  if (mouse.has && !isTouch) { ndc.set(mouse.x / window.innerWidth * 2 - 1, -(mouse.y / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera); if (ray.ray.intersectPlane(aimPlane, aimPt)) aim = aimPt.clone(); }
+  if (look3) aim = viewAim();
+  else if (mouse.has && !isTouch) { ndc.set(mouse.x / window.innerWidth * 2 - 1, -(mouse.y / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera); if (ray.ray.intersectPlane(aimPlane, aimPt)) aim = aimPt.clone(); }
   else {
     let bd = 28 * P.aim; for (const e of enemies) { if (e.dead) continue; const d = e.pos.distanceTo(hero.pos); if (d < bd && los(hero.pos, e.pos)) { bd = d; aim = e.pos.clone(); } }
     if (!aim && mv.lengthSq() > 0.01) aim = hero.pos.clone().add(mv);
@@ -2584,7 +2734,7 @@ const allies = [], pickups = [];
 const EP2_TITLES = ['Хвост', 'Накладные', 'Пассажир', 'Засада в парке', 'Фургон', 'Конечная'];
 let selEp = 1, ep2Pick = 1;
 function ep2Max() { try { return clamp(parseInt(localStorage.getItem('nf-ep2-ch'), 10) || 1, 1, 6); } catch (e) { return 1; } }
-function ep2Save(n) { try { if (n > ep2Max()) localStorage.setItem('nf-ep2-ch', String(Math.min(6, n))); } catch (e) { /* storage unavailable */ } }
+function ep2Save(n) { try { if (n > ep2Max()) { localStorage.setItem('nf-ep2-ch', String(Math.min(6, n))); cloudSaveSoon(); } } catch (e) { /* storage unavailable */ } }
 
 const LOOKS = {
   hook: { model: 'artem', skin: '#c89070', colors: { Main: '#c0632a', DarkGreen: '#3a2a20', Helmet: '#e0a020', Black: '#2a2a2a' }, face: { brow: '#2a1a10', iris: '#2a1a10', mouth: 'grim', angry: true, stubble: '#2a1a10' } },
@@ -2639,7 +2789,7 @@ function beginFoot(x, z, face) {
   hero.pos.set(x, 0, z); hero.face = face; hero.hp = P.footMax; hero.dead = false; hero.fireCd = 0; hero.walk = 0; hero.twist = 0;
   hero.g.visible = true; hero.g.position.copy(hero.pos); hero.g.rotation.set(0, face, 0); reviveHuman(hero);
   arrow.visible = false; $('hpLabel').textContent = 'Здоровье';
-  state.mode = 'foot'; state.invuln = 1.5; snapCam = true;
+  state.mode = 'foot'; state.invuln = 1.5; snapCam = true; viewYaw = face; viewPitch = -0.04;
 }
 // friendly NPCs: Vera in the prologue, Лёва in the park
 function spawnAlly(look, x, z, o) {
@@ -2755,7 +2905,7 @@ function failChapter(title, text) {
     mMenu: () => { hideModal(); showSelect(); },
   });
 }
-function startChapter(n) { state.fireLock = true; setMood('night'); if (state.ep === 2) [null, ch1, ch2, ch3, ch4, ch5, ch6][n](false); else startGen(state.ep, n - 1, false); }
+function startChapter(n) { saveLast(state.ep, n); state.fireLock = true; setMood('night'); if (state.ep === 2) [null, ch1, ch2, ch3, ch4, ch5, ch6][n](false); else startGen(state.ep, n - 1, false); }
 
 // ---- prologue + chapter 1: tail the courier ----
 function ch1(intro) {
@@ -3035,6 +3185,7 @@ function ch6() {
 
 function startEpisode2(ch) { startEpisode(2, ch); }
 function startEpisode(ep, ch) {
+  saveLast(ep, ch);
   initAudio(); hideModal(); setMood('night');
   $('select').hidden = true; $('preview').hidden = true; $('hud').hidden = false; $('touch').hidden = !isTouch;
   document.body.classList.toggle('touch-on', isTouch);
@@ -3057,7 +3208,8 @@ function renderChapters() {
   const titles = selEp === 2 ? EP2_TITLES : selEp >= 3 ? EPS[selEp].chapters.map((c) => c.t) : [];
   box.innerHTML = titles.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1}. ${t}</button>`).join('');
   box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { ep2Pick = +b.dataset.ch; renderChapters(); }));
-  $('btnGo').textContent = selEp >= 2 ? (ep2Pick === 1 ? `Начать эпизод ${selEp}` : `Глава ${ep2Pick}`) : 'В путь';
+  const L = loadLast();
+  $('btnGo').textContent = L && L.ep === selEp && L.ch === ep2Pick && selEp >= 2 ? `Продолжить: эпизод ${selEp}, глава ${ep2Pick}` : selEp >= 2 ? (ep2Pick === 1 ? `Начать эпизод ${selEp}` : `Глава ${ep2Pick}`) : 'В путь';
 }
 function showEnd2() {
   profEp(2);
@@ -3519,7 +3671,7 @@ const hdg = (h) => (typeof h === 'string' ? DIRS[h] : h);
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const fixLine = ([w, t]) => [w, t.replace(/\{name\}/g, CH.name).replace(/\{g:([^|}]*)\|([^}]*)\}/g, (_, a, b) => gx(a, b))];
 function epMax(ep) { try { return clamp(parseInt(localStorage.getItem('nf-ep' + ep + '-ch'), 10) || 1, 1, 6); } catch (e) { return 1; } }
-function epSave(ep, n) { try { if (n > epMax(ep)) localStorage.setItem('nf-ep' + ep + '-ch', String(Math.min(6, n))); } catch (e) { /* storage unavailable */ } }
+function epSave(ep, n) { try { if (n > epMax(ep)) { localStorage.setItem('nf-ep' + ep + '-ch', String(Math.min(6, n))); if (typeof cloudSaveSoon === 'function') cloudSaveSoon(); } } catch (e) { /* storage unavailable */ } }
 
 const ALLY_LOOKS = {
   ded: { model: 'savva', skin: '#e4b898', colors: { Shirt: '#5a4636', Pants: '#2e2e34', Hat: '#4a4a52', Detail: '#8a6a4a' }, face: { brow: '#e8e8e8', iris: '#4a6a8a', mouth: 'smirk', stache: '#ececec', wrinkles: true } },
@@ -3605,12 +3757,12 @@ function setMood(m) {
     if (KIT.neonMat) KIT.neonMat.color.setScalar(0.03); if (KIT.poolMat) KIT.poolMat.opacity = 0;
     if (KIT.bankLight) { KIT.bankLight.color.setScalar(0.04); KIT.bankAlarm.visible = true; BANKX.poolM.opacity = 0; }
   }
-  atmoMood(m);
+  atmoMood(m); cityScaleMood(m);
   if (finalPass) finalPass.uniforms.exposure.value = exp; renderer.toneMappingExposure = exp;
 }
 
 function startGen(ep, i, withIntro) {
-  const E = EPS[ep], c = E.chapters[i];
+  const E = EPS[ep], c = E.chapters[i]; saveLast(ep, i + 1);
   clearStage(); setMood(c.mood || 'night');
   state.ep = ep; state.ch = i + 1; epSave(ep, i + 1); state.fireLock = true;
   const title = `Глава ${i + 1} · ${c.t}`;
@@ -3923,8 +4075,20 @@ function updateCamera(dt) {
   } else {
     // with a helicopter overhead the camera pulls back and looks further ahead, so the helicopter stays in the frame
     const air = HELI && !HELI.gone;
-    desired = hero.pos.clone().add(air ? new V3(0, 13, 13) : new V3(0, 9.5, 6.4)); look = hero.pos.clone().add(air ? new V3(0, 1.5, -6) : new V3(0, 0.8, -2.4)); focus.copy(hero.pos);
+    focus.copy(hero.pos);
+    if (footView !== 'top' && hero) {
+      const fc = footCamera(); desired = fc.desired; look = fc.look;
+      if (Math.abs(camera.fov - fc.fov) > 0.1) { camera.fov += (fc.fov - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); }
+      if (fc.direct) { camPos.copy(desired); camLook.copy(look); snapCam = false; }
+    } else {
+      desired = hero.pos.clone().add(air ? new V3(0, 14, 14) : new V3(0, 12.5, 9)); look = hero.pos.clone().add(air ? new V3(0, 1.5, -6) : new V3(0, 0.8, -3.2));
+      if (Math.abs(camera.fov - 62) > 0.1) { camera.fov += (62 - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); }
+    }
+    const fpsNow = state.mode === 'foot' && footView === 'fps';
+    hero.g.visible = !fpsNow || hero.dead;   // in first person the body is hidden (it would block the view)
+    ensureViewGun().visible = fpsNow && !hero.dead;
   }
+  if (viewGun && (state.act !== 2 || state.mode !== 'foot')) viewGun.visible = false;
   if (snapCam) { camPos.copy(desired); camLook.copy(look); snapCam = false; }
   const k = state.mode === 'preview' ? 1 : 1 - Math.exp(-dt * (state.mode === 'select' ? 4 : 7));
   camPos.lerp(desired, k); camLook.lerp(look, k);
@@ -4020,10 +4184,10 @@ function updateHud(dt) {
   if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
   if (HELI && !HELI.crash && !HELI.invuln && (state.mode === 'drive' || state.mode === 'foot')) bars = bars.concat([{ label: HELI.name, frac: HELI.hp / HELI.max, color: '#c0ff6a' }]);
   renderBars(bars, timer, tbad);
-  $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : 'W A S D — бег · мышь — прицел · клик — огонь · B — щит';
+  $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : (footView === 'top' ? 'W A S D — бег · мышь — прицел · клик — огонь' : 'W A S D — бег · мышь — обзор · клик — огонь') + ' · V — вид · B — щит · Esc — пауза';
   updateBoostsHud();
-  const ch = $('crosshair'); const showCh = state.mode === 'foot' && mouse.has && !isTouch;
-  ch.hidden = !showCh; if (showCh) { ch.style.left = mouse.x + 'px'; ch.style.top = mouse.y + 'px'; }
+  const ch = $('crosshair'); const centre = state.mode === 'foot' && footView !== 'top', showCh = centre || (state.mode === 'foot' && mouse.has && !isTouch);
+  ch.hidden = !showCh; if (showCh) { ch.style.left = (centre ? window.innerWidth / 2 : mouse.x) + 'px'; ch.style.top = (centre ? window.innerHeight / 2 : mouse.y) + 'px'; }
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
   hurt = Math.max(0, hurt - dt * 1.5); $('hurt').style.opacity = hurt;
   drawMinimap();
@@ -4052,7 +4216,46 @@ function sha256(str) {
   return H.map((x) => (x >>> 0).toString(16).padStart(8, '0')).join('');
 }
 // the test hero: login «тест»; only the password hash is stored here
-const TEST_LOGIN = 'тест', TEST_HASH = '26d92e23a1eee3203bc21d5edb059510b5fb0f2e0d7745ed8392156f751478c6';
+// accounts live in Supabase (project night-fare): passwords are kept by Supabase Auth, the profile row is protected by RLS,
+// and test mode comes only from the server-side is_tester flag. A guest plays locally without an account.
+const SB_URL = 'https://xqgibyazilueurdqufso.supabase.co', SB_KEY = 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z';
+const CLOUD = { sb: null, user: null, saveT: 0, busy: false };
+const loginEmail = (l) => 'u' + Array.from(new TextEncoder().encode(l)).map((b) => b.toString(16).padStart(2, '0')).join('') + '@players.nightfare.invalid';
+function cloudInit() { try { if (window.supabase && !CLOUD.sb) CLOUD.sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'nf-auth' } }); } catch (e) { CLOUD.sb = null; } return !!CLOUD.sb; }
+const NO_SERVER = 'Сервер профилей недоступен. Проверь интернет — или играй как гость.';
+function collectProgress() {
+  const eps = {}; for (let e = 2; e <= 30; e++) { const v = +localStorage.getItem('nf-ep' + e + '-ch') || 0; if (v) eps[e] = v; }
+  let last = null; try { last = JSON.parse(localStorage.getItem('nf-last')); } catch (e) { /* none */ }
+  return { eps, last };
+}
+function applyProgress(pr) {
+  if (!pr) return;
+  try {
+    for (const [e, v] of Object.entries(pr.eps || {})) { const cur = +localStorage.getItem('nf-ep' + e + '-ch') || 0; if (v > cur) localStorage.setItem('nf-ep' + e + '-ch', String(v)); }
+    if (pr.last && pr.last.ep) localStorage.setItem('nf-last', JSON.stringify(pr.last));
+  } catch (e) { /* storage unavailable */ }
+}
+async function cloudLoadProfile(user) {
+  const { data: row, error } = await CLOUD.sb.from('profiles').select('login, name, data, progress, is_tester').eq('id', user.id).maybeSingle();
+  if (error || !row) return 'Профиль не найден на сервере.';
+  const d = profDefaults(row.name || row.login, row.login), s = row.data || {};
+  PROF = Object.assign(d, s, { up: Object.assign(d.up, s.up), inv: Object.assign(d.inv, s.inv), st: Object.assign(d.st, s.st) });
+  PROF.login = row.login; PROF.name = row.name || row.login; PROF.god = !!row.is_tester; PROF.cloud = true;
+  CLOUD.user = user; applyProgress(row.progress); store.set('nf-last-login', row.login);
+  applyLoadout(); updateProfChip(); return null;
+}
+async function cloudRestore() {
+  if (!cloudInit()) return false;
+  try { const { data } = await CLOUD.sb.auth.getSession(); if (data && data.session) return !(await cloudLoadProfile(data.session.user)); } catch (e) { /* offline */ }
+  return false;
+}
+async function cloudSave() {
+  CLOUD.saveT = 0; if (!CLOUD.sb || !CLOUD.user || !PROF.cloud) return;
+  const { god, cloud, login, name, ...data } = PROF;
+  try { await CLOUD.sb.from('profiles').update({ name: String(name || '').slice(0, 24), data, progress: collectProgress() }).eq('id', CLOUD.user.id); } catch (e) { /* will retry on the next save */ }
+}
+function cloudSaveSoon() { if (!PROF.cloud || CLOUD.saveT) return; CLOUD.saveT = setTimeout(cloudSave, 2500); }
+window.addEventListener('pagehide', () => { if (CLOUD.saveT) { clearTimeout(CLOUD.saveT); cloudSave(); } });
 const CARS = {
   taxi: { name: 'Такси «Классика»', model: 'car_taxi', price: 0, speed: 0, armor: 1, paint: 'yellow', desc: 'Рабочая лошадка таксопарка. Ничего лишнего.' },
   hatch: { name: 'Хэтч «Шустрик»', model: 'car_hatchback', price: 1500, speed: 3, armor: 1.12, paint: 'red', desc: 'Лёгкий и быстрый, но мнётся от каждого тарана.' },
@@ -4124,34 +4327,38 @@ function profDefaults(name, login) {
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } } };
 let PROF = profDefaults();
 const profKey = (login) => 'nf-profile:' + (login || 'guest');
-function loadProfile(login) {
-  const d = profDefaults(login === TEST_LOGIN ? 'Тест' : login ? login : 'Гость', login), s = store.get(profKey(login));
+// the local guest profile (no account)
+function loadProfile() {
+  const d = profDefaults('Гость', null), s = store.get(profKey(null));
   PROF = s ? Object.assign(d, s, { up: Object.assign(d.up, s.up), inv: Object.assign(d.inv, s.inv), st: Object.assign(d.st, s.st) }) : d;
-  PROF.god = login === TEST_LOGIN;
-  if (PROF.god) PROF.name = 'Тест';
-  store.set('nf-session', login || null);
+  PROF.god = false; PROF.cloud = false; PROF.login = null; CLOUD.user = null;
   applyLoadout();
 }
-function saveProfile() { const { god, ...rest } = PROF; store.set(profKey(PROF.login), rest); }
-function profLogin(login, pass) {
+function saveProfile() { if (PROF.cloud) { cloudSaveSoon(); return; } const { god, cloud, ...rest } = PROF; store.set(profKey(null), rest); }
+async function profLogin(login, pass) {
   const l = (login || '').trim().toLowerCase();
-  if (!l) return 'Введи логин.';
-  if (l === TEST_LOGIN) { if (sha256(pass || '') !== TEST_HASH) return 'Неверный пароль.'; loadProfile(TEST_LOGIN); return null; }
-  const acc = store.get('nf-accounts') || {};
-  if (!acc[l]) return 'Такого профиля нет на этом устройстве. Нажми «Создать».';
-  if (acc[l] !== sha256(l + ':' + (pass || ''))) return 'Неверный пароль.';
-  loadProfile(l); return null;
+  if (!l || !pass) return 'Введи логин и пароль.';
+  if (!cloudInit()) return NO_SERVER;
+  try {
+    const { data, error } = await CLOUD.sb.auth.signInWithPassword({ email: loginEmail(l), password: pass });
+    if (error) return /invalid/i.test(error.message) ? 'Неверный логин или пароль.' : 'Не удалось войти: ' + error.message;
+    return await cloudLoadProfile(data.user);
+  } catch (e) { return NO_SERVER; }
 }
-function profRegister(login, pass) {
+async function profRegister(login, pass, name) {
   const l = (login || '').trim().toLowerCase();
-  if (l.length < 2) return 'Логин — от 2 символов.';
-  if (l === TEST_LOGIN || l === 'guest') return 'Этот логин занят.';
-  if ((pass || '').length < 4) return 'Пароль — от 4 символов.';
-  const acc = store.get('nf-accounts') || {};
-  if (acc[l]) return 'Такой профиль уже есть. Нажми «Войти».';
-  acc[l] = sha256(l + ':' + pass); store.set('nf-accounts', acc);
-  loadProfile(l); PROF.name = login.trim(); saveProfile(); return null;
+  if (!/^[\p{L}\p{N}_.-]{2,24}$/u.test(l)) return 'Логин: от 2 до 24 символов — буквы, цифры, точка, дефис или подчёркивание.';
+  if ((pass || '').length < 6) return 'Пароль — от 6 символов.';
+  if (!cloudInit()) return NO_SERVER;
+  try {
+    const r = await fetch(SB_URL + '/functions/v1/nf-register', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ login: l, password: pass, name: (name || login || '').trim() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return j.error || 'Не удалось создать профиль.';
+  } catch (e) { return NO_SERVER; }
+  const err = await profLogin(l, pass);
+  return err;
 }
+async function profLogout() { try { if (CLOUD.sb) await CLOUD.sb.auth.signOut(); } catch (e) { /* offline */ } store.set('nf-last-login', null); loadProfile(); }
 // wallet and stats
 let achBusy = false;
 function walletAdd(n) { if (!n) return; PROF.coins += n; PROF.st.earned += Math.max(0, n); saveProfile(); checkAch(); }
@@ -4270,7 +4477,7 @@ function renderProfile() {
     <div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
       <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>
     <div class="pmsg">${esc(profMsg)}</div>
-    <div class="note">Профили хранятся только в этом браузере. Для настоящих аккаунтов нужен сервер.</div>`;
+    <div class="note">${PROF.cloud ? 'Профиль хранится на сервере и доступен на любом устройстве.' : 'Гость: прогресс хранится только в этом браузере. Войди или создай профиль, чтобы сохранить его на сервере.'}</div>`;
   } else if (profTab === 'garage') {
     h = '<div class="pitems cars">' + Object.entries(CARS).map(([id, c]) => {
       const own = PROF.cars.includes(id), on = PROF.car === id;
@@ -4295,8 +4502,12 @@ function profAction(act, id) {
   profMsg = '';
   const has = (arr, v) => arr.includes(v);
   if (act === 'hero') { closeProfile(); return; }
-  if (act === 'login' || act === 'register') { const err = (act === 'login' ? profLogin : profRegister)($('pLogin').value, $('pPass').value); profMsg = err || (PROF.god ? 'Тестовый профиль: бессмертие и бесплатные покупки включены.' : 'Готово: профиль загружен.'); }
-  else if (act === 'logout') { loadProfile(null); profMsg = 'Вы вышли. Сейчас играет гость.'; }
+  if (act === 'login' || act === 'register') {
+    if (CLOUD.busy) return; CLOUD.busy = true; profMsg = 'Связываюсь с сервером…'; renderProfile();
+    (act === 'login' ? profLogin : profRegister)($('pLogin').value, $('pPass').value).then((err) => { CLOUD.busy = false; profMsg = err || (PROF.god ? 'Тестовый профиль: бессмертие и бесплатные покупки включены.' : 'Готово: профиль загружен с сервера.'); renderProfile(); });
+    return;
+  }
+  else if (act === 'logout') { profLogout().then(() => { profMsg = 'Вы вышли. Сейчас играет гость.'; renderProfile(); }); return; }
   else if (act === 'outfit') { PROF.outfit = id || null; saveProfile(); applyLoadout(); }
   else if (act === 'buy-outfit') { if (pay(OUTFITS[id].price)) { PROF.outfits.push(id); PROF.outfit = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'car') { PROF.car = id; saveProfile(); applyLoadout(); }
@@ -4330,10 +4541,11 @@ let gateStep = 'install', gateMode = 'register', gateMsg = '';
 function startGate() {
   const needInstall = !isStandalone() && !store.get('nf-installed');
   gateStep = needInstall ? 'install' : 'register';
+  if (store.get('nf-last-login') && !PROF.login) gateMode = 'login';
   if (gateStep === 'register' && !needRegister()) return finishGate();
   $('gate').hidden = false; renderGate();
 }
-const needRegister = () => !PROF.login && !store.get('nf-guest');
+const needRegister = () => !PROF.login && (!store.get('nf-guest') || !!store.get('nf-last-login'));
 function gateNext() { if (gateStep === 'install') { gateStep = 'register'; gateMsg = ''; if (!needRegister()) return finishGate(); renderGate(); } else finishGate(); }
 function finishGate() { $('gate').hidden = true; updateProfChip(); }
 function renderGate() {
@@ -4364,27 +4576,115 @@ function renderGate() {
         <div class="pmsg">${esc(gateMsg)}</div>
         <div class="btns"><button class="btn primary big" type="submit">${reg ? 'Создать профиль' : 'Войти'}</button><button id="gGuest" class="btn" type="button">Играть как гость</button></div>
       </form>
-      <div class="note">Профиль хранится в этом браузере. Пароль сохраняется только в виде хеша.</div>`;
+      <div class="note">Профиль хранится на сервере: прогресс, машины и монеты будут с тобой на любом устройстве.</div>`;
     c.querySelectorAll('[data-g]').forEach((b) => { b.onclick = () => { gateMode = b.dataset.g; gateMsg = ''; renderGate(); }; });
     $('gGuest').onclick = () => { store.set('nf-guest', true); finishGate(); };
     $('gForm').onsubmit = (e) => {
       e.preventDefault();
       const login = $('gLogin').value, pass = $('gPass').value;
-      let err;
-      if (reg) {
-        if (pass !== $('gPass2').value) err = 'Пароли не совпадают.';
-        else { err = profRegister(login, pass); if (!err) { const nick = $('gNick').value.trim(); if (nick) { PROF.name = nick; saveProfile(); } } }
-      } else err = profLogin(login, pass);
-      if (err) { gateMsg = err; renderGate(); return; }
-      finishGate(); toast(PROF.god ? 'Тестовый профиль: бессмертие и бесплатные покупки' : `Привет, ${PROF.name}!`, 2);
+      if (reg && pass !== $('gPass2').value) { gateMsg = 'Пароли не совпадают.'; renderGate(); return; }
+      if (CLOUD.busy) return; CLOUD.busy = true;
+      const btn = $('gForm').querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Связываюсь с сервером…';
+      (reg ? profRegister(login, pass, $('gNick').value) : profLogin(login, pass)).then((err) => {
+        CLOUD.busy = false;
+        if (err) { gateMsg = err; renderGate(); return; }
+        finishGate(); toast(PROF.god ? 'Тестовый профиль: бессмертие и бесплатные покупки' : `Привет, ${PROF.name}!`, 2);
+      });
     };
-    const f = $(reg ? 'gNick' : 'gLogin'); if (f && !isTouch) f.focus();
+    const ll = store.get('nf-last-login'); if (!reg && ll && !$('gLogin').value) $('gLogin').value = ll;
+    const f = $(reg ? 'gNick' : (ll ? 'gPass' : 'gLogin')); if (f && !isTouch) f.focus();
   }
 }
 // installable web app: the service worker caches the game for fast start (only on http(s) with a manifest next to the page)
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel="manifest"]')) {
   window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* not available here */ }); });
 }
+
+// ---------------- on-foot views: first person, over the shoulder, top-down ----------------
+const VIEWS = ['fps', 'tps', 'top'], VIEW_NAMES = { fps: 'от первого лица', tps: 'из-за плеча', top: 'сверху' };
+let footView = (() => { try { const v = JSON.parse(localStorage.getItem('nf-view')); return VIEWS.includes(v) ? v : 'fps'; } catch (e) { return 'fps'; } })();
+let viewYaw = PI, viewPitch = -0.04, viewGun = null;
+function setView(v) {
+  footView = v; try { localStorage.setItem('nf-view', JSON.stringify(v)); } catch (e) { /* storage unavailable */ }
+  if (v === 'top' && document.pointerLockElement) document.exitPointerLock();
+  snapCam = true; if ($('btnView')) $('btnView').textContent = 'Вид: ' + VIEW_NAMES[v];
+  if (state.mode === 'foot') toast('Вид ' + VIEW_NAMES[v] + (v !== 'top' && !isTouch ? ' · кликни, чтобы управлять мышью' : ''), 1.6);
+}
+const cycleView = () => setView(VIEWS[(VIEWS.indexOf(footView) + 1) % VIEWS.length]);
+const lookMode = () => state.mode === 'foot' && footView !== 'top';
+// mouse look (pointer lock); without it the cursor's distance from the centre turns the view
+document.addEventListener('mousemove', (e) => {
+  if (!lookMode() || document.pointerLockElement !== renderer.domElement) return;
+  viewYaw -= e.movementX * 0.0024; viewPitch = clamp(viewPitch - e.movementY * 0.002, -0.85, 0.75);
+});
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (lookMode() && e.pointerType === 'mouse' && document.pointerLockElement !== renderer.domElement && renderer.domElement.requestPointerLock) { try { const r = renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) { /* not allowed here */ } }
+});
+// touch: dragging on the right half of the screen turns the view
+const lookTouch = { id: null, x: 0, y: 0 };
+renderer.domElement.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse' && lookMode() && e.clientX > window.innerWidth * 0.45) { lookTouch.id = e.pointerId; lookTouch.x = e.clientX; lookTouch.y = e.clientY; } });
+renderer.domElement.addEventListener('pointermove', (e) => { if (e.pointerId !== lookTouch.id) return; viewYaw -= (e.clientX - lookTouch.x) * 0.006; viewPitch = clamp(viewPitch - (e.clientY - lookTouch.y) * 0.004, -0.85, 0.75); lookTouch.x = e.clientX; lookTouch.y = e.clientY; });
+window.addEventListener('pointerup', (e) => { if (e.pointerId === lookTouch.id) lookTouch.id = null; });
+function viewTurnFallback(dt) {
+  // no pointer lock (e.g. inside a frame): the cursor near the left/right edge turns the view
+  if (isTouch || !mouse.has || document.pointerLockElement === renderer.domElement) return;
+  const dx = mouse.x / window.innerWidth - 0.5; if (Math.abs(dx) > 0.18) viewYaw -= Math.sign(dx) * (Math.abs(dx) - 0.18) * dt * 7;
+  const dy = mouse.y / window.innerHeight - 0.5; if (Math.abs(dy) > 0.25) viewPitch = clamp(viewPitch - Math.sign(dy) * (Math.abs(dy) - 0.25) * dt * 3, -0.85, 0.75);
+}
+// a gun in the right hand of the first-person camera
+function ensureViewGun() {
+  if (viewGun) return viewGun;
+  const g = new THREE.Group(), m = std(0x1c1d22, { metalness: 0.7, roughness: 0.35 }), w = std(0x3a2a20, { roughness: 0.8 });
+  const body = new THREE.Mesh(box1, m); body.scale.set(0.09, 0.11, 0.42); g.add(body);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.3, 10), m); barrel.rotation.x = PI / 2; barrel.position.set(0, 0.025, -0.34); g.add(barrel);
+  const grip = new THREE.Mesh(box1, w); grip.scale.set(0.075, 0.18, 0.09); grip.position.set(0, -0.12, 0.1); grip.rotation.x = -0.25; g.add(grip);
+  const sight = new THREE.Mesh(box1, basic(new THREE.Color(0.2, 2.5, 1.2))); sight.scale.set(0.015, 0.015, 0.015); sight.position.set(0, 0.07, -0.15); g.add(sight);
+  g.position.set(0.2, -0.2, -0.45); camera.add(g); if (!camera.parent) scene.add(camera);
+  viewGun = g; return g;
+}
+// movement relative to the view, and the aim direction with a light assist towards enemies near the crosshair
+function viewMove(mx, mz) {
+  const F = new V3(Math.sin(viewYaw), 0, Math.cos(viewYaw)), R = new V3(-Math.cos(viewYaw), 0, Math.sin(viewYaw));
+  return F.multiplyScalar(-mz).add(R.multiplyScalar(mx));
+}
+function viewAim() {
+  let best = null, ba = 0.11;
+  for (const e of enemies) {
+    if (e.dead) continue; const d = e.pos.distanceTo(hero.pos); if (d > 45) continue;
+    const a = Math.abs(wrapA(Math.atan2(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z) - viewYaw));
+    if (a < ba && los(hero.pos, e.pos)) { ba = a; best = e; }
+  }
+  const ang = best ? Math.atan2(best.pos.x - hero.pos.x, best.pos.z - hero.pos.z) : viewYaw;
+  return hero.pos.clone().add(new V3(Math.sin(ang), 0, Math.cos(ang)).multiplyScalar(12));
+}
+function footCamera() {
+  const F = new V3(Math.sin(viewYaw), 0, Math.cos(viewYaw)), R = new V3(-Math.cos(viewYaw), 0, Math.sin(viewYaw));
+  const dir = new V3(Math.sin(viewYaw) * Math.cos(viewPitch), Math.sin(viewPitch), Math.cos(viewYaw) * Math.cos(viewPitch));
+  if (footView === 'fps') {
+    const p = hero.pos.clone().add(new V3(0, 1.62 + Math.sin(hero.walk * 0.9) * 0.04, 0)).addScaledVector(F, 0.15);
+    return { desired: p, look: p.clone().addScaledVector(dir, 20), direct: true, fov: 72 };
+  }
+  const p = hero.pos.clone().add(new V3(0, 2.3, 0)).addScaledVector(F, -4.4).addScaledVector(R, 1.0);
+  return { desired: p, look: p.clone().addScaledVector(dir, 20), direct: false, fov: 66 };
+}
+// pause menu
+let pausedFrom = null;
+function pauseGame() {
+  if (state.mode !== 'drive' && state.mode !== 'foot') return;
+  pausedFrom = state.mode; state.mode = 'paused'; setEngine(0, false);
+  if (document.pointerLockElement) document.exitPointerLock();
+  const ttl = state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
+  showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
+    <p class="lead">Прогресс сохраняется по главам: выйдешь в меню — продолжишь с начала этой главы.</p>
+    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Вид: ${VIEW_NAMES[footView]}</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
+    pResume: () => { hideModal(); state.mode = pausedFrom; state.fireLock = true; },
+    pView: () => { cycleView(); $('pView').textContent = 'Вид: ' + VIEW_NAMES[footView]; },
+    pMenu: () => { hideModal(); showSelect(); },
+  });
+}
+// where the player stopped: the episode and chapter to continue from
+function saveLast(ep, ch) { try { localStorage.setItem('nf-last', JSON.stringify({ ep, ch })); } catch (e) { /* storage unavailable */ } cloudSaveSoon(); }
+function loadLast() { try { const v = JSON.parse(localStorage.getItem('nf-last')); return v && EP_NAMES[v.ep] ? v : null; } catch (e) { return null; } }
 
 // ---------------- drivers ----------------
 // stats: [health, shooting, driving], 1–5 each, 10 points per driver
@@ -4492,7 +4792,9 @@ function showSelect() {
   $('preview').hidden = true; $('select').hidden = false; $('hud').hidden = true; $('touch').hidden = true;
   pvEnemy.g.visible = false; arrow.visible = false; setBeam(null);
   if (hero) hero.g.visible = false;
-  clearStage(); setMood('night'); renderChapters();
+  clearStage(); setMood('night');
+  const last = loadLast(); if (last) { selEp = last.ep; ep2Pick = last.ep >= 2 ? Math.max(1, Math.min(last.ch, epMax(last.ep))) : 1; }
+  renderChapters();
   pc.g.visible = true; pc.pos.set(SHOW.x - 4.6, 0, SHOW.z - 3.2); pc.h = PI * 0.82; pc.vel.set(0, 0, 0);
   pc.g.position.copy(pc.pos); pc.g.rotation.set(0, pc.h, 0);
   showDisc.visible = true;
@@ -4630,6 +4932,7 @@ $('btnPlay').addEventListener('click', showSelect);
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
 $('btnProfile').addEventListener('click', () => openProfile('me'));
+$('btnView').addEventListener('click', cycleView); $('btnPause').addEventListener('click', pauseGame); $('btnView').textContent = 'Вид: ' + VIEW_NAMES[footView];
 $('selProfile').addEventListener('click', () => openProfile('me'));
 $('profClose').addEventListener('click', closeProfile);
 $('prof').addEventListener('click', (e) => { if (e.target.id === 'prof') closeProfile(); });
@@ -4667,7 +4970,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateRain(dt, focus);
@@ -4682,7 +4985,7 @@ function loop(now) {
 $('loading').textContent = 'Загрузка города… 0%';
 loadAssets((k) => { $('loading').textContent = 'Загрузка города… ' + Math.round(k * 100) + '%'; }).then(() => {
   buildWorld();
-  { const ses = store.get('nf-session'); loadProfile(ses === TEST_LOGIN ? null : ses); } // the test profile always needs the password again
+  loadProfile();   // a guest until the server session (if any) is restored
   initLife();
   buildRoster();
   renderPortraits();
@@ -4690,12 +4993,14 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   pvEnemy = Object.assign(makeCar(0x2b2b33, false), { pos: new V3(), h: PI / 2 });
   applyChar(); updateProfChip(); updateBoostsHud();
   $('loading').hidden = true;
-  showPreview(); startGate();
+  showPreview();
+  // a signed-in player skips the entry screen; wait for the server at most 4 s
+  Promise.race([cloudRestore(), new Promise((r) => setTimeout(() => r(false), 4000))]).then(() => { updateProfChip(); startGate(); });
   requestAnimationFrame(loop);
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>
