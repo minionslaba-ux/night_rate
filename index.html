@@ -52,6 +52,11 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .toast { position: absolute; top: 28%; left: 50%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(18px, 3.4vw, 30px); color: var(--taxi); text-shadow: 0 0 18px rgba(255,196,61,.55), 0 2px 4px #000; white-space: nowrap; animation: pop .25s ease-out; }
 @keyframes pop { from { transform: translateX(-50%) scale(1.4); opacity: 0; } }
 .hint { position: absolute; left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); font-size: 12px; color: var(--muted); background: var(--panel); padding: 6px 10px; border-radius: 6px; }
+.nav { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid rgba(77,255,166,.35); border-radius: 10px; padding: 6px 14px 6px 8px; box-shadow: 0 0 20px rgba(77,255,166,.15); }
+.nav svg { width: 44px; height: 44px; flex: none; transition: transform .12s linear; filter: drop-shadow(0 0 6px rgba(77,255,166,.7)); }
+.nav b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 17px; color: var(--go); letter-spacing: .02em; white-space: nowrap; }
+.nav span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 560px) { .nav { top: calc(116px + env(safe-area-inset-top, 0px)); left: calc(12px + env(safe-area-inset-left, 0px)); transform: none; } .nav svg { width: 36px; height: 36px; } .nav b { font-size: 15px; } }
 .hurt { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 30, 70, .55) 100%); opacity: 0; }
 .crosshair { position: fixed; width: 22px; height: 22px; margin: -11px 0 0 -11px; border: 2px solid var(--taxi); border-radius: 50%; pointer-events: none; box-shadow: 0 0 8px rgba(255,196,61,.6); }
 
@@ -196,6 +201,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
     <button id="mute" class="mute" type="button">Звук: вкл</button>
   </div>
   <div id="bossBar" class="boss" hidden>Бригадир «Шакалов»<div class="bar-track"><div id="bossFill" class="bar-fill"></div></div></div>
+  <div id="nav" class="nav" hidden><svg id="navArrow" viewBox="-50 -50 100 100" aria-hidden="true"><path d="M0 -42 L32 0 L13 0 L13 40 L-13 40 L-13 0 L-32 0 Z" fill="#4dffa6" stroke="#0b0d1f" stroke-width="5" stroke-linejoin="round"/></svg><div><b id="navTurn">Прямо</b><span id="navDist"></span></div></div>
   <div id="speedo" class="speedo"><b id="speed">0</b><small>км/ч</small></div>
   <div id="toast" class="toast" hidden></div>
   <div id="hint" class="hint"></div>
@@ -952,6 +958,50 @@ function makeCar(color, kind) {
   return { g, wheels };
 }
 
+// faces: painted per character onto a decal attached to the head bone (replaces the plain eye slits)
+const FACE_TEX = {};
+function faceTex(f) {
+  const key = JSON.stringify(f); if (FACE_TEX[key]) return FACE_TEX[key];
+  const t = canvasTex(256, 256, (g) => {
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    const ey = 100, ex = 44;
+    if (f.blush) for (const sd of [-1, 1]) { const gr = g.createRadialGradient(128 + sd * 72, 146, 0, 128 + sd * 72, 146, 28); gr.addColorStop(0, 'rgba(255,110,120,.42)'); gr.addColorStop(1, 'rgba(255,110,120,0)'); g.fillStyle = gr; g.fillRect(0, 100, 256, 100); }
+    if (f.freckles) { g.fillStyle = 'rgba(150,70,40,.55)'; [[-70, 136], [-58, 146], [-80, 148], [-64, 128], [70, 136], [58, 146], [80, 148], [64, 128]].forEach(([x, y]) => { g.beginPath(); g.arc(128 + x, y, 2.6, 0, PI * 2); g.fill(); }); }
+    if (f.stubble) { g.fillStyle = f.stubble; g.globalAlpha = 0.28; for (let i = 0; i < 420; i++) { const a = Math.random() * PI, r = 40 + Math.random() * 46; const x = 128 + Math.cos(a) * r * 1.05, y = 150 + Math.sin(a) * r * 0.85; if (y > 168 && !(y < 200 && Math.abs(x - 128) < 26)) g.fillRect(x, y, 2.2, 2.2); } g.globalAlpha = 1; }
+    for (const sd of [-1, 1]) {
+      const cx = 128 + sd * ex, h = f.fem ? 21 : 18, w = 23;
+      g.fillStyle = '#fbf8f2'; g.beginPath(); g.ellipse(cx, ey, w, h, 0, 0, PI * 2); g.fill();
+      g.save(); g.beginPath(); g.ellipse(cx, ey, w, h, 0, 0, PI * 2); g.clip();
+      g.fillStyle = f.iris; g.beginPath(); g.arc(cx + sd * 1.5, ey + 2, 15, 0, PI * 2); g.fill(); g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = '#0d0b0c'; g.beginPath(); g.arc(cx + sd * 1.5, ey + 2, 7.5, 0, PI * 2); g.fill();
+      if (f.angry) { g.fillStyle = 'rgba(40,20,20,.35)'; g.beginPath(); g.moveTo(cx - 22, ey - 22); g.lineTo(cx + 22, ey - 22); g.lineTo(cx - sd * 20, ey - 2); g.closePath(); g.fill(); }
+      g.restore();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(cx - 5, ey - 5, 4.5, 0, PI * 2); g.fill(); g.beginPath(); g.arc(cx + 5, ey + 6, 2, 0, PI * 2); g.fill();
+      g.strokeStyle = '#1a1416'; g.lineWidth = f.fem ? 7 : 5.5; g.beginPath(); g.ellipse(cx, ey, w + 1, h + 1, 0, PI * 1.06, PI * 1.94); g.stroke();
+      if (f.fem) { g.lineWidth = 3.5; for (let k = 0; k < 3; k++) { g.beginPath(); g.moveTo(cx + sd * (15 + k * 3), ey - 15 + k * 6); g.lineTo(cx + sd * (27 + k * 4), ey - 22 + k * 7); g.stroke(); } }
+      if (f.wrinkles) { g.strokeStyle = 'rgba(90,50,40,.4)'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(cx - 12, ey + 22); g.quadraticCurveTo(cx, ey + 27, cx + 12, ey + 22); g.stroke(); }
+      // brows
+      g.strokeStyle = f.brow; g.lineWidth = f.fem ? 7 : 11;
+      const yi = f.angry ? 70 : 62, yo = f.angry ? 52 : 60;
+      g.beginPath(); g.moveTo(128 + sd * 22, yi); g.quadraticCurveTo(128 + sd * 44, f.fem ? 52 : (yi + yo) / 2 - 4, 128 + sd * 66, yo); g.stroke();
+    }
+    if (f.scar) { g.strokeStyle = '#9a4a48'; g.lineWidth = 4; g.beginPath(); g.moveTo(70, 52); g.lineTo(96, 128); g.stroke(); }
+    if (f.mask) return;
+    g.strokeStyle = 'rgba(90,40,30,.38)'; g.lineWidth = 4; g.beginPath(); g.moveTo(121, 146); g.quadraticCurveTo(128, 153, 135, 146); g.stroke();
+    if (f.stache) { g.fillStyle = f.stache; for (const sd of [-1, 1]) { g.beginPath(); g.ellipse(128 + sd * 15, 168, 19, 9, sd * 0.25, 0, PI * 2); g.fill(); } }
+    const lip = f.fem ? '#b04658' : '#5a2224'; g.strokeStyle = lip; g.lineWidth = f.fem ? 6 : 5;
+    g.beginPath();
+    if (f.mouth === 'grin') { g.fillStyle = '#4a1a1c'; g.moveTo(104, 180); g.quadraticCurveTo(128, 210, 152, 180); g.closePath(); g.fill(); g.fillStyle = '#f4f0ea'; g.fillRect(110, 181, 36, 6); g.beginPath(); g.moveTo(104, 180); g.quadraticCurveTo(128, 210, 152, 180); g.stroke(); }
+    else if (f.mouth === 'smile') { g.moveTo(106, 182); g.quadraticCurveTo(128, 198, 150, 182); g.stroke(); }
+    else if (f.mouth === 'smirk') { g.moveTo(110, 188); g.quadraticCurveTo(132, 193, 150, 180); g.stroke(); }
+    else if (f.mouth === 'grim') { g.moveTo(110, 191); g.quadraticCurveTo(128, 183, 146, 191); g.stroke(); }
+    else { g.moveTo(112, 186); g.quadraticCurveTo(128, 191, 144, 186); g.stroke(); }
+    if (f.fem) { g.fillStyle = 'rgba(176,70,88,.55)'; g.beginPath(); g.ellipse(128, 191, 11, 4, 0, 0, PI * 2); g.fill(); }
+  });
+  FACE_TEX[key] = t; return t;
+}
+const FACE_GEO = (() => { const g = new THREE.PlaneGeometry(0.8, 0.8, 12, 1); const P = g.attributes.position; for (let i = 0; i < P.count; i++) { const x = P.getX(i); P.setZ(i, -0.9 * x * x); } g.computeVertexNormals(); return g; })();
+
 // people: Quaternius animated characters (one shared skeleton and clip set), recoloured per driver
 const HUMANS = new Set();
 const HUMAN_S = 0.54;
@@ -966,9 +1016,14 @@ function makeHuman(look, scale) {
     o.material = o.material.clone(); o.material.envMapIntensity = 0.5; o.material.roughness = Math.min(0.85, o.material.roughness);
     const n = o.material.name;
     if (n === 'Skin') o.material.color.set(look.skin || '#e0b89a');
-    else if (n === 'Face') o.material.color.set('#1c1a22');
+    else if (n === 'Face') { o.material.color.set('#1c1a22'); if (look.face) o.visible = false; }
     else if (look.colors && look.colors[n]) o.material.color.set(look.colors[n]);
   });
+  const headB = model.getObjectByName('Head');
+  if (headB && look.face) {
+    const fm = new THREE.Mesh(FACE_GEO, new THREE.MeshStandardMaterial({ map: faceTex(look.face), transparent: true, depthWrite: false, roughness: 0.55, envMapIntensity: 0.4, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+    fm.position.set(0, 0.35, 0.5); fm.renderOrder = 2; headB.add(fm);
+  }
   const fist = model.getObjectByName('FistR');
   if (fist) { const gun = new THREE.Group(); const a = new THREE.Mesh(gunGeoA, gunMat); a.position.set(0, 0.06, 0.22); gun.add(a); const b = new THREE.Mesh(gunGeoB, gunMat); b.position.set(0, -0.1, 0.02); b.rotation.x = 0.25; gun.add(b); gun.scale.setScalar(0.9); gun.position.set(0, 0.12, 0.08); gun.rotation.set(-1.57, 0, 0); fist.add(gun); }
   model.scale.setScalar(HUMAN_S);
@@ -991,17 +1046,28 @@ function playAct(h, name, fade, once) {
 // o: { move (0..1), aim, idle } -> picks the clip; the mixer itself runs in updateHumans
 function poseHuman(h, o) {
   if (h.lockT > 0) return;
-  const want = o.idle ? 'Idle' : o.move > 0.5 ? 'Run' : o.move > 0.08 ? 'Walk' : (o.aim ? 'Shoot_OneHanded' : 'Idle');
+  const want = o.idle ? 'Idle' : o.back && o.move > 0.08 ? 'Walk' : o.move > 0.5 ? 'Run' : o.move > 0.08 ? 'Walk' : (o.aim ? 'Shoot_OneHanded' : 'Idle');
   if (want !== h.cur) playAct(h, want, 0.18);
+  if (h.acts.Walk) h.acts.Walk.timeScale = o.back ? -1.3 : 1;
 }
 function hitHuman(h) { if (h.lockT > 0) return; h.lockT = 0.32; playAct(h, 'RecieveHit', 0.06, true); }
-function killHuman(h) { h.lockT = 1e9; playAct(h, 'Death', 0.1, true); }
+function killHuman(h) { h.twist = 0; h.lockT = 1e9; playAct(h, 'Death', 0.1, true); }
 function reviveHuman(h) { h.lockT = 0; playAct(h, 'Idle', 0.2); }
+const _tq = new THREE.Quaternion(), _tq2 = new THREE.Quaternion(), _ax = new V3();
+function twistTorso(h, ang) {
+  if (!h.spine) h.spine = [[h.model.getObjectByName('Abdomen'), 0.35], [h.model.getObjectByName('Torso'), 0.65]].filter((b) => b[0]);
+  for (const [bone, k] of h.spine) {
+    bone.parent.getWorldQuaternion(_tq2).invert();
+    _ax.set(0, 1, 0).applyQuaternion(_tq2).normalize();
+    bone.quaternion.premultiply(_tq.setFromAxisAngle(_ax, ang * k));
+  }
+}
 function updateHumans(dt) {
   for (const h of HUMANS) {
     if (!h.g.parent) { HUMANS.delete(h); continue; }
     if (h.lockT > 0 && h.lockT < 1e8) { h.lockT -= dt; }
     h.mixer.update(dt);
+    if (h.twist) twistTorso(h, h.twist);
   }
 }
 
@@ -1146,8 +1212,59 @@ let pc, hero, medkit = null, spawnQueue = [];
 
 const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 90, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x4dffa6, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
 scene.add(beam);
-const arrowGeo = new THREE.ConeGeometry(0.55, 1.7, 4); arrowGeo.rotateX(PI / 2);
-const arrow = new THREE.Mesh(arrowGeo, basic(0x4dffa6)); scene.add(arrow);
+// route arrow: a glowing chevron hovering over the taxi, pointing along the road route
+const arrowShape = new THREE.Shape();
+[[0, 1.7], [1.25, 0.25], [0.48, 0.25], [0.48, -1.3], [-0.48, -1.3], [-0.48, 0.25], [-1.25, 0.25]].forEach(([x, y], i) => (i ? arrowShape.lineTo(x, y) : arrowShape.moveTo(x, y)));
+const arrowGeo = new THREE.ExtrudeGeometry(arrowShape, { depth: 0.22, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 2 });
+arrowGeo.rotateX(PI / 2); arrowGeo.translate(0, 0.11, 0);
+const arrow = new THREE.Group();
+const arrowCore = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.15, 0.95, 0.5) }));
+const arrowGlow = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 5.5), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(0.1, 0.8, 0.4), transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+arrowGlow.rotation.x = -PI / 2; arrowGlow.position.y = -0.05;
+arrow.add(arrowCore, arrowGlow); arrow.scale.setScalar(0.85); scene.add(arrow);
+
+// road-grid navigation to the yard gate: intersections every 80 units, goal on road z = -80 between x 80 and 160
+const NAV = { pts: [], target: null, dist: 0, turn: 0, turnDist: 0, atGoal: false };
+const GOAL = new V3(120, 0, -80), GA = [80, -80], GB = [160, -80];
+const gridD = (x, z) => Math.min(Math.abs(x - GA[0]) + Math.abs(z - GA[1]), Math.abs(x - GB[0]) + Math.abs(z - GB[1])) + 40;
+const snapLo = (v) => ROADS.filter((r) => r <= v + 0.01).pop() ?? ROADS[0];
+const snapHi = (v) => ROADS.find((r) => r >= v - 0.01) ?? ROADS[ROADS.length - 1];
+function updateNav(pos) {
+  NAV.pts.length = 0;
+  const onGoalRoad = Math.abs(pos.z - GOAL.z) < 9 && pos.x >= GA[0] - 2 && pos.x <= GB[0] + 2;
+  if (onGoalRoad) NAV.pts.push(GOAL.clone());
+  else {
+    const cand = [];
+    const vr = ROADS.find((r) => Math.abs(pos.x - r) < 9), hr = ROADS.find((r) => Math.abs(pos.z - r) < 9);
+    if (vr !== undefined) { cand.push([vr, snapLo(pos.z)], [vr, snapHi(pos.z)]); }
+    if (hr !== undefined) { cand.push([snapLo(pos.x), hr], [snapHi(pos.x), hr]); }
+    if (!cand.length) cand.push([snapLo(pos.x), snapLo(pos.z)], [snapHi(pos.x), snapHi(pos.z)], [snapLo(pos.x), snapHi(pos.z)], [snapHi(pos.x), snapLo(pos.z)]);
+    let best = cand[0], bc = Infinity;
+    for (const c of cand) { const cost = Math.abs(pos.x - c[0]) + Math.abs(pos.z - c[1]) + gridD(c[0], c[1]); if (cost < bc) { bc = cost; best = c; } }
+    let n = best.slice();
+    NAV.pts.push(new V3(n[0], 0, n[1]));
+    for (let guard = 0; guard < 12; guard++) {
+      if ((n[0] === GA[0] || n[0] === GB[0]) && n[1] === GA[1]) break;
+      let nb = null, nd = Infinity;
+      for (const [dx, dz] of [[80, 0], [-80, 0], [0, 80], [0, -80]]) { const x = n[0] + dx, z = n[1] + dz; if (x < -160 || x > 160 || z < -160 || z > 160) continue; const d = gridD(x, z); if (d < nd) { nd = d; nb = [x, z]; } }
+      n = nb; NAV.pts.push(new V3(n[0], 0, n[1]));
+    }
+    NAV.pts.push(GOAL.clone());
+  }
+  // drop the first point once the car is inside that intersection
+  while (NAV.pts.length > 1 && Math.hypot(NAV.pts[0].x - pos.x, NAV.pts[0].z - pos.z) < 9) NAV.pts.shift();
+  NAV.target = NAV.pts[0];
+  let d = 0, prev = pos; for (const q of NAV.pts) { d += Math.hypot(q.x - prev.x, q.z - prev.z); prev = q; } NAV.dist = d;
+  NAV.turnDist = Math.hypot(NAV.target.x - pos.x, NAV.target.z - pos.z);
+  NAV.turn = 0;
+  if (NAV.pts.length > 1) {
+    const a = NAV.pts[0], b = NAV.pts[1];
+    let d1x = a.x - pos.x, d1z = a.z - pos.z; const l1 = Math.hypot(d1x, d1z) || 1; d1x /= l1; d1z /= l1;
+    let d2x = b.x - a.x, d2z = b.z - a.z; const l2 = Math.hypot(d2x, d2z) || 1; d2x /= l2; d2z /= l2;
+    const cr = d1x * d2z - d1z * d2x, dot = d1x * d2x + d1z * d2z;
+    if (dot < 0.7) NAV.turn = cr > 0 ? 1 : -1;
+  }
+}
 function setBeam(v) { beam.visible = !!v; if (v) beam.position.set(v.x, 45, v.z); }
 
 // ---------------- physics helpers ----------------
@@ -1416,9 +1533,17 @@ function updateDrive(dt) {
   }
   for (let i = enemyCars.length - 1; i >= 0; i--) if (enemyCars[i].dead) enemyCars.splice(i, 1);
 
-  // arrow to goal + arrival
-  arrow.position.set(pc.pos.x, 3.4 + Math.sin(state.t * 4) * 0.15, pc.pos.z);
-  arrow.rotation.y = Math.atan2(GATE.x - pc.pos.x, GATE.z - pc.pos.z);
+  // route arrow over the taxi + navigator panel
+  updateNav(pc.pos);
+  const bearing = Math.atan2(NAV.target.x - pc.pos.x, NAV.target.z - pc.pos.z);
+  arrow.position.set(pc.pos.x, 3.6 + Math.sin(state.t * 4) * 0.12, pc.pos.z);
+  arrow.rotation.y += wrapA(bearing - arrow.rotation.y) * Math.min(1, dt * 10);
+  arrowCore.material.color.setRGB(0.12, 0.8 + Math.sin(state.t * 6) * 0.2, 0.42);
+  const rel = wrapA(bearing - pc.h);
+  $('navArrow').style.transform = `rotate(${(-rel).toFixed(3)}rad)`;
+  const m = Math.round(NAV.turnDist / 5) * 5;
+  $('navTurn').textContent = Math.abs(rel) > 2.2 ? 'Развернись' : NAV.pts.length === 1 ? 'Склад №7' : NAV.turn ? `${NAV.turn > 0 ? 'Направо' : 'Налево'} через ${m} м` : `Прямо ${m} м`;
+  $('navDist').textContent = `до склада ${Math.round(NAV.dist / 10) * 10} м`;
   if (pc.pos.distanceTo(GATE) < 11) arriveAtYard();
   setEngine(pc.vf, true);
 }
@@ -1452,7 +1577,7 @@ function setupAct2() {
 }
 function spawnEnemy(x, z, boss) {
   const skin = pick(['#d9a98a', '#c08a6a', '#e8c0a0', '#a87452']);
-  const m = makeHuman(boss ? { model: 'boss', skin: '#c89a7a', colors: { Details: '#7a1426', Belt: '#7a1426' } } : pick([{ model: 'thug1', skin, colors: { Details: '#b01e34' } }, { model: 'thug2', skin, colors: { Shirt: '#8c1c2b', Pants: '#1b1b22', Hair: '#15151a' } }, { model: 'thug3', skin, colors: { Shirt: '#2a2a30', Pants: '#3a1418', Hair: '#15151a' } }]), boss ? 1.18 : 1);
+  const m = makeHuman(boss ? { model: 'boss', skin: '#c89a7a', colors: { Details: '#7a1426', Belt: '#7a1426' }, face: { brow: '#5a4228', iris: '#2a1a10', mouth: 'smirk', angry: true, scar: true } } : pick([{ model: 'thug1', skin, colors: { Details: '#b01e34' }, face: { brow: '#15151a', iris: '#3a2a1a', angry: true, mask: true } }, { model: 'thug2', skin, colors: { Shirt: '#8c1c2b', Pants: '#1b1b22', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true } }, { model: 'thug3', skin, colors: { Shirt: '#2a2a30', Pants: '#3a1418', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true, stubble: '#15151a' } }]), boss ? 1.18 : 1);
   const e = Object.assign(m, { pos: new V3(x, 0, z), face: 0, hp: boss ? 280 : 60, max: boss ? 280 : 60, fireCd: rand(0.9, 1.6), strafe: Math.random() < 0.5 ? 1 : -1, strafeT: rand(1, 2.5), boss, prefer: boss ? 9 : rand(8, 13), react: rand(0.5, 1.0), walk: 0, dead: false, hitT: 0 });
   e.g.position.copy(e.pos); enemies.push(e);
   return e;
@@ -1471,18 +1596,26 @@ function updateFoot(dt) {
     let bd = 28 * P.aim; for (const e of enemies) { if (e.dead) continue; const d = e.pos.distanceTo(hero.pos); if (d < bd && los(hero.pos, e.pos)) { bd = d; aim = e.pos.clone(); } }
     if (!aim && mv.lengthSq() > 0.01) aim = hero.pos.clone().add(mv);
   }
-  if (aim) hero.face = Math.atan2(aim.x - hero.pos.x, aim.z - hero.pos.z);
+  // legs follow the stick, the torso turns to the target (up to ~100 degrees); aiming backwards = backpedal
+  const moving = mv.lengthSq() > 0.01;
+  const moveAng = moving ? Math.atan2(mv.x, mv.z) : hero.face;
+  const aimAng = aim ? Math.atan2(aim.x - hero.pos.x, aim.z - hero.pos.z) : moveAng;
+  let bodyAng = moving ? moveAng : aimAng, back = false;
+  if (moving && aim && Math.abs(wrapA(aimAng - moveAng)) > 1.9) { bodyAng = aimAng; back = true; }
+  hero.face = wrapA(hero.face + wrapA(bodyAng - hero.face) * Math.min(1, dt * 16));
+  hero.aimAng = aimAng;
+  hero.twist = clamp(wrapA(aimAng - hero.face), -1.75, 1.75);
   hero.g.position.copy(hero.pos); hero.g.rotation.y = hero.face;
   heroLight.position.set(hero.pos.x + 1.2, 4.5, hero.pos.z + 2.5); heroLight.intensity = 1.6;
   hero.walk += mv.length() * dt * 9.5;
-  poseHuman(hero, { walk: hero.walk, move: Math.min(1, mv.length() * 1.5), aim: true, t: state.t });
+  poseHuman(hero, { walk: hero.walk, move: Math.min(1, mv.length() * 1.5), aim: true, back, t: state.t });
   hero.fireCd -= dt;
   if (!fireHeld()) state.fireLock = false;
   if (fireHeld() && !state.fireLock && hero.fireCd <= 0) {
     hero.fireCd = 0.15 * P.fireMult;
-    const dir = new V3(Math.sin(hero.face), 0, Math.cos(hero.face));
+    const dir = new V3(Math.sin(hero.aimAng), 0, Math.cos(hero.aimAng));
     dir.x += rand(-0.025, 0.025); dir.z += rand(-0.025, 0.025); dir.normalize();
-    fire(hero.pos.clone().add(new V3(0, 1.02, 0)).addScaledVector(dir, 0.9).add(new V3(Math.cos(hero.face) * 0.1, 0, -Math.sin(hero.face) * 0.1)), dir, 95, 20 * P.dmg, 'p');
+    fire(hero.pos.clone().add(new V3(0, 1.02, 0)).addScaledVector(dir, 0.9), dir, 95, 20 * P.dmg, 'p');
   }
   // enemies
   for (const e of enemies) {
@@ -1613,6 +1746,10 @@ const mmStatic = document.createElement('canvas'); mmStatic.width = mmStatic.hei
 function drawMinimap() {
   const s = 300 / 360, P = (v) => (v + 180) * s;
   mctx.drawImage(mmStatic, 0, 0);
+  if (state.act === 1 && pc && NAV.pts.length) {
+    mctx.strokeStyle = 'rgba(77,255,166,.85)'; mctx.lineWidth = 5; mctx.lineJoin = 'round'; mctx.setLineDash([10, 6]); mctx.lineDashOffset = -state.t * 30;
+    mctx.beginPath(); mctx.moveTo(P(pc.pos.x), P(pc.pos.z)); for (const q of NAV.pts) mctx.lineTo(P(q.x), P(q.z)); mctx.stroke(); mctx.setLineDash([]);
+  }
   const tgt = beam.visible ? beam.position : null;
   if (tgt) { mctx.fillStyle = '#4dffa6'; mctx.beginPath(); mctx.arc(P(tgt.x), P(tgt.z), 7 + Math.sin(state.t * 5) * 2, 0, PI * 2); mctx.fill(); }
   mctx.fillStyle = '#ff3d8b';
@@ -1630,6 +1767,7 @@ function updateHud(dt) {
   if (r !== lastHp) { lastHp = r; $('hpFill').style.width = r + '%'; $('hpFill').classList.toggle('low', r < 35); }
   $('coins').textContent = state.coins; $('kills').textContent = state.carKills + state.footKills;
   $('speedo').hidden = state.act !== 1;
+  $('nav').hidden = !(state.act === 1 && state.mode === 'drive');
   if (state.act === 1 && pc) $('speed').textContent = Math.round(Math.abs(pc.vf || 0) * 3.3);
   const boss = state.act === 2 && enemies.find((e) => e.boss && !e.dead);
   $('bossBar').hidden = !boss; if (boss) $('bossFill').style.width = (boss.hp / boss.max * 100) + '%';
@@ -1644,16 +1782,16 @@ function updateHud(dt) {
 // ---------------- drivers ----------------
 // stats: [health, shooting, driving], 1–5 each, 10 points per driver
 const CHARS = [
-  { id: 'gleb', sex: 'm', name: 'Глеб', nick: 'Бугай', age: 41, bio: 'Двадцать лет таскал контейнеры в порту. Дверь машины открывает плечом.', stats: [5, 2, 3], perk: ['Крепкий', '+30 к здоровью пешком'], accent: '#9fd36b', fx: { footHp: 30 }, look: { model: 'gleb', skin: '#d9a98a', colors: { Shirt: '#56683a', Pants: '#2b2b33' } } },
-  { id: 'timur', sex: 'm', name: 'Тимур', nick: 'Фара', age: 28, bio: 'Ночной стритрейсер. Проходит повороты, не сбрасывая газ.', stats: [2, 3, 5], perk: ['Гонщик', 'Максимальная скорость выше на 2 деления'], accent: '#5aa8ff', fx: { speed: 2 }, look: { model: 'timur', skin: '#c58c66', colors: { Shirt: '#1f6fd1', Pants: '#22222a', Hair: '#e2b64e' } } },
-  { id: 'artem', sex: 'm', name: 'Артём', nick: 'Прицел', age: 33, bio: 'Бывший армейский стрелок и биатлонист. Попадает в цель на ходу и под дождём.', stats: [3, 5, 2], perk: ['Меткий', 'Пули наносят на 25% больше урона'], accent: '#ff7a5a', fx: { dmg: 1.25 }, look: { model: 'artem', skin: '#e8c0a0', colors: { Main: '#3c3f4a', DarkGreen: '#2a2c34', Helmet: '#7a2a24' } } },
-  { id: 'savva', sex: 'm', name: 'Савва', nick: 'Дед', age: 63, bio: 'Таксует сорок лет. Знает каждый двор и каждый ухаб Порт-Северного.', stats: [3, 3, 4], perk: ['Старая школа', 'Машина получает на 25% меньше урона'], accent: '#d9b26b', fx: { carArmor: 0.75 }, look: { model: 'savva', skin: '#e0b090' } },
-  { id: 'rustam', sex: 'm', name: 'Рустам', nick: 'Механик', age: 37, bio: 'Починит что угодно гаечным ключом и честным словом. Даже на ходу.', stats: [4, 3, 3], perk: ['Механик', 'Машина понемногу чинится в пути'], accent: '#6bd3c8', fx: { regen: true }, look: { model: 'rustam', skin: '#b07a55', colors: { Shirt: '#8a96a6', Pants: '#1f2a38', Hair: '#1a1410' } } },
-  { id: 'kira', sex: 'f', name: 'Кира', nick: 'Ночь', age: 29, bio: 'Возит самых трудных пассажиров города и никогда не задаёт лишних вопросов.', stats: [3, 3, 4], perk: ['Хладнокровие', 'Стреляет на 20% быстрее'], accent: '#ffc43d', fx: { fire: 0.8 }, look: { model: 'kira', skin: '#e0b89a', colors: { Shirt: '#f2b134', Pants: '#2a2a35', Hair: '#1e1620' } } },
-  { id: 'maya', sex: 'f', name: 'Майя', nick: 'Искра', age: 24, bio: 'Бывший курьер на мотоцикле. В заносе чувствует себя как дома.', stats: [2, 3, 5], perk: ['Дрифт', 'Занос без потери скорости'], accent: '#ff5fa2', fx: { drift: true }, look: { model: 'maya', skin: '#f0c8a8', colors: { Shirt: '#ff3d8b', Pants: '#22222c', Hair: '#ff7a2a' } } },
-  { id: 'zoya', sex: 'f', name: 'Зоя', nick: 'Снайпер', age: 35, bio: 'Инструктор стрелкового тира. Видит цель раньше, чем цель видит её.', stats: [2, 5, 3], perk: ['Снайпер', 'Автоприцел бьёт на треть дальше'], accent: '#8fd96b', fx: { aim: 1.35 }, look: { model: 'zoya', skin: '#d8a888' } },
-  { id: 'olga', sex: 'f', name: 'Ольга', nick: 'Сталь', age: 45, bio: 'Пятнадцать лет водила патрульную машину. Под огнём не теряет голову.', stats: [4, 4, 2], perk: ['Бронежилет', 'Пешком получает на 25% меньше урона'], accent: '#7a9cff', fx: { footArmor: 0.75 }, look: { model: 'olga', skin: '#e8c4a8', colors: { Hair: '#b03a2e' } } },
-  { id: 'nika', sex: 'f', name: 'Ника', nick: 'Хакер', age: 22, bio: 'Айтишница, которая таксует ради историй. Всегда знает, где лишняя монета.', stats: [3, 3, 4], perk: ['Расчёт', '+25% монет за всё'], accent: '#b48bff', fx: { coins: 1.25 }, look: { model: 'nika', skin: '#c89070', colors: { Details: '#7a3fd0' } } },
+  { id: 'gleb', sex: 'm', name: 'Глеб', nick: 'Бугай', age: 41, bio: 'Двадцать лет таскал контейнеры в порту. Дверь машины открывает плечом.', stats: [5, 2, 3], perk: ['Крепкий', '+30 к здоровью пешком'], accent: '#9fd36b', fx: { footHp: 30 }, look: { model: 'gleb', skin: '#d9a98a', colors: { Shirt: '#56683a', Pants: '#2b2b33' }, face: { brow: '#3a2a20', iris: '#5a4030', mouth: 'grin', stubble: '#3a2a20' } } },
+  { id: 'timur', sex: 'm', name: 'Тимур', nick: 'Фара', age: 28, bio: 'Ночной стритрейсер. Проходит повороты, не сбрасывая газ.', stats: [2, 3, 5], perk: ['Гонщик', 'Максимальная скорость выше на 2 деления'], accent: '#5aa8ff', fx: { speed: 2 }, look: { model: 'timur', skin: '#c58c66', colors: { Shirt: '#1f6fd1', Pants: '#22222a', Hair: '#e2b64e' }, face: { brow: '#2a2018', iris: '#3a2a1a', mouth: 'smirk' } } },
+  { id: 'artem', sex: 'm', name: 'Артём', nick: 'Прицел', age: 33, bio: 'Бывший армейский стрелок и биатлонист. Попадает в цель на ходу и под дождём.', stats: [3, 5, 2], perk: ['Меткий', 'Пули наносят на 25% больше урона'], accent: '#ff7a5a', fx: { dmg: 1.25 }, look: { model: 'artem', skin: '#e8c0a0', colors: { Main: '#3c3f4a', DarkGreen: '#2a2c34', Helmet: '#7a2a24' }, face: { brow: '#6a4a2a', iris: '#3a6a9a', mouth: 'neutral' } } },
+  { id: 'savva', sex: 'm', name: 'Савва', nick: 'Дед', age: 63, bio: 'Таксует сорок лет. Знает каждый двор и каждый ухаб Порт-Северного.', stats: [3, 3, 4], perk: ['Старая школа', 'Машина получает на 25% меньше урона'], accent: '#d9b26b', fx: { carArmor: 0.75 }, look: { model: 'savva', skin: '#e0b090', face: { brow: '#e0e0e0', iris: '#5a7a9a', mouth: 'smile', stache: '#ececec', wrinkles: true } } },
+  { id: 'rustam', sex: 'm', name: 'Рустам', nick: 'Механик', age: 37, bio: 'Починит что угодно гаечным ключом и честным словом. Даже на ходу.', stats: [4, 3, 3], perk: ['Механик', 'Машина понемногу чинится в пути'], accent: '#6bd3c8', fx: { regen: true }, look: { model: 'rustam', skin: '#b07a55', colors: { Shirt: '#8a96a6', Pants: '#1f2a38', Hair: '#1a1410' }, face: { brow: '#1a1410', iris: '#2a1a10', mouth: 'smile', stubble: '#1a1410' } } },
+  { id: 'kira', sex: 'f', name: 'Кира', nick: 'Ночь', age: 29, bio: 'Возит самых трудных пассажиров города и никогда не задаёт лишних вопросов.', stats: [3, 3, 4], perk: ['Хладнокровие', 'Стреляет на 20% быстрее'], accent: '#ffc43d', fx: { fire: 0.8 }, look: { model: 'kira', skin: '#e0b89a', colors: { Shirt: '#f2b134', Pants: '#2a2a35', Hair: '#1e1620' }, face: { fem: true, brow: '#1e1620', iris: '#7a5030', mouth: 'neutral', blush: true } } },
+  { id: 'maya', sex: 'f', name: 'Майя', nick: 'Искра', age: 24, bio: 'Бывший курьер на мотоцикле. В заносе чувствует себя как дома.', stats: [2, 3, 5], perk: ['Дрифт', 'Занос без потери скорости'], accent: '#ff5fa2', fx: { drift: true }, look: { model: 'maya', skin: '#f0c8a8', colors: { Shirt: '#ff3d8b', Pants: '#22222c', Hair: '#ff7a2a' }, face: { fem: true, brow: '#c85a20', iris: '#3a8a5a', mouth: 'grin', blush: true, freckles: true } } },
+  { id: 'zoya', sex: 'f', name: 'Зоя', nick: 'Снайпер', age: 35, bio: 'Инструктор стрелкового тира. Видит цель раньше, чем цель видит её.', stats: [2, 5, 3], perk: ['Снайпер', 'Автоприцел бьёт на треть дальше'], accent: '#8fd96b', fx: { aim: 1.35 }, look: { model: 'zoya', skin: '#d8a888', face: { fem: true, brow: '#5a2a1a', iris: '#4a6a3a', mouth: 'smirk' } } },
+  { id: 'olga', sex: 'f', name: 'Ольга', nick: 'Сталь', age: 45, bio: 'Пятнадцать лет водила патрульную машину. Под огнём не теряет голову.', stats: [4, 4, 2], perk: ['Бронежилет', 'Пешком получает на 25% меньше урона'], accent: '#7a9cff', fx: { footArmor: 0.75 }, look: { model: 'olga', skin: '#e8c4a8', colors: { Hair: '#b03a2e' }, face: { fem: true, brow: '#8a2a20', iris: '#4a6a9a', mouth: 'neutral' } } },
+  { id: 'nika', sex: 'f', name: 'Ника', nick: 'Хакер', age: 22, bio: 'Айтишница, которая таксует ради историй. Всегда знает, где лишняя монета.', stats: [3, 3, 4], perk: ['Расчёт', '+25% монет за всё'], accent: '#b48bff', fx: { coins: 1.25 }, look: { model: 'nika', skin: '#c89070', colors: { Details: '#7a3fd0' }, face: { fem: true, brow: '#2a4a4a', iris: '#7a40c0', mouth: 'smile', blush: true } } },
 ];
 let curIdx = 5;
 try { const s = parseInt(localStorage.getItem('nf-driver'), 10); if (s >= 0 && s < CHARS.length) curIdx = s; } catch (e) { /* storage unavailable */ }
@@ -1933,7 +2071,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>
