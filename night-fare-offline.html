@@ -380,7 +380,7 @@ body:has(#dialog:not([hidden])) .touch { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v16'; window.__errs = [];
+window.APP_VER = 'v17'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -2237,8 +2237,10 @@ function updateRain(dt, focus) {
 let muted = false;
 const audio = {};
 function initAudio() {
-  if (audio.ctx) { if (audio.ctx.state === 'suspended') audio.ctx.resume(); return; }
+  if (audio.ctx) { wakeAudio(); return; }
   try {
+    // iPhone (Safari 17+): play like a game/video, not like a ringtone, so the silent switch does not mute it
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }
     const C = window.AudioContext || window.webkitAudioContext; const ctx = new C();
     const { master, nb, verb } = buildMix(ctx);
     const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 40;
@@ -2247,6 +2249,20 @@ function initAudio() {
     Object.assign(audio, { ctx, master, nb, osc, eg, verb });
   } catch (e) { /* no audio */ }
 }
+// iPhone: after switching apps (say, to Telegram to confirm a login) the sound can stay 'interrupted', or fail to start
+// («Failed to start the audio device»). Any tap brings it back; a context that cannot start is rebuilt from scratch.
+function wakeAudio() {
+  const c = audio.ctx; if (!c || muted || audioSaved || c.state === 'running' || c.state === 'closed') return;
+  try { const pr = c.resume(); if (pr && pr.then) pr.then(() => { if (c.state !== 'running') rebuildAudio(c); }, () => rebuildAudio(c)); } catch (e) { rebuildAudio(c); }
+}
+function rebuildAudio(old) {
+  if (audio.ctx !== old) return;
+  try { old.close(); } catch (e) { /* already closed */ }
+  Object.keys(audio).forEach((k) => { delete audio[k]; });
+  if (typeof POLICE !== 'undefined' && POLICE.siren) POLICE.siren = null;
+  initAudio();
+}
+['pointerdown', 'touchend', 'keydown'].forEach((ev) => document.addEventListener(ev, wakeAudio, true));
 // master -> a compressor (loud shots without clipping) -> speakers; a street echo (convolution reverb) on a send
 function buildMix(ctx) {
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 6; comp.attack.value = 0.002; comp.release.value = 0.18; comp.connect(ctx.destination);
@@ -4806,7 +4822,7 @@ if (PLATFORM === 'vk') {
 let hiddenPaused = false;
 function appHidden(hide) {
   if (hide) { if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend(); if (state.mode === 'drive' || state.mode === 'foot') { hiddenPaused = true; pauseGame(); } }
-  else if (audio.ctx && audio.ctx.state === 'suspended' && !muted) audio.ctx.resume();
+  else wakeAudio();
 }
 document.addEventListener('visibilitychange', () => appHidden(document.hidden));
 // sign in through the platform once per launch; failing that, the player is a guest
@@ -5426,7 +5442,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine };
+window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
