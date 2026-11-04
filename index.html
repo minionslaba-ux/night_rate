@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0d1f">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Ночной тариф</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -78,6 +84,14 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .boosts { font-size: 12px; opacity: .9; } .stats.god { background: #b8233a; color: #fff; font-weight: 700; }
 .touch-on .boosts { display: none; }
 .prof-chip { align-self: flex-start; margin-bottom: 6px; } .prof-chip b { color: var(--taxi); }
+.gate { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: radial-gradient(ellipse at 50% 30%, rgba(30,24,70,.55), rgba(5,6,16,.9)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.gate-card { width: min(480px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: rgba(18,20,44,.92); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.5), 0 0 40px rgba(255,196,61,.12); }
+.gate-card .btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.gate-icon { width: 72px; height: 72px; border-radius: 18px; background: linear-gradient(160deg, #1b1f4a, #0b0d1f); border: 1px solid var(--line); display: grid; place-items: center; box-shadow: 0 0 24px rgba(255,196,61,.35); }
+.gate-icon span { width: 44px; height: 18px; border-radius: 4px; background: repeating-linear-gradient(90deg, #ffc43d 0 8px, #1a1405 8px 11px); box-shadow: 0 0 14px rgba(255,196,61,.8); }
+.gate-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; } .gate-hint { font-size: 13px; background: rgba(255,255,255,.06); border-radius: 8px; padding: 10px; margin: 0; }
+.gate-tabs { display: flex; gap: 6px; } .gate-form { display: grid; gap: 10px; } .gate-form label { display: grid; gap: 4px; font-size: 13px; opacity: .9; }
+.gate-form input { background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 11px 12px; font: 15px var(--font-body); }
 .prof { position: fixed; inset: 0; z-index: 40; background: rgba(5,6,16,.72); display: grid; place-items: center; padding: 16px; }
 .prof-card { width: min(920px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: #12142c; border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; }
 .prof-head { display: flex; align-items: center; gap: 12px; } .prof-who { flex: 1; display: grid; min-width: 0; } .prof-who b { font-size: 18px; } .prof-who small { opacity: .7; font-size: 12px; }
@@ -289,6 +303,8 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
   <div class="sel-stage"><div class="stage-name"><b id="stageName"></b><span id="stageNick"></span></div></div>
 </div>
 
+<div id="gate" class="gate" hidden><div id="gateCard" class="gate-card" role="dialog" aria-label="Вход в игру"></div></div>
+
 <div id="prof" class="prof" hidden>
   <div class="prof-card" role="dialog" aria-label="Профиль">
     <div class="prof-head"><div id="profAva" class="prof-ava">Г</div><div class="prof-who"><b id="profName"></b><small id="profSub"></small></div><div class="prof-coins"><b id="profCoins">0</b><small>монет</small></div><button id="profClose" class="btn sm" type="button" aria-label="Закрыть">✕</button></div>
@@ -365,13 +381,26 @@ camera.position.set(0, 80, 140);
 // post-processing: HDR scene -> bloom -> ACES tone map + sRGB + vignette
 let composer = null, bloomPass = null, finalPass = null;
 const FinalShader = {
-  uniforms: { tDiffuse: { value: null }, exposure: { value: 1.05 } },
+  uniforms: { tDiffuse: { value: null }, exposure: { value: 1.05 }, time: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: [
-    'uniform sampler2D tDiffuse; uniform float exposure; varying vec2 vUv;',
+    'uniform sampler2D tDiffuse; uniform float exposure; uniform float time; varying vec2 vUv;',
+    'float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
     'vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }',
     'vec3 toSRGB(vec3 c){ return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4))-0.055, step(vec3(0.0031308), c)); }',
-    'void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; c = aces(c*exposure); vec2 q = vUv-0.5; c *= 1.0 - dot(q,q)*0.6; gl_FragColor = vec4(toSRGB(c), 1.0); }',
+    'void main(){',
+    '  vec2 q = vUv - 0.5; float r2 = dot(q, q);',
+    '  vec2 off = q * r2 * 0.012;',  // slight chromatic fringe towards the corners
+    '  vec3 c = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);',
+    '  c = aces(c * exposure);',
+    '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+    '  c = mix(c, c * vec3(0.86, 0.98, 1.14), (1.0 - smoothstep(0.0, 0.45, l)) * 0.35);',  // cool, teal-blue shadows
+    '  c = mix(c, c * vec3(1.08, 1.0, 0.88), smoothstep(0.45, 1.0, l) * 0.3);',          // warm highlights
+    '  c = mix(vec3(l), c, 1.08);',                                                       // a touch more saturation
+    '  c *= 1.0 - r2 * 0.65;',
+    '  vec3 o = toSRGB(c) + (hash(vUv * 900.0 + fract(time * 7.0)) - 0.5) * 0.028;',     // fine film grain
+    '  gl_FragColor = vec4(o, 1.0);',
+    '}',
   ].join('\n'),
 };
 function setupPost() {
@@ -826,7 +855,7 @@ function buildWorld() {
     for (const [lx, lz, ax, az] of [[r + s * 9.3, t, -s, 0], [t, r + s * 9.3, 0, -s]]) {
       if (nearGate(lx, lz) || inCanalBand(lx, lz, 1) || inTunnel(lx, lz, 1.5)) continue;
       // lamp: pole, arm over the road, glowing head and a light pool
-      lamps.push({ x: lx, y: 0.15, z: lz, ry: Math.atan2(az, -ax), sx: 8 });
+      lamps.push({ x: lx, y: 0.15, z: lz, ry: Math.atan2(az, -ax), sx: 8 }); LAMP_HEADS.push([lx + ax * 1.72, 7.15, lz + az * 1.72]);
       putB(B.neon, G.box, lx + ax * 1.72, 7.22, lz + az * 1.72, ax ? 0.62 : 0.3, 0.08, az ? 0.62 : 0.3, 0, lampHead);
       const pool = new THREE.Mesh(poolGeo, poolMat); pool.position.set(lx + ax * 2.6, 0.05, lz + az * 2.6); scene.add(pool);
     }
@@ -875,6 +904,7 @@ function buildWorld() {
   meshB(B.water, new THREE.MeshStandardMaterial({ color: 0x0b2236, roughness: 0.08, metalness: 0.2, envMapIntensity: 1.8, vertexColors: true }), false);
   KIT.bankLight = meshB(B.bankL, new THREE.MeshBasicMaterial({ vertexColors: true }), false).material;
   const alarm = meshB(B.bankA, new THREE.MeshBasicMaterial({ vertexColors: true }), false); alarm.visible = false; KIT.bankAlarm = alarm;
+  buildAtmosphere();
   makeEnvironment();
 }
 
@@ -1138,6 +1168,191 @@ function updateLife(dt) {
     const want = run ? 'Run' : 'Walk';
     if (p.act !== want) { playAct(p, want, 0.2); p.act = want; }
   }
+}
+
+// ---------------- helicopter «Сокол-1»: hunts with a searchlight, fires bursts, can be shot down ----------------
+let HELI = null;
+function makeHeliModel() {
+  const g = new THREE.Group(), body = std(0x3a4232, { roughness: 0.5, metalness: 0.3 }), dark = std(0x1a1c20, { roughness: 0.5, metalness: 0.4 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x0a1420, roughness: 0.1, metalness: 0.6, emissive: 0x0a2a40, emissiveIntensity: 0.6 });
+  const hull = new THREE.Mesh(new THREE.SphereGeometry(1.6, 18, 12), body); hull.scale.set(1.15, 1.0, 2.0); g.add(hull);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(1.25, 16, 10, 0, PI * 2, 0, PI * 0.55), glass); nose.rotation.x = PI / 2.4; nose.position.set(0, 0.25, 2.1); nose.scale.set(1.1, 1, 1); g.add(nose);
+  const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.18, 6.5, 10), body); boom.rotation.x = PI / 2; boom.position.set(0, 0.45, -5.2); g.add(boom);
+  const fin = new THREE.Mesh(box1, body); fin.scale.set(0.12, 1.6, 1.1); fin.position.set(0, 1.2, -8.2); g.add(fin);
+  const stab = new THREE.Mesh(box1, body); stab.scale.set(2.2, 0.1, 0.7); stab.position.set(0, 0.5, -7.6); g.add(stab);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.7, 8), dark); mast.position.y = 1.85; g.add(mast);
+  const rotor = new THREE.Group(); rotor.position.y = 2.25; g.add(rotor);
+  for (let k = 0; k < 4; k++) { const b = new THREE.Mesh(box1, dark); b.scale.set(0.42, 0.05, 11); b.rotation.y = k * PI / 4 * 2 / 2 + k * PI / 4; rotor.add(b); }
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(5.6, 32), new THREE.MeshBasicMaterial({ color: 0x8a8a90, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide })); disc.rotation.x = -PI / 2; rotor.add(disc);
+  const tail = new THREE.Group(); tail.position.set(0.25, 1.25, -8.3); g.add(tail);
+  for (let k = 0; k < 2; k++) { const b = new THREE.Mesh(box1, dark); b.scale.set(0.05, 1.8, 0.2); b.rotation.x = k * PI / 2; tail.add(b); }
+  for (const s of [-1, 1]) { const sk = new THREE.Mesh(box1, dark); sk.scale.set(0.12, 0.12, 4.2); sk.position.set(s * 1.25, -1.75, 0.2); g.add(sk); for (const z of [-1, 1.3]) { const st = new THREE.Mesh(box1, dark); st.scale.set(0.1, 0.8, 0.1); st.position.set(s * 1.05, -1.35, z); g.add(st); } }
+  const navR = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), basic(new THREE.Color(5, 0.3, 0.3))); navR.position.set(-1.8, 0.2, 0); g.add(navR);
+  const navG = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), basic(new THREE.Color(0.3, 5, 0.6))); navG.position.set(1.8, 0.2, 0); g.add(navG);
+  const strobe = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), basic(new THREE.Color(6, 6, 6))); strobe.position.set(0, 2.0, -8.8); g.add(strobe);
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.35, 0.4, 10), basic(new THREE.Color(6, 5.6, 4.6))); lamp.position.set(0, -1.4, 2.2); g.add(lamp);
+  // the searchlight: a real spot light plus a visible beam and a bright disc on the ground
+  const spot = new THREE.SpotLight(0xf4f0ff, 9, 70, 0.22, 0.5, 1.2); spot.position.set(0, -1.4, 2.2); g.add(spot); scene.add(spot.target);
+  const beamTex = canvasTex(4, 128, (x, w, h) => { const gr = x.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0.05)'); x.fillStyle = gr; x.fillRect(0, 0, w, h); });
+  const beamGeo = new THREE.CylinderGeometry(0.3, 3.2, 1, 16, 1, true); beamGeo.translate(0, -0.5, 0);
+  const beamM = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ map: beamTex, color: new THREE.Color(0.35, 0.36, 0.42), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  scene.add(beamM);
+  const spotDisc = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.6, 1.6, 1.8), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  spotDisc.rotation.x = -PI / 2; scene.add(spotDisc);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  scene.add(g);
+  return { g, rotor, tail, spot, beamM, spotDisc, navR, navG, strobe, lamp };
+}
+function spawnHeli(o) {
+  removeHeli();
+  const m = makeHeliModel(), T = state.act === 1 && pc ? pc.pos : hero ? hero.pos : new V3();
+  const start = o.from ? new V3(o.from[0], 26, o.from[1]) : new V3(T.x + 60, 30, T.z - 60);
+  HELI = Object.assign(m, { pos: start, vel: new V3(), h: 0, hp: o.hp || 900, max: o.hp || 900, invuln: !!o.invuln, mode: o.mode || 'hunt', name: o.name || 'Вертолёт «Сокол-1»',
+    fireCd: o.delay || 4, every: o.every || [2.8, 4.2], dmg: o.dmg || 6, burst: null, tracers: [], lost: false, lostT: 0, dead: false, crash: 0, spotPt: T.clone(), alt: o.alt || 13,
+    route: o.route ? o.route.map(([x, z]) => new V3(x, 0, z)) : null, ri: 0, speed: o.speed || 24, center: o.center ? new V3(o.center[0], 0, o.center[1]) : null, orbit: 0, fireFrom: o.fireFrom || 0 });
+  m.g.position.copy(start);
+  return HELI;
+}
+function removeHeli() {
+  if (!HELI) return;
+  scene.remove(HELI.g); scene.remove(HELI.beamM); scene.remove(HELI.spotDisc); scene.remove(HELI.spot.target);
+  for (const t of HELI.tracers) scene.remove(t.m);
+  HELI = null;
+}
+const tracerMat = new THREE.LineBasicMaterial({ color: new THREE.Color(4, 2.6, 0.8), transparent: true, opacity: 0.9 });
+function heliTarget() { return state.act === 1 ? pc : hero; }
+function damageHeli(d) {
+  const H = HELI; if (!H || H.dead) return;
+  sparks(H.pos.clone(), 0xffd080);
+  if (H.invuln) { if (toastT <= 0) toast('Броня вертолёта держит пули', 1.2); return; }
+  H.hp -= d;
+  if (H.hp <= 0) { H.hp = 0; H.dead = true; H.crash = 0.001; toast('Вертолёт подбит!', 2); sfx.crash(14); addCoins(150); profStat('bosses'); }
+}
+function updateHeli(dt) {
+  const H = HELI; if (!H) return;
+  const tgt = heliTarget(); const T = tgt ? tgt.pos : H.pos;
+  // falling after being shot down: spin, smoke, then a fireball
+  if (H.crash) {
+    H.crash += dt; H.vel.y -= 14 * dt; H.pos.addScaledVector(H.vel, dt); H.g.rotation.y += dt * (3 + H.crash * 3);
+    if (Math.random() < 0.9) spawnP(H.pos.clone(), { color: pick([0x2a2a30, 0x3a3a40, 0xff7a2a]), size: 1.4, vel: new V3(rand(-1, 1), 3, rand(-1, 1)), life: 1.6, grow: 2.5, opacity: 0.8 });
+    if (H.pos.y <= 1) { explode(new V3(H.pos.x, 0.5, H.pos.z), 2.4); addWreck(new V3(H.pos.x, 0, H.pos.z), H.g.rotation.y); shake = Math.min(1.4, shake + 0.8); H.gone = true; scene.remove(H.g); scene.remove(H.beamM); scene.remove(H.spotDisc); H.spot.intensity = 0; }
+    else H.g.position.copy(H.pos);
+    return;
+  }
+  // where to fly
+  const want = new V3();
+  if (H.mode === 'route' && H.route) {
+    const p = H.route[H.ri]; want.set(p.x, H.alt, p.z);
+    if (Math.hypot(H.pos.x - p.x, H.pos.z - p.z) < 10) H.ri = (H.ri + 1) % H.route.length;
+  } else if (H.mode === 'boss' && H.center) {
+    H.orbit += dt * 0.35; want.set(H.center.x + Math.cos(H.orbit) * 16, H.alt, H.center.z + Math.sin(H.orbit) * 12 - 6);
+  } else {
+    // hunt: hang ahead of the target so the camera keeps it in view
+    const f = state.act === 1 ? new V3(Math.sin(pc.h), 0, Math.cos(pc.h)) : new V3(0, 0, -1);
+    H.orbit += dt * 0.5;
+    want.set(T.x + f.x * 15 + Math.cos(H.orbit) * 6, H.alt, T.z + f.z * 15 + Math.sin(H.orbit) * 6);
+  }
+  const to = want.clone().sub(H.pos), dist = to.length();
+  const maxV = H.mode === 'route' ? H.speed : 34;
+  const desired = dist > 0.01 ? to.multiplyScalar(Math.min(maxV, dist * 1.4) / dist) : to;
+  H.vel.lerp(desired, Math.min(1, dt * 1.6)); H.pos.addScaledVector(H.vel, dt);
+  const flat = Math.hypot(H.vel.x, H.vel.z);
+  if (flat > 1) H.h += wrapA(Math.atan2(H.vel.x, H.vel.z) - H.h) * Math.min(1, dt * 2.5);
+  H.g.position.copy(H.pos); H.g.rotation.set(clamp(flat * 0.012, 0, 0.32), H.h, 0, 'YXZ');
+  H.rotor.rotation.y += dt * 38; H.tail.rotation.x += dt * 50;
+  const blink = Math.sin(state.t * 9) > 0.6; H.strobe.visible = blink; H.navR.visible = H.navG.visible = Math.sin(state.t * 3) > -0.2;
+  // the target hides in the tunnel: the helicopter loses it
+  const hidden = state.act === 1 && inTunnel(T.x, T.z) && Math.abs(T.z - TUNNEL.z) < 8.5;
+  if (hidden && !H.lost) { H.lost = true; toast('Вертолёт потерял тебя в тоннеле', 1.8); }
+  if (!hidden && H.lost) H.lostT += dt; else H.lostT = 0;
+  if (H.lost && H.lostT > 4) H.lost = false;
+  // the searchlight sweeps after the target
+  const aim = H.lost ? new V3(H.pos.x + Math.sin(state.t * 0.8) * 14, 0, H.pos.z + Math.cos(state.t * 0.6) * 14) : T;
+  H.spotPt.lerp(new V3(aim.x, 0, aim.z), Math.min(1, dt * (H.lost ? 1 : 3)));
+  H.spot.target.position.copy(H.spotPt);
+  const lampW = H.lamp.getWorldPosition(new V3());
+  const dir = H.spotPt.clone().sub(lampW), len = dir.length();
+  H.beamM.position.copy(lampW); H.beamM.scale.set(1, len, 1); H.beamM.quaternion.setFromUnitVectors(new V3(0, -1, 0), dir.normalize());
+  H.spotDisc.position.set(H.spotPt.x, 0.08, H.spotPt.z);
+  // bursts: a line of impacts walks across the target
+  H.fireCd -= dt;
+  const d2 = Math.hypot(T.x - H.pos.x, T.z - H.pos.z);
+  if (!H.burst && H.fireCd <= 0 && !H.lost && tgt && !tgt.dead && d2 < 45 && (!H.fireFrom || H.hp < H.max * H.fireFrom)) {
+    const a = new V3(T.x - H.pos.x, 0, T.z - H.pos.z).normalize();
+    H.burst = { n: 0, t: 0, from: T.clone().addScaledVector(a, -9), step: a.multiplyScalar(1.6), side: rand(-1.5, 1.5) };
+    H.fireCd = rand(H.every[0], H.every[1]);
+  }
+  if (H.burst) {
+    const B = H.burst; B.t -= dt;
+    if (B.t <= 0) {
+      B.t = 0.08; B.n++;
+      const p = B.from.clone().addScaledVector(B.step, B.n); p.x += B.side * 0.3; p.z += rand(-0.5, 0.5);
+      const g = new THREE.BufferGeometry().setFromPoints([lampW.clone().add(new V3(0, 0.4, 0)), new V3(p.x, 0.2, p.z)]);
+      const m = new THREE.Line(g, tracerMat); scene.add(m); H.tracers.push({ m, life: 0.07 });
+      spawnP(new V3(p.x, 0.3, p.z), { color: 0xd8c8a0, size: 0.5, vel: new V3(rand(-1, 1), 3, rand(-1, 1)), life: 0.35, grow: 1.5, opacity: 0.7 });
+      sfx.eshot();
+      const t2 = heliTarget();
+      if (t2 && !t2.dead && Math.hypot(t2.pos.x - p.x, t2.pos.z - p.z) < (state.act === 1 ? 2.8 : 1.3)) { sparks(new V3(t2.pos.x, 1, t2.pos.z), 0xff6a6a); damagePlayer(H.dmg); }
+      if (B.n >= 12) H.burst = null;
+    }
+  }
+  for (let i = H.tracers.length - 1; i >= 0; i--) { const t = H.tracers[i]; t.life -= dt; if (t.life <= 0) { scene.remove(t.m); t.m.geometry.dispose(); H.tracers.splice(i, 1); } }
+}
+// 3D distance from a bullet segment to the helicopter body
+function heliHit(a, b) {
+  const H = HELI; if (!H || H.dead || H.crash) return false;
+  const ab = b.clone().sub(a), ap = H.pos.clone().sub(a), t = clamp(ab.lengthSq() ? ap.dot(ab) / ab.lengthSq() : 0, 0, 1);
+  return a.clone().addScaledVector(ab, t).distanceTo(H.pos) < 3.2;
+}
+
+// ---------------- atmosphere: light cones under lamps, clouds, rain splashes ----------------
+const LAMP_HEADS = [];
+const ATMO = { cones: null, clouds: null, splash: null, coneMat: null };
+function buildAtmosphere() {
+  // volumetric-looking cones: one instanced mesh, additive, brighter at the lamp head and fading to the ground
+  const coneTex = canvasTex(4, 128, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0.0)'); gr.addColorStop(0.06, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+  const geo = new THREE.CylinderGeometry(0.35, 3.4, 7.0, 20, 1, true); geo.translate(0, -3.5, 0);
+  const mat = new THREE.MeshBasicMaterial({ map: coneTex, color: new THREE.Color(0.26, 0.19, 0.11), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true });
+  ATMO.coneMat = mat;
+  const cones = new THREE.InstancedMesh(geo, mat, LAMP_HEADS.length);
+  const m4 = new THREE.Matrix4();
+  LAMP_HEADS.forEach(([x, y, z], i) => { m4.makeTranslation(x, y - 0.1, z); cones.setMatrixAt(i, m4); });
+  cones.frustumCulled = false; cones.renderOrder = 3; scene.add(cones); ATMO.cones = cones;
+  // a slow layer of moonlit clouds under the sky dome
+  const cloudTex = canvasTex(1024, 512, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    for (let i = 0; i < 260; i++) {
+      const x = Math.random() * w, y = h * (0.25 + Math.random() * 0.6), r = rand(30, 110);
+      const gr = g.createRadialGradient(x, y, 0, x, y, r); const a = rand(0.05, 0.16);
+      gr.addColorStop(0, `rgba(190,180,230,${a})`); gr.addColorStop(1, 'rgba(190,180,230,0)');
+      g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+      if (x < r) { g.save(); g.translate(w, 0); g.fillRect(x - r, y - r, r * 2, r * 2); g.restore(); }
+      if (x > w - r) { g.save(); g.translate(-w, 0); g.fillRect(x - r, y - r, r * 2, r * 2); g.restore(); }
+    }
+  });
+  cloudTex.wrapS = THREE.RepeatWrapping;
+  const clouds = new THREE.Mesh(new THREE.SphereGeometry(700, 40, 16, 0, PI * 2, 0, PI * 0.48), new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, side: THREE.BackSide, fog: false, color: new THREE.Color(1.1, 1.0, 1.25) }));
+  clouds.renderOrder = -9; clouds.frustumCulled = false; scene.add(clouds); ATMO.clouds = clouds;
+  // rain splashes: tiny rings that flash on the ground around the camera
+  const N = 220, sp = new Float32Array(N * 3), life = new Float32Array(N);
+  for (let i = 0; i < N; i++) { sp[i * 3] = rand(-26, 26); sp[i * 3 + 1] = 0.08; sp[i * 3 + 2] = rand(-26, 26); life[i] = Math.random(); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+  const ringTex = canvasTex(32, 32, (g, w) => { g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 2; g.beginPath(); g.arc(w / 2, w / 2, w / 2 - 3, 0, PI * 2); g.stroke(); });
+  const splash = new THREE.Points(sg, new THREE.PointsMaterial({ map: ringTex, size: 0.3, color: new THREE.Color(0.6, 0.7, 0.95), transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
+  splash.frustumCulled = false; scene.add(splash); ATMO.splash = { m: splash, life, pos: sp, N };
+}
+function updateAtmosphere(dt) {
+  if (ATMO.clouds) { ATMO.clouds.rotation.y += dt * 0.004; ATMO.clouds.position.copy(camera.position); }
+  const S = ATMO.splash; if (!S) return;
+  const low = perf.level >= 2; S.m.visible = !low && rain.visible !== false;
+  for (let i = 0; i < S.N; i++) { S.life[i] -= dt * 3; if (S.life[i] <= 0) { S.life[i] = 1; S.pos[i * 3] = focus.x + rand(-26, 26); S.pos[i * 3 + 2] = focus.z + rand(-26, 26); } }
+  S.m.geometry.attributes.position.needsUpdate = true;
+}
+function atmoMood(m) {
+  if (!ATMO.coneMat) return;
+  ATMO.cones.visible = m !== 'blackout';
+  ATMO.coneMat.color.setRGB(0.26, 0.19, 0.11).multiplyScalar(m === 'dawn' ? 0.25 : 1);
+  ATMO.clouds.material.color.setRGB(1.1, 1.0, 1.25).multiplyScalar(m === 'dawn' ? 1.6 : m === 'blackout' ? 0.6 : 1);
 }
 
 // ---- city landmarks (for future stories): central square with the city hall, metro, canal with bridges, the tunnel, bus stops ----
@@ -1457,6 +1672,7 @@ function makeEnvironment() {
 
 // ---------------- models ----------------
 const CAR_S = 4.7;
+const HEADBEAM = {};
 function makeCar(color, kind) {
   const g = new THREE.Group();
   const wreck = kind === 'wreck', player = kind === true || kind === 'player';
@@ -1472,6 +1688,16 @@ function makeCar(color, kind) {
     const head = basic(new THREE.Color(5, 4.6, 3.8)), tail = basic(new THREE.Color(5, 0.25, 0.3));
     box(head, -0.6, 0.62, 2.23, 0.36, 0.14, 0.04); box(head, 0.6, 0.62, 2.23, 0.36, 0.14, 0.04);
     box(tail, -0.7, 0.7, -2.23, 0.32, 0.12, 0.04); box(tail, 0.7, 0.7, -2.23, 0.32, 0.12, 0.04);
+    // headlight beams in the rain and a warm pool of light on the road ahead
+    if (!HEADBEAM.mat) {
+      const t = canvasTex(4, 128, (x, w, h) => { const gr = x.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0.85)'); gr.addColorStop(0.4, 'rgba(255,255,255,0.22)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, w, h); });
+      HEADBEAM.geo = new THREE.CylinderGeometry(0.25, 2.4, 11, 14, 1, true); HEADBEAM.geo.translate(0, -5.5, 0); HEADBEAM.geo.rotateX(-PI / 2);
+      HEADBEAM.mat = new THREE.MeshBasicMaterial({ map: t, color: new THREE.Color(0.38, 0.36, 0.3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      HEADBEAM.pool = new THREE.PlaneGeometry(5, 9); HEADBEAM.pool.rotateX(-PI / 2);
+      HEADBEAM.poolMat = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(0.9, 0.8, 0.6), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+    }
+    for (const sx of [-0.6, 0.6]) { const b = new THREE.Mesh(HEADBEAM.geo, HEADBEAM.mat); b.position.set(sx, 0.62, 2.25); b.rotation.x = 0.06; g.add(b); }
+    const hp = new THREE.Mesh(HEADBEAM.pool, HEADBEAM.poolMat); hp.position.set(0, 0.05, 7.5); g.add(hp);
   }
   if (player) {
     if (PLAYER_CAR.model === 'car_taxi') box(basic(new THREE.Color(3, 2.4, 0.7)), 0, 1.98, -0.15, 0.5, 0.12, 0.3);
@@ -1894,6 +2120,7 @@ function updateBullets(dt) {
           if (t.dead || t.noTarget) continue; const r = state.act === 1 ? 2.5 : (t.boss ? 1.05 : 0.8);
           if (segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos); sfx.hit(); if (state.act === 1) damageEnemyCar(t, b.dmg); else damageEnemy(t, b.dmg); break; }
         }
+        if (!hit && HELI && heliHit(prevP, b.pos)) { hit = true; sfx.hit(); damageHeli(b.dmg); }
       } else {
         const t = state.act === 1 ? pc : hero, r = state.act === 1 ? 2.4 : 0.85;
         if (t && !t.dead && segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos, 0xff6a6a); damagePlayer(b.dmg); }
@@ -1970,6 +2197,8 @@ const WHO = {
   glyba: { name: 'Глыба, начальник охраны', color: '#7aa0d8', init: 'Г' },
   ten: { name: 'Тень', color: '#b07ad8', init: 'Т' },
   radio: { name: 'Новости по радио', color: '#a0a8b8', init: 'Р' },
+  zharov: { name: 'Полковник Жаров, ЧВК «Сокол»', color: '#a8c060', init: 'Ж' },
+  pilot: { name: 'Пилот «Сокола»', color: '#8ab070', init: 'П' },
 };
 const dlg = { lines: [], i: 0, shown: 0, done: null, prev: null };
 function playDialog(lines, done) {
@@ -2045,7 +2274,9 @@ function updateDrive(dt) {
     let best = null, bd = 60 * P.aim;
     for (const e of enemyCars) { const d = e.pos.distanceTo(pc.pos); if (!e.dead && !e.noTarget && d < bd && los(pc.pos, e.pos)) { bd = d; best = e; } }
     const from = pc.pos.clone().add(new V3(0, 1.5, 0));
-    const dir = best ? best.pos.clone().addScaledVector(best.vel, bd / 140).sub(pc.pos).setY(0).normalize() : new V3(Math.sin(pc.h), 0, Math.cos(pc.h));
+    let aimHeli = false;
+    if (HELI && !HELI.crash) { const dh = Math.hypot(HELI.pos.x - pc.pos.x, HELI.pos.z - pc.pos.z); if (dh < 60 && (!best || dh < bd)) aimHeli = true; }
+    const dir = aimHeli ? HELI.pos.clone().addScaledVector(HELI.vel, 0.12).sub(from).normalize() : best ? best.pos.clone().addScaledVector(best.vel, bd / 140).sub(pc.pos).setY(0).normalize() : new V3(Math.sin(pc.h), 0, Math.cos(pc.h));
     dir.x += rand(-0.03, 0.03); dir.z += rand(-0.03, 0.03); dir.normalize();
     fire(from.addScaledVector(dir, 2.6), dir, 140, 7 * P.dmg, 'p');
   }
@@ -2115,6 +2346,7 @@ function updateDrive(dt) {
   const navName = state.ep === 1 ? 'Склад №7' : MIS.navName;
   $('navTurn').textContent = Math.abs(rel) > 2.2 ? 'Развернись' : NAV.pts.length === 1 ? navName : NAV.turn ? `${NAV.turn > 0 ? 'Направо' : 'Налево'} через ${m} м` : `Прямо ${m} м`;
   $('navDist').textContent = `${state.ep === 1 ? 'до склада' : navName.toLowerCase() + ':'} ${Math.round(NAV.dist / 10) * 10} м`;
+  updateHeli(dt);
   if (state.ep === 1) { if (pc.pos.distanceTo(GATE) < 11) arriveAtYard(); }
   else if (MIS) MIS.update(dt);
   setEngine(pc.vf, true);
@@ -2188,9 +2420,16 @@ function updateFoot(dt) {
   if (!fireHeld()) state.fireLock = false;
   if (fireHeld() && !state.fireLock && hero.fireCd <= 0) {
     hero.fireCd = 0.15 * P.fireMult;
-    const dir = new V3(Math.sin(hero.aimAng), 0, Math.cos(hero.aimAng));
+    let dir = new V3(Math.sin(hero.aimAng), 0, Math.cos(hero.aimAng));
+    const muzzle = hero.pos.clone().add(new V3(0, 1.02, 0));
+    if (HELI && !HELI.crash) {
+      // aiming roughly at the helicopter (or at nothing on the ground) lifts the shot towards it
+      const hb = Math.atan2(HELI.pos.x - hero.pos.x, HELI.pos.z - hero.pos.z), dh = Math.hypot(HELI.pos.x - hero.pos.x, HELI.pos.z - hero.pos.z);
+      const noFoe = !enemies.some((e) => !e.dead && e.pos.distanceTo(hero.pos) < 28);
+      if (dh < 50 && (Math.abs(wrapA(hb - hero.aimAng)) < 0.3 || (noFoe && isTouch))) dir = HELI.pos.clone().sub(muzzle).normalize();
+    }
     dir.x += rand(-0.025, 0.025); dir.z += rand(-0.025, 0.025); dir.normalize();
-    fire(hero.pos.clone().add(new V3(0, 1.02, 0)).addScaledVector(dir, 0.9), dir, 95, 20 * P.dmg, 'p');
+    fire(muzzle.addScaledVector(dir, 0.9), dir, 95, 20 * P.dmg, 'p');
   }
   // enemies
   for (const e of enemies) {
@@ -2236,7 +2475,7 @@ function updateFoot(dt) {
     medkit.rotation.y += dt * 2; medkit.position.y = 0.7 + Math.sin(state.t * 3) * 0.15;
     if (medkit.position.distanceTo(new V3(hero.pos.x, medkit.position.y, hero.pos.z)) < 1.6) { hero.hp = Math.min(P.footMax, hero.hp + 50); scene.remove(medkit); medkit = null; toast('Аптечка: +50 здоровья'); }
   }
-  if (state.ep >= 2) { updateAllies(dt); updatePickups(dt); if (MIS) MIS.update(dt); return; }
+  if (state.ep >= 2) { updateAllies(dt); updatePickups(dt); updateHeli(dt); if (MIS) MIS.update(dt); return; }
   const alive = enemies.filter((e) => !e.dead).length;
   if (alive === 0 && spawnQueue.length === 0) {
     if (state.wave === 1) {
@@ -2292,6 +2531,7 @@ const LOOKS = {
 // ---- stage helpers ----
 let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
+  removeHeli();
   for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
@@ -2740,7 +2980,7 @@ function startEpisode(ep, ch) {
   else startGen(ep, ch - 1, true);
 }
 function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else startMission(); }
-const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга' };
+const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол' };
 function renderChapters() {
   const eb = $('epChips');
   eb.innerHTML = Object.keys(EP_NAMES).map((k) => `<button class="chip${selEp === +k ? ' active' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
@@ -3084,7 +3324,7 @@ const EPS = {
     title: 'Чёрная книга', faction: 'granit', carStyle: 'granit', chaseMsg: 'Хвост! Охрана «Гранита»',
     logline: 'Последний раунд с Гранином. Соня оказывается его дочерью, чёрная книга разорвана, а настоящие деньги на рассвете уходят в порт.',
     endTitle: 'Возврат вклада', endLead: 'Страницы чёрной книги у прокурора, Гранин в наручниках, таксопарк и деньги вернулись водителям. А в тюрьме Вера смотрит новости и улыбается.',
-    teaser: 'Конец второго сезона. Спасибо, что ездили с нами.',
+    teaser: 'Дальше — спецэпизод «Сокол».',
     chapters: [
       { t: 'Соня', type: 'tail', start: [80, -100, 'N'], car: [80, -135, 'N'], speed: 18, name: 'Машина Сони', stops: { 2: 4, 4: 5 },
         route: [[80, -160], [0, -160], [0, -80], [-80, -80], [-80, 0], [0, 0], [0, 40]],
@@ -3118,6 +3358,50 @@ const EPS = {
         outro: [['sonya', 'Он жив. Отец в наручниках — никогда не думала, что увижу.'], ['mark', 'Прокурор получил все страницы. Таксопарк возвращают, деньги — водителям.'], ['vera2', 'Здравствуй, водитель. Смотрю новости в камере. Ты {g:забрал|забрала} у Гранина то, что не смогла забрать я.'], ['vera2', 'Может, когда выйду, поработаем вместе?'], ['hero', 'Счётчик выключен, Вера. Смена окончена.']] },
     ],
   },
+  // ---------------- special episode: the helicopter (episode 11) ----------------
+  11: {
+    title: 'Сокол', faction: 'sokol', chaseMsg: 'Хвост! Машины ЧВК «Сокол»',
+    logline: 'Завтра суд над Граниным. Его компаньон, полковник Жаров из ЧВК «Сокол», поднимает в воздух вертолёт, чтобы до утра не осталось ни одного свидетеля. Ночь, прожектор с неба и жёлтое такси внизу.',
+    endTitle: 'Сокол сбит', endLead: 'Вертолёт догорает у причала, Жаров в наручниках, Лёва даёт показания в суде. Над Порт-Северным снова только чайки.',
+    teaser: 'Продолжение следует.',
+    chapters: [
+      { t: 'Прожектор', type: 'escape', start: [-80, 0, 'E'], secs: 100, chase: 3, goal: [40, -160], goalName: 'Тоннель',
+        heli: { invuln: true, dmg: 5, every: [3, 4.5], alt: 13 },
+        about: 'Вертолёт ЧВК «Сокол» ведёт такси прожектором и бьёт очередями. Продержаться 1:40 и уйти в тоннель — под землёй вертолёт теряет цель.',
+        intro: [['radio', '…суд над банкиром Аркадием Граниным начнётся завтра утром в здании мэрии. Главные свидетели находятся под защитой…'], ['mark', 'Под защитой? Лёву никто не охраняет. А над городом кружит вертолёт без опознавательных знаков.'], ['zharov', 'Таксист. Я полковник Жаров, ЧВК «Сокол». Гранин — мой компаньон, и завтра свидетелей не будет. Начнём с тебя.'], ['hero', 'Сначала догони.'], ['mark', 'Уходи в тоннель на южной улице! Под землёй он тебя не увидит.']],
+        outro: [['hero', 'Тоннель. Прожектор ушёл.'], ['mark', 'Лёва прячется в старом трамвайном депо на западе. Забери его и вези к мэрии — суд будет там. Охрана суда пустит вас внутрь.']] },
+      { t: 'Свидетель', type: 'deliver', start: [70, -160, 'E'], chase: 2, ramp: 1, heli: { invuln: true, dmg: 6, every: [3, 4.2], alt: 13 },
+        pts: [
+          { p: [-160, -80], name: 'Трамвайное депо', t: 80, say: [['leva', 'Я видел вертолёт над депо. Он знает, где я.'], ['hero', 'Пристегнись. Едем в суд.']] },
+          { p: [40, 0], name: 'Мэрия', t: 80 },
+        ],
+        about: 'Забрать Лёву из трамвайного депо и довезти до мэрии, пока сверху бьёт вертолёт. Каждая точка — на время.',
+        intro: [['hero', 'Депо на другом конце города. Он опять над нами.']],
+        outro: [['leva', 'Мэрия! Но двери заперты до утра.'], ['zharov', 'Площадь хорошо видно сверху, бухгалтер. Ни шагу с крыльца.'], ['hero', 'Держись за колонной. Я прикрою.']] },
+      { t: 'Площадь', type: 'arena', arena: 'square', ally: { who: 'leva', at: [40, 46], hp: 260, name: 'Лёва' }, waves: [4, 5], survive: 60, heavyFrom: 2,
+        surviveObj: 'Продержись, пока охрана суда открывает двери мэрии.', heli: { invuln: true, dmg: 5, every: [3.5, 5], alt: 13 },
+        about: 'Центральная площадь ночью: Лёва на ступенях мэрии, бойцы «Сокола» с двух сторон и вертолёт над головой. Продержаться, пока не откроют двери.',
+        intro: [['hero', 'Стела, клумбы, фонари — и ни одного укрытия от вертолёта.'], ['leva', 'Я за колонной. Только не дай им подойти к крыльцу!']],
+        outro: [['mark', 'Двери открыли, Лёва внутри. Охрана суда держит здание.'], ['zharov', 'Вертолёт заправится и вернётся. До утра у тебя не будет ни минуты.'], ['mark', 'Его площадка — на старой подстанции. Сожги топливо, и он не взлетит надолго.']] },
+      { t: 'Топливо', type: 'arena', arena: [0, -80], docs: 3, docName: 'Бочка с топливом', guards: 6, waves: [5], heavyFrom: 1, exit: true, exitObj: 'Топливо горит. Назад к машине.',
+        about: 'Вертолётная площадка «Сокола» у старой подстанции: найти и поджечь 3 бочки с топливом, отбиться от охраны.',
+        intro: [['hero', 'Бочки с топливом у ангара. Охраны много, но вертолёта нет — заправляться ему нечем.']],
+        outro: [['zharov', 'Ты сжёг моё топливо. Полечу на остатках — и заберу свидетеля сам.'], ['mark', 'Вертолёт взлетел и кружит над центром! Сбей его, пока он не сел на крышу мэрии!']] },
+      { t: 'Воздушная погоня', type: 'helichase', start: [-40, 0, 'E'], from: [30, -20], hp: 1400, downAt: 0.5, speed: 21, chase: 2, fireFrom: 0.85, fleeTo: [-120, 140], name: 'Вертолёт «Сокол-1»',
+        route: [[0, 0], [80, 0], [80, -80], [160, -80], [160, 80], [0, 80], [-80, 80], [-80, -80], [0, -80]],
+        fleeMsg: 'Вертолёт задымился и тянет к порту!',
+        about: 'Погоня за вертолётом по улицам: держаться под ним и стрелять. Подбить наполовину — и он уйдёт на вынужденную к порту.',
+        intro: [['pilot', '«Сокол-1» на маршруте. Цель внизу, жёлтое такси.'], ['hero', 'Цель тоже тебя видит.']],
+        outro: [['pilot', 'Теряю мощность! Иду на посадку в порту!'], ['zharov', 'Садись у причала. Яхта ждёт.'], ['mark', 'В порту его встречают люди Жарова. Последний бой, {name}.']] },
+      { t: 'Последний вылет', type: 'arena', arena: 'docks', mood: 'dawn', waves: [5], heavyFrom: 1, exit: true, exitObj: 'Всё кончено. Вернись к машине.',
+        heliBoss: { hp: 900, dmg: 7, every: [2.6, 3.8], alt: 12, name: 'Вертолёт «Сокол-1»', msg: 'Вертолёт снова в воздухе!', obj: 'Сбей вертолёт: целься в него и стреляй.' },
+        boss: { look: 'zharov', name: 'Полковник Жаров', hp: 900, scale: 1.15, burst: 4, dmg: 9, speed: 4.6,
+          say: [['zharov', 'Я сорок лет летал над чужими городами, таксист.'], ['hero', 'А этот город — мой.']] },
+        about: 'Порт на рассвете: бойцы «Сокола», вертолёт снова в воздухе и сам полковник Жаров.',
+        intro: [['hero', 'Рассвет, причал, дым над водой. Он успел дозаправиться.']],
+        outro: [['zharov', 'Скажи своему бухгалтеру… пусть говорит громче. Мне в камере будет плохо слышно.'], ['mark', 'Суд начался. Лёва даёт показания.'], ['leva', 'Я рассказал всё: про Гранина, про Жарова, про книгу. Судья слушал до последнего слова.'], ['hero', 'Тогда домой. Счётчик выключен.']] },
+    ],
+  },
 };
 
 // ---- chapter engine for episodes 3–7 ----
@@ -3135,6 +3419,7 @@ const ALLY_LOOKS = {
   host: { model: 'savva', skin: '#e0b090', colors: { Shirt: '#d8c8a8', Pants: '#3a3a42', Hat: '#3a2a20', Detail: '#6a4a2a' }, face: { brow: '#c8c8c8', iris: '#5a5a5a', mouth: 'grim', stache: '#d0d0d0', wrinkles: true } },
 };
 const BOSS_LOOKS = {
+  zharov: { model: 'crow', skin: '#d8a888', colors: { Main: '#3a4230', Grey: '#6a7450', Black: '#1a1c16', Helmet: '#2a3020' }, face: { brow: '#8a8a8a', iris: '#4a5a3a', mouth: 'grim', angry: true, scar: true, stache: '#9a9a9a' } },
   glyba: { model: 'boss', skin: '#c8987a', colors: { Black: '#1a2238', Shirt: '#2a3a5a', Details: '#c0c8d8', Belt: '#101010', Hair: '#1a1a1a' }, face: { brow: '#1a1a1a', iris: '#2a1a10', mouth: 'grim', angry: true, scar: true, stubble: '#1a1a1a' } },
   ten: { model: 'vera', skin: '#ecc8b0', colors: { Black: '#14141c', Shirt: '#24243a', Details: '#b07ad8', Hair: '#101014', Belt: '#14141c' }, face: { fem: true, brow: '#101014', iris: '#6a4a9a', mouth: 'grim', angry: true } },
   granin: { model: 'boss', skin: '#e0b494', colors: { Black: '#6a6a72', Shirt: '#ecece6', Details: '#c8a030', Belt: '#2a2a2a', Hair: '#c8c8c8' }, face: { brow: '#a8a8a8', iris: '#5a6a7a', mouth: 'smirk', angry: true, wrinkles: true } },
@@ -3146,6 +3431,7 @@ const BOSS_LOOKS = {
   verab: LOOKS.vera,
 };
 const FACTIONS = {
+  sokol: { thug1: { Details: '#7a8a3a' }, thug2: { Shirt: '#4a5434', Pants: '#2a2e22', Hair: '#15151a' }, thug3: { Shirt: '#3a4230', Pants: '#4a5434', Hair: '#15151a' }, heavy: { Shirt: '#2a3020', Pants: '#2a2e22' } },
   granit: { thug1: { Details: '#3a7ad0' }, thug2: { Shirt: '#1e2c4a', Pants: '#15151c', Hair: '#15151a' }, thug3: { Shirt: '#2a3a58', Pants: '#1a2030', Hair: '#15151a' }, heavy: { Shirt: '#101828', Pants: '#101828' } },
   night: { thug1: { Details: '#7a3fd0' }, thug2: { Shirt: '#3a2050', Pants: '#1b1b22', Hair: '#15151a' }, thug3: { Shirt: '#24182e', Pants: '#3a2a50', Hair: '#15151a' }, heavy: { Shirt: '#4a2070', Pants: '#1b1b22' } },
   tour: { thug1: { Details: '#1aa0a0' }, thug2: { Shirt: '#1a6a6a', Pants: '#1b1b22', Hair: '#15151a' }, thug3: { Shirt: '#14323a', Pants: '#1a4a4a', Hair: '#15151a' }, heavy: { Shirt: '#0a5a5a', Pants: '#14323a' } },
@@ -3160,6 +3446,10 @@ function factionLook(f, heavy) {
 }
 // on-foot locations: the warehouse yard, the docks, the park, or any inner crossroads [x, z]
 function arenaDef(a) {
+  if (a === 'square') return { r: { x0: 12, x1: 68, z0: 8, z1: 50 }, start: [40, 12, PI], car: [40, 3, PI / 2],
+    edges: [[11, 20], [69, 20], [11, 36], [69, 41], [24, 50], [56, 50], [34, 9], [46, 9]],
+    inner: [[22, 30], [58, 30], [30, 24], [50, 36], [40, 40], [24, 46], [56, 46]],
+    docs: [[18, 12], [62, 26], [22, 36], [58, 46]], mid: [40, 20], boss: [40, 44] };
   if (a === 'bank') return { r: { x0: 93.5, x1: 146.5, z0: -66.5, z1: -4 }, start: [120, -8, PI], car: [120, 3, PI / 2], bank: true,
     edges: [[97, -65], [103, -64], [146, -30], [94, -30], [110, -15], [130, -15], [146, -60], [94, -50]],
     inner: [[104, -24], [136, -24], [108, -52], [132, -52], [120, -44], [100, -42], [140, -42]],
@@ -3204,6 +3494,7 @@ function setMood(m) {
     if (KIT.neonMat) KIT.neonMat.color.setScalar(0.03); if (KIT.poolMat) KIT.poolMat.opacity = 0;
     if (KIT.bankLight) { KIT.bankLight.color.setScalar(0.04); KIT.bankAlarm.visible = true; BANKX.poolM.opacity = 0; }
   }
+  atmoMood(m);
   if (finalPass) finalPass.uniforms.exposure.value = exp; renderer.toneMappingExposure = exp;
 }
 
@@ -3222,6 +3513,7 @@ function startGen(ep, i, withIntro) {
   };
   MIS = GEN[c.type](c, title, done, E);
   if (E.carStyle) MIS.carStyle = E.carStyle; if (E.chaseMsg) MIS.chaseMsg = E.chaseMsg;
+  if (c.heli) spawnHeli(c.heli);
   const mode0 = state.mode;
   if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; });
 }
@@ -3332,6 +3624,23 @@ const GEN = {
         return { bars: a.map((e) => ({ label: n > 1 ? `${c.name} ${cars.indexOf(e) + 1}` : c.name, frac: e.hp / e.max, color: '#ff8a3a' })), timer: far > 0.3 ? `Уходит: ${Math.ceil(8 - far)}` : '', bad: far > 0.3 };
       } };
   },
+  helichase(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const H = spawnHeli({ mode: 'route', route: c.route, speed: c.speed || 22, hp: c.hp || 1400, alt: c.alt || 14, fireFrom: c.fireFrom || 0.75, dmg: c.dmg || 6, from: c.from, delay: 3, name: c.name });
+    const chase = { max: c.chase || 2 }; state.spawnT = 6;
+    let far = 0, fled = false; const stopAt = H.max * (c.downAt || 0.5);
+    setObjective(c.obj || 'Держись под вертолётом и стреляй: огонь сам целится в него.');
+    return { title, chase, navName: c.name || 'Вертолёт', navGoal: () => (HELI ? new V3(HELI.pos.x, 0, HELI.pos.z) : pc.pos),
+      update(dt) {
+        if (!HELI) return;
+        setBeam(new V3(HELI.pos.x, 0, HELI.pos.z));
+        if (!fled && HELI.hp <= stopAt) { fled = true; HELI.invuln = true; HELI.mode = 'route'; HELI.route = [new V3(c.fleeTo[0], 0, c.fleeTo[1])]; HELI.ri = 0; HELI.speed = 30; HELI.fireCd = 99; toast(c.fleeMsg || 'Вертолёт задымился и уходит!', 2.2); chase.max = 0; return done(); }
+        const d = Math.hypot(HELI.pos.x - pc.pos.x, HELI.pos.z - pc.pos.z);
+        if (d > 170) far += dt; else far = Math.max(0, far - dt);
+        if (far > 10) failChapter('Вертолёт ушёл', 'Он улетел слишком далеко. Держись ближе, срезай через переулки.');
+      },
+      hud() { return { timer: far > 0.3 ? `Уходит: ${Math.ceil(10 - far)}` : `До вертолёта ${Math.round(Math.hypot(HELI.pos.x - pc.pos.x, HELI.pos.z - pc.pos.z))} м`, bad: far > 0.3 }; } };
+  },
   arena(c, title, done, E) {
     const A = arenaDef(c.arena), R = A.r, fac = c.faction || E.faction;
     placeCar(A.car[0], A.car[1], A.car[2]); beginFoot(A.start[0], A.start[1], A.start[2]);
@@ -3340,7 +3649,7 @@ const GEN = {
     let rot = 0;
     const cfg = (k, w) => { const heavy = c.heavyFrom && w >= c.heavyFrom && k % 3 === 0; return Object.assign({ look: factionLook(fac, heavy), react: rand(0.6, 1.5), tgt: ally && k % 3 === 1 ? ally : undefined }, heavy ? { hp: 130, scale: 1.12, burst: 2 } : {}); };
     const group = (n, w) => { const pts = []; for (let k = 0; k < n; k++) pts.push(A.edges[(rot++ * 4 + k) % A.edges.length]); queueWave(pts, 0.5, (k) => cfg(k, w)); };
-    const phases = []; if (c.docs) phases.push('docs'); if (c.waves) phases.push('waves'); if (c.drill) phases.push('drill'); if (c.survive) phases.push('survive'); if (c.boss) phases.push('boss'); if (c.exit) phases.push('exit');
+    const phases = []; if (c.docs) phases.push('docs'); if (c.waves) phases.push('waves'); if (c.drill) phases.push('drill'); if (c.survive) phases.push('survive'); if (c.heliBoss) phases.push('heli'); if (c.boss) phases.push('boss'); if (c.exit) phases.push('exit');
     const st = { ph: -1, found: 0, wave: 0, gap: 0, left: 0, spT: 0, boss: null, exit: null, medkit: false, prog: 0, jam: false, jamT: 0, fix: 0, dpos: null, rig: null };
     if (A.bank) setVault(c.vault === 'open');
     if (c.drill) {
@@ -3366,6 +3675,10 @@ const GEN = {
       else if (P_ === 'drill') {
         const D = c.drill; st.prog = 0; st.jam = false; st.jamT = rand(D.jam[0], D.jam[1]); st.spT = 2; st.rig.on = true; st.medkit = false;
         toast(D.startMsg || 'Пошло!', 1.6); setObjective(D.obj);
+      }
+      else if (P_ === 'heli') {
+        spawnHeli(Object.assign({ mode: 'boss', center: A.mid, from: [A.mid[0] + 50, A.mid[1] - 60] }, c.heliBoss)); st.spT = 6;
+        toast(c.heliBoss.msg || 'Вертолёт заходит на цель!', 2); setObjective(c.heliBoss.obj || 'Сбей вертолёт: целься в него и стреляй.');
       }
       else if (P_ === 'survive') { st.left = c.survive; st.spT = 1; setObjective(c.surviveObj || `Продержись ${fmt(c.survive)}.`); }
       else if (P_ === 'boss') {
@@ -3421,6 +3734,11 @@ const GEN = {
           if (st.left > 0 && st.spT <= 0 && aliveFoes() + spawnQueue.length < (c.maxAlive || 7)) { st.spT = c.every || 6; group(2, 3); }
           if (st.left <= 0) { if (clear) next(); else if (!st.lastCall) { st.lastCall = true; setObjective('Время! Добей оставшихся.'); } }
           if (!st.medkit && st.left < c.survive / 2) { st.medkit = true; addMedkit(A.mid[0], A.mid[1]); }
+        } else if (P_ === 'heli') {
+          st.spT -= dt;
+          if (HELI && !HELI.crash && st.spT <= 0 && aliveFoes() + spawnQueue.length < 4) { st.spT = 9; group(2, 3); }
+          if (!st.medkit && HELI && HELI.hp < HELI.max / 2) { st.medkit = true; addMedkit(A.mid[0], A.mid[1]); }
+          if ((!HELI || HELI.gone) && clear) next();
         } else if (P_ === 'boss') { if (st.boss && st.boss.dead && clear) next(); }
         else if (P_ === 'exit') { if (hero.pos.distanceTo(st.exit) < 4) { st.ph = 99; done(); } }
       },
@@ -3513,28 +3831,55 @@ const mmStatic = document.createElement('canvas'); mmStatic.width = mmStatic.hei
   g.fillStyle = '#1e3a2a'; g.fillRect(P(-69), P(11), 58 * s, 58 * s);
   g.fillStyle = '#2a2c3f'; g.fillRect(P(88), P(-152), 64 * s, 64 * s);
   g.strokeStyle = '#4a5078'; g.lineWidth = RW * s;
+  g.fillStyle = '#1c1f38'; for (const bx of [-120, -40, 40, 120]) for (const bz of [-120, -40, 40, 120]) { if ((bx === -40 && bz === 40) || (bx === 120 && bz === -120)) continue; g.fillRect(P(bx - 30), P(bz - 30), 60 * s, 60 * s); }
+  g.fillStyle = '#1e3a2a'; g.fillRect(P(-69), P(11), 58 * s, 58 * s);
+  g.fillStyle = '#2a2c3f'; g.fillRect(P(88), P(-152), 64 * s, 64 * s);
+  g.fillStyle = '#3a3550'; g.fillRect(P(10), P(10), 60 * s, 60 * s); g.fillStyle = '#c8bca8'; g.fillRect(P(27.5), P(52), 25 * s, 18 * s);   // square + city hall
+  g.fillStyle = '#4a4030'; g.fillRect(P(90), P(-70), 60 * s, 60 * s);                                                                    // bank
+  g.fillStyle = '#2a6a9a'; g.fillRect(P(-124.5), P(-185), 9 * s, 256 * s);                                                               // canal
+  g.strokeStyle = '#4a5078'; g.lineWidth = RW * s;
   for (const r of ROADS) { g.beginPath(); g.moveTo(P(r), P(-LIM)); g.lineTo(P(r), P(LIM)); g.stroke(); g.beginPath(); g.moveTo(P(-LIM), P(r)); g.lineTo(P(LIM), P(r)); g.stroke(); }
+  g.fillStyle = '#2a2c3a'; g.fillRect(P(13), P(-169.5), 54 * s, 19 * s);                                                                 // tunnel
+  g.fillStyle = '#d82a2a'; for (const [x, z] of [[66, 15], [68, 33]]) { g.beginPath(); g.arc(P(x), P(z), 3, 0, PI * 2); g.fill(); }        // metro
 })();
+// minimap: centred on the player and turned like the camera, so «right» on the map is right on screen
+const MM_R = 95; // metres from the centre to the edge
 function drawMinimap() {
-  const s = 300 / 360, P = (v) => (v + 180) * s;
-  mctx.drawImage(mmStatic, 0, 0);
+  const W = 300, k = W / 2 / MM_R, me = state.act === 1 ? pc : hero; if (!me) return;
+  // in the car the camera follows the heading; on foot it always looks north (-z)
+  const yaw = state.act === 1 ? camYaw : PI;
+  const rot = -PI / 2 - Math.atan2(Math.cos(yaw), Math.sin(yaw));
+  const toMap = (x, z) => { const dx = (x - me.pos.x) * k, dz = (z - me.pos.z) * k, c = Math.cos(rot), sn = Math.sin(rot); return [W / 2 + dx * c - dz * sn, W / 2 + dx * sn + dz * c]; };
+  mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.fillStyle = '#0c0e1e'; mctx.fillRect(0, 0, W, W);
+  mctx.save(); mctx.translate(W / 2, W / 2); mctx.rotate(rot); mctx.scale(k, k); mctx.translate(-me.pos.x, -me.pos.z);
+  mctx.drawImage(mmStatic, -180, -180, 360, 360);
   if (state.act === 1 && pc && NAV.pts.length) {
-    mctx.strokeStyle = 'rgba(77,255,166,.85)'; mctx.lineWidth = 5; mctx.lineJoin = 'round'; mctx.setLineDash([10, 6]); mctx.lineDashOffset = -state.t * 30;
-    mctx.beginPath(); mctx.moveTo(P(pc.pos.x), P(pc.pos.z)); for (const q of NAV.pts) mctx.lineTo(P(q.x), P(q.z)); mctx.stroke(); mctx.setLineDash([]);
+    mctx.strokeStyle = 'rgba(77,255,166,.9)'; mctx.lineWidth = 4 / k; mctx.lineJoin = 'round'; mctx.setLineDash([8 / k, 5 / k]); mctx.lineDashOffset = -state.t * 24 / k;
+    mctx.beginPath(); mctx.moveTo(pc.pos.x, pc.pos.z); for (const q of NAV.pts) mctx.lineTo(q.x, q.z); mctx.stroke(); mctx.setLineDash([]);
   }
-  const tgt = beam.visible ? beam.position : null;
-  if (tgt) { mctx.fillStyle = '#4dffa6'; mctx.beginPath(); mctx.arc(P(tgt.x), P(tgt.z), 7 + Math.sin(state.t * 5) * 2, 0, PI * 2); mctx.fill(); }
-  if (state.act === 2) {
-    mctx.fillStyle = '#ffd23a'; for (const k of pickups) { mctx.beginPath(); mctx.arc(P(k.pos.x), P(k.pos.z), 5, 0, PI * 2); mctx.fill(); }
-    mctx.fillStyle = '#5ad1ff'; for (const a of allies) if (!a.dead) { mctx.beginPath(); mctx.arc(P(a.pos.x), P(a.pos.z), 5, 0, PI * 2); mctx.fill(); }
-  }
-  mctx.fillStyle = '#ff3d8b';
+  const dot = (x, z, r, c) => { mctx.fillStyle = c; mctx.beginPath(); mctx.arc(x, z, r / k, 0, PI * 2); mctx.fill(); };
+  if (state.act === 2) { for (const kk of pickups) dot(kk.pos.x, kk.pos.z, 5, '#ffd23a'); for (const a of allies) if (!a.dead) dot(a.pos.x, a.pos.z, 5, '#5ad1ff'); }
   const list = state.act === 1 ? enemyCars : enemies;
-  for (const e of list) if (!e.dead) { mctx.beginPath(); mctx.arc(P(e.pos.x), P(e.pos.z), 5, 0, PI * 2); mctx.fill(); }
-  const me = state.act === 1 ? pc : hero; if (!me) return;
-  const h = state.act === 1 ? pc.h : hero.face;
-  mctx.save(); mctx.translate(P(me.pos.x), P(me.pos.z)); mctx.rotate(-h);
-  mctx.fillStyle = '#ffc43d'; mctx.beginPath(); mctx.moveTo(0, 11); mctx.lineTo(7, -7); mctx.lineTo(-7, -7); mctx.closePath(); mctx.fill(); mctx.restore();
+  for (const e of list) if (!e.dead) dot(e.pos.x, e.pos.z, 5, '#ff3d8b');
+  for (const c of LIFE.cars) if (c.g.visible) dot(c.pos.x, c.pos.z, 3, 'rgba(200,200,220,.55)');
+  mctx.restore();
+  // the target: a pulsing dot, or an arrow on the rim when it is farther than the map shows
+  const tgt = beam.visible ? beam.position : null;
+  if (tgt) {
+    let [tx, ty] = toMap(tgt.x, tgt.z); const dx = tx - W / 2, dy = ty - W / 2, dd = Math.hypot(dx, dy), rim = W / 2 - 16;
+    if (dd > rim) {
+      tx = W / 2 + dx / dd * rim; ty = W / 2 + dy / dd * rim;
+      mctx.save(); mctx.translate(tx, ty); mctx.rotate(Math.atan2(dy, dx)); mctx.fillStyle = '#4dffa6'; mctx.beginPath(); mctx.moveTo(14, 0); mctx.lineTo(-8, -10); mctx.lineTo(-8, 10); mctx.closePath(); mctx.fill(); mctx.restore();
+    } else { mctx.fillStyle = '#4dffa6'; mctx.beginPath(); mctx.arc(tx, ty, 9 + Math.sin(state.t * 5) * 2.5, 0, PI * 2); mctx.fill(); mctx.strokeStyle = '#0b0d1f'; mctx.lineWidth = 2; mctx.stroke(); }
+  }
+  if (HELI && !HELI.gone) {
+    const [hx, hy] = toMap(HELI.pos.x, HELI.pos.z), inside = Math.hypot(hx - W / 2, hy - W / 2) < W / 2 - 10;
+    if (inside) { mctx.save(); mctx.translate(hx, hy); mctx.rotate(state.t * 8); mctx.strokeStyle = '#c0ff6a'; mctx.lineWidth = 3; mctx.beginPath(); mctx.moveTo(-11, 0); mctx.lineTo(11, 0); mctx.moveTo(0, -11); mctx.lineTo(0, 11); mctx.stroke(); mctx.restore(); mctx.fillStyle = '#c0ff6a'; mctx.beginPath(); mctx.arc(hx, hy, 4, 0, PI * 2); mctx.fill(); }
+  }
+  // the player in the centre, pointing where the screen looks
+  const rel = state.act === 1 ? wrapA(pc.h - camYaw) : wrapA(hero.face - PI);
+  mctx.save(); mctx.translate(W / 2, W / 2); mctx.rotate(-rel);
+  mctx.fillStyle = '#ffc43d'; mctx.strokeStyle = '#0b0d1f'; mctx.lineWidth = 2; mctx.beginPath(); mctx.moveTo(0, -13); mctx.lineTo(9, 9); mctx.lineTo(0, 4); mctx.lineTo(-9, 9); mctx.closePath(); mctx.fill(); mctx.stroke(); mctx.restore();
 }
 let lastHp = -1, barsSig = '';
 function renderBars(list, timer, bad) {
@@ -3559,6 +3904,7 @@ function updateHud(dt) {
   if (state.ep >= 2 && MIS && MIS.hud && (state.mode === 'drive' || state.mode === 'foot')) { const hh = MIS.hud(); bars = hh.bars || []; timer = hh.timer || ''; tbad = !!hh.bad; }
   const boss = state.act === 2 && enemies.find((e) => e.boss && !e.dead);
   if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
+  if (HELI && !HELI.crash && !HELI.invuln && (state.mode === 'drive' || state.mode === 'foot')) bars = bars.concat([{ label: HELI.name, frac: HELI.hp / HELI.max, color: '#c0ff6a' }]);
   renderBars(bars, timer, tbad);
   $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : 'W A S D — бег · мышь — прицел · клик — огонь · B — щит';
   updateBoostsHud();
@@ -3855,6 +4201,77 @@ function profAction(act, id) {
   renderProfile();
 }
 
+// ---------------- entry: «install the game» banner, then registration ----------------
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; if (!$('gate').hidden && gateStep === 'install') renderGate(); });
+window.addEventListener('appinstalled', () => { store.set('nf-installed', true); deferredInstall = null; if (!$('gate').hidden && gateStep === 'install') gateNext(); });
+const isStandalone = () => { try { return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true; } catch (e) { return false; } };
+function platformHint() {
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document)) return 'На iPhone и iPad: откройте игру в Safari, нажмите «Поделиться» (квадрат со стрелкой) и выберите «На экран „Домой“».';
+  if (/Android/.test(ua)) return 'На Android: откройте меню браузера (⋮) и выберите «Установить приложение» или «Добавить на главный экран».';
+  return 'На компьютере: нажмите значок установки в адресной строке Chrome, Edge или Яндекс Браузера, или выберите в меню «Установить приложение».';
+}
+let gateStep = 'install', gateMode = 'register', gateMsg = '';
+function startGate() {
+  const needInstall = !isStandalone() && !store.get('nf-installed');
+  gateStep = needInstall ? 'install' : 'register';
+  if (gateStep === 'register' && !needRegister()) return finishGate();
+  $('gate').hidden = false; renderGate();
+}
+const needRegister = () => !PROF.login && !store.get('nf-guest');
+function gateNext() { if (gateStep === 'install') { gateStep = 'register'; gateMsg = ''; if (!needRegister()) return finishGate(); renderGate(); } else finishGate(); }
+function finishGate() { $('gate').hidden = true; updateProfChip(); }
+function renderGate() {
+  const c = $('gateCard');
+  if (gateStep === 'install') {
+    c.innerHTML = `<div class="gate-icon"><span></span></div>
+      <div class="kicker">Шаг 1 из 2</div><h2 class="h2">Установи игру</h2>
+      <p class="lead">«Ночной тариф» открывается с рабочего стола как обычное приложение: на весь экран, без адресной строки, и запускается быстрее.</p>
+      <ul class="gate-list"><li>Полный экран и удобное управление на телефоне</li><li>Быстрый запуск: город загружается из памяти устройства</li><li>Прогресс, машины и покупки остаются с тобой</li></ul>
+      ${deferredInstall ? '' : `<p class="gate-hint">${platformHint()}</p>`}
+      <div class="btns"><button id="gInstall" class="btn primary big" type="button">${deferredInstall ? 'Установить' : 'Готово, установил'}</button><button id="gSkip" class="btn" type="button">Продолжить в браузере</button></div>`;
+    $('gInstall').onclick = async () => {
+      if (deferredInstall) { deferredInstall.prompt(); try { const r = await deferredInstall.userChoice; if (r.outcome === 'accepted') store.set('nf-installed', true); } catch (e) { /* the prompt was closed */ } deferredInstall = null; }
+      else store.set('nf-installed', true);
+      gateNext();
+    };
+    $('gSkip').onclick = gateNext;
+  } else {
+    const reg = gateMode === 'register';
+    c.innerHTML = `<div class="kicker">Шаг 2 из 2</div><h2 class="h2">${reg ? 'Регистрация' : 'Вход'}</h2>
+      <p class="lead">${reg ? 'Профиль хранит монеты, машины, достижения и пройденные главы.' : 'Войди в свой профиль на этом устройстве.'}</p>
+      <div class="gate-tabs"><button class="chip${reg ? ' active' : ''}" data-g="register" type="button">Регистрация</button><button class="chip${reg ? '' : ' active'}" data-g="login" type="button">Вход</button></div>
+      <form id="gForm" class="gate-form" autocomplete="on">
+        ${reg ? '<label>Имя в игре<input id="gNick" type="text" maxlength="20" placeholder="Например, Ночной гонщик" autocomplete="nickname"></label>' : ''}
+        <label>Логин<input id="gLogin" type="text" maxlength="24" autocomplete="username" required></label>
+        <label>Пароль<input id="gPass" type="password" maxlength="40" autocomplete="${reg ? 'new-password' : 'current-password'}" required></label>
+        ${reg ? '<label>Повтори пароль<input id="gPass2" type="password" maxlength="40" autocomplete="new-password" required></label>' : ''}
+        <div class="pmsg">${esc(gateMsg)}</div>
+        <div class="btns"><button class="btn primary big" type="submit">${reg ? 'Создать профиль' : 'Войти'}</button><button id="gGuest" class="btn" type="button">Играть как гость</button></div>
+      </form>
+      <div class="note">Профиль хранится в этом браузере. Пароль сохраняется только в виде хеша.</div>`;
+    c.querySelectorAll('[data-g]').forEach((b) => { b.onclick = () => { gateMode = b.dataset.g; gateMsg = ''; renderGate(); }; });
+    $('gGuest').onclick = () => { store.set('nf-guest', true); finishGate(); };
+    $('gForm').onsubmit = (e) => {
+      e.preventDefault();
+      const login = $('gLogin').value, pass = $('gPass').value;
+      let err;
+      if (reg) {
+        if (pass !== $('gPass2').value) err = 'Пароли не совпадают.';
+        else { err = profRegister(login, pass); if (!err) { const nick = $('gNick').value.trim(); if (nick) { PROF.name = nick; saveProfile(); } } }
+      } else err = profLogin(login, pass);
+      if (err) { gateMsg = err; renderGate(); return; }
+      finishGate(); toast(PROF.god ? 'Тестовый профиль: бессмертие и бесплатные покупки' : `Привет, ${PROF.name}!`, 2);
+    };
+    const f = $(reg ? 'gNick' : 'gLogin'); if (f && !isTouch) f.focus();
+  }
+}
+// installable web app: the service worker caches the game for fast start (only on http(s) with a manifest next to the page)
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel="manifest"]')) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* not available here */ }); });
+}
+
 // ---------------- drivers ----------------
 // stats: [health, shooting, driving], 1–5 each, 10 points per driver
 const CHARS = [
@@ -4106,6 +4523,7 @@ $('profTabs').addEventListener('click', (e) => { const b = e.target.closest('[da
 $('profBody').addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) profAction(b.dataset.act, b.dataset.id); });
 for (const [id, k] of [['btnNitro', 'nitro'], ['btnShield', 'shield']]) $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); useBoost(k); });
 window.addEventListener('keydown', (e) => {
+  if (!$('gate').hidden) return;
   if (state.mode === 'preview' && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); showSelect(); return; }
   if (state.mode !== 'select' || !$('prof').hidden) return;
   let i = curIdx;
@@ -4135,7 +4553,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateRain(dt, focus);
@@ -4158,12 +4576,12 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   pvEnemy = Object.assign(makeCar(0x2b2b33, false), { pos: new V3(), h: PI / 2 });
   applyChar(); updateProfChip(); updateBoostsHud();
   $('loading').hidden = true;
-  showPreview();
+  showPreview(); startGate();
   requestAnimationFrame(loop);
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>

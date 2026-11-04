@@ -1,0 +1,19 @@
+{
+  "name": "Ночной тариф",
+  "short_name": "Ночной тариф",
+  "description": "3D-экшен с погонями на ночном такси: живой город, перестрелки и сюжет по эпизодам.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#0b0d1f",
+  "theme_color": "#0b0d1f",
+  "categories": ["games"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
