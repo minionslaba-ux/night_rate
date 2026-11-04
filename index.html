@@ -621,12 +621,15 @@ function addMesh(geo, mat, x, y, z, sx, sy, sz, shadow) {
 }
 
 const YARD = { x: 120, z: -120 };
+const BANK = { x: 120, z: -40 }; // bank «Гранит» fills this block (season 2)
+const inBankBlock = (x, z) => Math.abs(x - BANK.x) < 33 && Math.abs(z - BANK.z) < 33;
+const SINK = batch(); // geometry sent here is dropped (keeps the random layout of the rest of the city unchanged)
 const GATE = new V3(120, 0, -84);
 const DOOR = new V3(120, 0, -131);
 const START = { x: -160, z: 158, h: PI };
 
 const B = {};
-['brick', 'office', 'glass', 'shop', 'trim', 'roof', 'metal', 'neon', 'sign', 'awning', 'walk', 'grass', 'leaf', 'mark', 'container', 'wood', 'water'].forEach((k) => { B[k] = batch(); });
+['brick', 'office', 'glass', 'shop', 'trim', 'roof', 'metal', 'neon', 'sign', 'awning', 'walk', 'grass', 'leaf', 'mark', 'container', 'wood', 'water', 'bankL', 'bankA'].forEach((k) => { B[k] = batch(); });
 const FAC = ['brick', 'office', 'glass'];
 const AWN = [0xb8323a, 0x2f6a4a, 0x2a4f8a, 0xd08a2a, 0x6a3a8a, 0x2a7a7a];
 const NEON = [0xff3d8b, 0x3de8ff, 0xffd23a, 0x7cff6a, 0xb46bff];
@@ -747,7 +750,9 @@ function buildWorld() {
   const BT = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], WIDE = { E: 1, F: 1, G: 1, H: 1 };
   const bld = {}; BT.forEach((t) => { bld[t] = [[], [], [], []]; });
   const putBld = (t, x, z, ry, sy, S, collide) => {
-    bld[t][Math.floor(srand() * 4)].push({ x, y: -0.4, z, ry, sx: S, sy: S * sy, sz: S });
+    const v = Math.floor(srand() * 4);
+    if (inBankBlock(x, z)) return;
+    bld[t][v].push({ x, y: -0.4, z, ry, sx: S, sy: S * sy, sz: S });
     if (!collide) return;
     const hw = (WIDE[t] ? 1.0 : 0.62) * S, z0 = -0.66 * S, z1 = 0.82 * S, c = Math.round(Math.cos(ry)), sn = Math.round(Math.sin(ry));
     const pts = [[-hw, z0], [hw, z0], [-hw, z1], [hw, z1]].map(([lx, lz]) => [x + lx * c + lz * sn, z - lx * sn + lz * c]);
@@ -789,12 +794,13 @@ function buildWorld() {
     const tt = t + 8.5;
     if (!ROADS.some((r2) => Math.abs(tt - r2) < 14)) for (const [tx, tz] of [[r - s * 10.6, tt], [tt, r - s * 10.6]]) {
       if (nearGate(tx, tz)) continue;
-      putB(B.trim, G.cyl, tx, 0.35, tz, 1.6, 0.4, 1.6, 0, col(0x6a6a72));
-      putB(B.wood, G.cyl6, tx, 1.8, tz, 0.3, 3.2, 0.3, 0, col(0x5a3a26));
+      const bk = Math.abs(tx - BANK.x) < 12 && Math.abs(tz - (BANK.z + 30)) < 4; // keep the bank entrance clear
+      putB(bk ? SINK : B.trim, G.cyl, tx, 0.35, tz, 1.6, 0.4, 1.6, 0, col(0x6a6a72));
+      putB(bk ? SINK : B.wood, G.cyl6, tx, 1.8, tz, 0.3, 3.2, 0.3, 0, col(0x5a3a26));
       const lc = col(pick([0x2f5a32, 0x3a6a34, 0x2a4d34, 0x4a6a2a]));
-      putB(B.leaf, G.sph, tx, 4.4, tz, 1.9, 1.6, 1.9, srand() * 3, lc);
-      putB(B.leaf, G.sph, tx + sr(-0.8, 0.8), 5.4, tz + sr(-0.8, 0.8), 1.3, 1.2, 1.3, srand() * 3, lc.clone().multiplyScalar(1.15));
-      addBox(tx, tz, 0.9, 0.9, 3);
+      putB(bk ? SINK : B.leaf, G.sph, tx, 4.4, tz, 1.9, 1.6, 1.9, srand() * 3, lc);
+      putB(bk ? SINK : B.leaf, G.sph, tx + sr(-0.8, 0.8), 5.4, tz + sr(-0.8, 0.8), 1.3, 1.2, 1.3, srand() * 3, lc.clone().multiplyScalar(1.15));
+      if (!bk) addBox(tx, tz, 0.9, 0.9, 3);
     }
     // parked cars along the curb
     for (const side of [-1, 1]) {
@@ -814,7 +820,7 @@ function buildWorld() {
   kitInstances('streetlight', lamps, KIT.prop, true);
   kitInstances('trafficlight_A', tlights, KIT.prop, true);
 
-  buildPark(); buildDocks(); buildYard();
+  buildPark(); buildDocks(); buildYard(); buildBank();
 
   // one material per batch: a few draw calls for the whole city
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -828,6 +834,8 @@ function buildWorld() {
   meshB(B.container, new THREE.MeshStandardMaterial({ map: ribTex, vertexColors: true, roughness: 0.6, metalness: 0.3 }), true);
   meshB(B.wood, new THREE.MeshStandardMaterial({ map: woodTex, vertexColors: true, roughness: 0.85 }), true);
   meshB(B.water, new THREE.MeshStandardMaterial({ color: 0x0b2236, roughness: 0.08, metalness: 0.2, envMapIntensity: 1.8, vertexColors: true }), false);
+  KIT.bankLight = meshB(B.bankL, new THREE.MeshBasicMaterial({ vertexColors: true }), false).material;
+  const alarm = meshB(B.bankA, new THREE.MeshBasicMaterial({ vertexColors: true }), false); alarm.visible = false; KIT.bankAlarm = alarm;
   makeEnvironment();
 }
 
@@ -882,6 +890,133 @@ function buildDocks() {
 }
 
 let yardGate, warehouseDoor, gateCollider = null;
+// ---- bank «Гранит»: a cut-away hall (no roof) so the top-down camera sees the heist ----
+// hall x 92..148, z -68..-12; entrance from the street (road z = 0); the vault door in the back wall
+const BANKX = { door: null, doorA: 0, doorT: 0, drill: null, laptop: null, top: [], topA: 1, glow: null, spin: 0 };
+function buildBank() {
+  const X = BANK.x, Z = BANK.z, stone = col(0xd6cdb9), stoneD = col(0x9a9284), plinth = col(0x5a544c), wallH = 4.6;
+  const wall = (x0, z0, x1, z1, h, c) => { boxB(B.trim, x0, 0.15, z0, x1, h, z1, { col: c || stone }); addBox((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, h); boxB(B.trim, x0 - 0.12, 0.15, z0 - 0.12, x1 + 0.12, 0.9, z1 + 0.12, { col: plinth, top: false }); boxB(B.trim, x0 - 0.2, h - 0.25, z0 - 0.2, x1 + 0.2, h + 0.05, z1 + 0.2, { col: stoneD }); };
+  // outer walls with doors: west and east side doors, a service door at the back left, the main entrance in front
+  wall(90, -70, 92, -34, wallH); wall(90, -26, 92, -10, wallH);
+  wall(148, -70, 150, -34, wallH); wall(148, -26, 150, -10, wallH);
+  wall(90, -70, 94, -68, 6.6); wall(100, -70, 106, -68, 6.6); wall(134, -70, 150, -68, 6.6);
+  wall(106, -70.5, 134, -66.6, 7.4, col(0x8e8c90)); // vault wall: steel-grey, thicker
+  wall(90, -12, 113, -10, 5.2); wall(127, -12, 150, -10, 5.2);
+  // lit windows on the street side and the side walls
+  const win = HDR(0xffd9a0, 1.6);
+  for (const x of [95, 101, 107, 133, 139, 145]) { putB(B.bankL, G.box, x, 2.9, -9.92, 2.2, 3.0, 0.06, 0, win); putB(B.trim, G.box, x, 2.9, -9.88, 2.6, 3.4, 0.04, 0, stoneD); }
+  for (const z of [-60, -50, -20, -16]) for (const x of [89.92, 150.08]) { putB(B.bankL, G.box, x, 2.6, z, 0.06, 2.6, 2.0, 0, win); }
+  // portico: steps, six columns, the entablature with the sign
+  for (let k = 0; k < 3; k++) boxB(B.trim, 100 - k * 0.6, 0.15, -10 + k * 0.5, 140 + k * 0.6, 0.45 - k * 0.1, -9.2 + k * 0.5, { col: k % 2 ? stone : stoneD });
+  for (const x of [98, 105, 112, 128, 135, 142]) {
+    putB(B.trim, G.box, x, 0.5, -8.6, 1.9, 0.5, 1.9, 0, stoneD);
+    putB(B.trim, G.cyl, x, 3.6, -8.6, 1.35, 5.8, 1.35, 0, stone);
+    putB(B.trim, G.box, x, 6.6, -8.6, 1.9, 0.4, 1.9, 0, stoneD);
+    addBox(x, -8.6, 1.5, 1.5, 7);
+  }
+  const topMat = new THREE.MeshStandardMaterial({ color: 0xd6cdb9, roughness: 0.85, transparent: true });
+  const ent = new THREE.Mesh(box1, topMat); ent.scale.set(50, 1.3, 2.4); ent.position.set(X, 7.45, -8.7); ent.castShadow = true; scene.add(ent);
+  const signTex = canvasTex(1024, 96, (g, w, h) => {
+    g.fillStyle = '#0f1a16'; g.fillRect(0, 0, w, h); g.strokeStyle = '#c8a030'; g.lineWidth = 4; g.strokeRect(6, 6, w - 12, h - 12);
+    g.fillStyle = '#f0c850'; g.font = 'bold 62px Georgia, "Times New Roman", serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('БАНК  «ГРАНИТ»', w / 2, h / 2 + 3);
+  });
+  const signMat = new THREE.MeshBasicMaterial({ map: signTex, color: new THREE.Color(1.7, 1.5, 1.2), transparent: true });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(22, 2.06), signMat); sign.position.set(X, 7.45, -7.48); scene.add(sign);
+  BANKX.top = [topMat, signMat];
+  // marble floor, a red carpet to the counter
+  const marble = rep(canvasTex(512, 512, (g, w) => {
+    const n = 4, s = w / n;
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { g.fillStyle = (r + c) % 2 ? '#3a4642' : '#a8a092'; g.fillRect(c * s, r * s, s, s); }
+    for (let i = 0; i < 26; i++) { g.strokeStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '90,90,90'},${rand(0.08, 0.2)})`; g.lineWidth = rand(0.6, 2); g.beginPath(); let x = Math.random() * w, y = Math.random() * w; g.moveTo(x, y); for (let k = 0; k < 6; k++) { x += rand(-60, 60); y += rand(-60, 60); g.lineTo(x, y); } g.stroke(); }
+    g.strokeStyle = 'rgba(200,160,48,.6)'; g.lineWidth = 2; for (let k = 0; k <= n; k++) { g.beginPath(); g.moveTo(k * s, 0); g.lineTo(k * s, w); g.moveTo(0, k * s); g.lineTo(w, k * s); g.stroke(); }
+  }), 7, 7);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(56, 56), new THREE.MeshStandardMaterial({ map: marble, color: 0x9a948a, roughness: 0.32, metalness: 0.05, envMapIntensity: 0.7 }));
+  floor.rotation.x = -PI / 2; floor.position.set(X, 0.17, -40); floor.receiveShadow = true; scene.add(floor);
+  boxB(B.trim, 116.5, 0.17, -36, 123.5, 0.2, -10.5, { col: col(0x7a1a22) });
+  boxB(B.trim, 117.1, 0.2, -35.4, 122.9, 0.205, -11, { col: col(0x9a2a30), sides: false });
+  // teller counter (low: shots fly over it), glass screens, desks with lamps behind it
+  const wood = col(0x6a3e24), top = col(0xe8e0d0);
+  for (const [x0, x1] of [[94, 115], [125, 146]]) {
+    boxB(B.trim, x0, 0.17, -39.2, x1, 1.05, -37.6, { col: wood }); boxB(B.trim, x0 - 0.1, 1.05, -39.3, x1 + 0.1, 1.17, -37.5, { col: top });
+    addBox((x0 + x1) / 2, -38.4, x1 - x0, 1.6, 0.95);
+    for (let x = x0 + 3; x < x1 - 1; x += 4.2) { putB(B.bankL, G.box, x, 1.5, -38.4, 0.5, 0.06, 0.3, 0, HDR(0x7cff9a, 1.2)); putB(B.metal, G.box, x - 2.1, 1.75, -38.4, 0.06, 1.15, 0.06, 0, col(0xc8a030)); }
+  }
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.16, roughness: 0.05, metalness: 0.3, depthWrite: false }));
+  for (const [x0, x1] of [[94, 115], [125, 146]]) { const g = glass.clone(); g.scale.set(x1 - x0, 1.2, 0.06); g.position.set((x0 + x1) / 2, 1.78, -38.4); scene.add(g); }
+  for (const x of [99, 107, 133, 141]) {
+    boxB(B.trim, x - 1.4, 0.17, -47.6, x + 1.4, 0.95, -46.2, { col: wood }); addBox(x, -46.9, 2.8, 1.4, 0.9);
+    putB(B.bankL, G.box, x - 0.6, 1.25, -47.2, 0.9, 0.55, 0.05, 0, HDR(0x5ab8ff, 1.4));
+    putB(B.metal, G.box, x + 0.8, 1.15, -46.9, 0.08, 0.4, 0.08, 0, col(0xc8a030)); putB(B.bankL, G.sph, x + 0.8, 1.42, -46.9, 0.32, 0.18, 0.32, 0, HDR(0x5aff8a, 2.2));
+  }
+  // benches and potted plants in the public half
+  for (const [x, z] of [[103, -22], [137, -22], [103, -29], [137, -29]]) { boxB(B.trim, x - 2.4, 0.17, z - 0.6, x + 2.4, 0.75, z + 0.6, { col: col(0x5a1e24) }); addBox(x, z, 4.8, 1.2, 0.7); }
+  for (const [x, z] of [[95, -14.5], [145, -14.5], [95, -64], [145, -64]]) {
+    putB(B.trim, G.cyl, x, 0.7, z, 1.3, 1.1, 1.3, 0, col(0x3a3a40)); addBox(x, z, 1.2, 1.2, 1);
+    putB(B.leaf, G.sph, x, 1.9, z, 1.0, 1.1, 1.0, srand() * 3, col(0x2f6a36)); putB(B.leaf, G.sph, x + 0.2, 2.7, z - 0.1, 0.7, 0.8, 0.7, 1, col(0x3a7a3e));
+  }
+  // warm light pools on the floor (the bank has no ceiling in this cut-away)
+  const poolM = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.0, 0.75, 0.45), transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false });
+  const poolG = new THREE.PlaneGeometry(16, 16); poolG.rotateX(-PI / 2);
+  BANKX.pools = [];
+  for (const [x, z] of [[106, -22], [134, -22], [106, -52], [134, -52], [120, -30], [120, -58]]) { const m = new THREE.Mesh(poolG, poolM); m.position.set(x, 0.22, z); scene.add(m); }
+  BANKX.poolM = poolM;
+  // red emergency lamps: lit only in a blackout
+  for (const [x, z] of [[92.3, -40], [147.7, -40], [120, -66.3], [120, -12.3], [96, -67.7]]) putB(B.bankA, G.box, x, 3.9, z, Math.abs(x - 120) > 20 ? 0.12 : 0.9, 0.35, Math.abs(x - 120) > 20 ? 0.9 : 0.12, 0, HDR(0xff2a2a, 5));
+  // the vault: frame ring, dark interior with gold, and a round door on a hinge
+  const steel = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, roughness: 0.32, metalness: 0.85, envMapIntensity: 1.2 });
+  const gold = new THREE.MeshStandardMaterial({ color: 0xd0a030, roughness: 0.3, metalness: 0.9, emissive: 0x3a2a08, envMapIntensity: 1.2 });
+  const cylZ = (r, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d, 40), mat); m.rotation.x = PI / 2; m.position.set(x, y, z); m.castShadow = true; return m; };
+  scene.add(cylZ(3.35, 0.3, gold, X, 3.2, -66.45));
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(3.0, 40), new THREE.MeshBasicMaterial({ color: 0x0a0806 })); hole.position.set(X, 3.2, -66.28); scene.add(hole);
+  const barM = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.7, 0.5) });
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 5 - (r % 2); c++) { const b = new THREE.Mesh(box1, barM); b.scale.set(0.8, 0.3, 0.1); b.position.set(X - 1.8 + c * 0.9 + (r % 2) * 0.45, 1.6 + r * 0.42, -66.26); scene.add(b); }
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.6, 1.1, 0.35), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.rotation.x = -PI / 2; glow.position.set(X, 0.25, -62); scene.add(glow); BANKX.glow = glow;
+  const pivot = new THREE.Group(); pivot.position.set(X - 2.9, 3.2, -65.9); scene.add(pivot);
+  const door = cylZ(2.9, 0.75, steel, 2.9, 0, 0); pivot.add(door);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.45, 0.09, 8, 40), gold); ring.position.set(2.9, 0, 0.4); pivot.add(ring);
+  const hub = cylZ(0.45, 0.3, gold, 2.9, 0, 0.5); pivot.add(hub);
+  for (let k = 0; k < 3; k++) { const sp = new THREE.Mesh(box1, gold); sp.scale.set(2.6, 0.14, 0.14); sp.position.set(2.9, 0, 0.62); sp.rotation.z = k * PI / 3; pivot.add(sp); }
+  for (let k = 0; k < 12; k++) { const a = k / 12 * PI * 2, bt = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), gold); bt.position.set(2.9 + Math.cos(a) * 2.7, Math.sin(a) * 2.7, 0.38); pivot.add(bt); }
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshBasicMaterial({ map: canvasTex(256, 64, (g, w, h) => { g.fillStyle = '#c8a030'; g.fillRect(0, 0, w, h); g.fillStyle = '#1a1408'; g.font = 'bold 36px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('№ 117', w / 2, h / 2 + 2); }) }));
+  lab.position.set(2.9, 1.6, 0.39); pivot.add(lab);
+  BANKX.door = pivot;
+  // drill rig (aimed at the vault door) and the hacking laptop
+  const drill = new THREE.Group(), dark = std(0x2a2a30, { metalness: 0.5, roughness: 0.5 }), yel = std(0xe0a020, { roughness: 0.5 });
+  const dBase = new THREE.Mesh(box1, dark); dBase.scale.set(1.4, 0.3, 1.6); dBase.position.y = 0.32; drill.add(dBase);
+  const post = new THREE.Mesh(box1, dark); post.scale.set(0.22, 2.9, 0.22); post.position.y = 1.8; drill.add(post);
+  const body = cylZ(0.42, 1.6, yel, 0, 3.0, -0.5); drill.add(body);
+  const motor = new THREE.Mesh(box1, yel); motor.scale.set(0.9, 0.8, 0.8); motor.position.set(0, 3.0, 0.5); drill.add(motor);
+  const bitG = new THREE.Group(); bitG.position.set(0, 3.0, -1.35); drill.add(bitG);
+  const bit = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1.1, 8), steel); bit.rotation.x = -PI / 2; bit.position.z = -0.5; bitG.add(bit);
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 3, 0.6) })); lamp.position.set(0, 3.55, 0.5); drill.add(lamp);
+  drill.position.set(X, 0.17, -64.0); drill.visible = false; scene.add(drill);
+  BANKX.drill = { g: drill, bit: bitG, lamp };
+  const lap = new THREE.Group();
+  const tbl = new THREE.Mesh(box1, std(0x3a3a42)); tbl.scale.set(1.8, 0.9, 1.0); tbl.position.y = 0.45; lap.add(tbl);
+  const base = new THREE.Mesh(box1, dark); base.scale.set(0.9, 0.05, 0.6); base.position.y = 0.93; lap.add(base);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.56), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.2, 2.0) })); scr.position.set(0, 1.25, -0.28); scr.rotation.x = -0.25; lap.add(scr);
+  const sglow = new THREE.Mesh(new THREE.PlaneGeometry(5, 5), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(0.2, 1.2, 1.1), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); sglow.rotation.x = -PI / 2; sglow.position.y = 0.06; lap.add(sglow);
+  lap.visible = false; scene.add(lap);
+  BANKX.laptop = { g: lap, scr };
+}
+// vault door: 0 = closed, 1 = open; animate = swing over ~2 s
+function setVault(open, animate) { BANKX.doorT = open ? 1 : 0; if (!animate) BANKX.doorA = BANKX.doorT; }
+function updateBank(dt) {
+  if (!BANKX.door) return;
+  BANKX.doorA += clamp(BANKX.doorT - BANKX.doorA, -dt * 0.55, dt * 0.55);
+  const e = BANKX.doorA * BANKX.doorA * (3 - 2 * BANKX.doorA);
+  BANKX.door.rotation.y = -1.75 * e; BANKX.glow.material.opacity = 0.9 * e;
+  // fade the entablature when the hero walks under it (it would hide the hero from the camera)
+  const under = state.act === 2 && hero && Math.abs(hero.pos.x - BANK.x) < 30 && hero.pos.z < -6 && hero.pos.z > -30;
+  BANKX.topA += ((under ? 0.18 : 1) - BANKX.topA) * Math.min(1, dt * 5);
+  BANKX.top.forEach((m) => { m.opacity = BANKX.topA; m.depthWrite = BANKX.topA > 0.95; });
+  const D = BANKX.drill;
+  if (D.g.visible && D.on) { D.bit.rotation.z += dt * 40; if (Math.random() < dt * 30) spawnP(new V3(BANK.x + rand(-0.3, 0.3), 3.0 + rand(-0.3, 0.3), -65.3), { color: 0xffb040, size: 0.18, vel: new V3(rand(-4, 4), rand(1, 5), rand(1, 5)), life: 0.5, opacity: 1 }); }
+  if (D.g.visible) D.lamp.material.color.setRGB(D.on ? 0.3 : (Math.sin(state.t * 12) > 0 ? 4 : 0.4), D.on ? 3 : 0.2, D.on ? 0.6 : 0.2);
+  const L = BANKX.laptop; if (L.g.visible) L.scr.material.color.setRGB(L.on ? 0.4 : (Math.sin(state.t * 10) > 0 ? 3 : 0.5), L.on ? 2.2 : 0.3, L.on ? 2.0 : 0.3);
+}
+
 function buildYard() {
   const { x: X, z: Z } = YARD;
   const wallC = col(0x8a8790);
@@ -1434,6 +1569,11 @@ const WHO = {
   lisa: { name: 'Лиса', color: '#ff6a3a', init: 'Л' },
   baron: { name: 'Барон', color: '#3ad0c0', init: 'Б' },
   twin: { name: 'Близнец', color: '#8a9ab8', init: 'Б' },
+  ded: { name: 'Дед Савелий, медвежатник', color: '#e0c890', init: 'Д' },
+  granin: { name: 'Аркадий Гранин, банкир', color: '#e8d8a0', init: 'Г' },
+  glyba: { name: 'Глыба, начальник охраны', color: '#7aa0d8', init: 'Г' },
+  ten: { name: 'Тень', color: '#b07ad8', init: 'Т' },
+  radio: { name: 'Новости по радио', color: '#a0a8b8', init: 'Р' },
 };
 const dlg = { lines: [], i: 0, shown: 0, done: null, prev: null };
 function playDialog(lines, done) {
@@ -1481,10 +1621,11 @@ function spawnEnemyCar() {
   const idx = trail.length - 22, p = trail[idx], nx = trail[idx + 1];
   if (p.distanceTo(pc.pos) < 30) return;
   const m = makeCar(pick([0x2b2b33, 0x3a1f2b, 0x1f2a3a, 0x332a22]), false);
+  if (MIS && MIS.carStyle === 'granit') { const bc = new THREE.Mesh(box1, basic(new THREE.Color(4, 1.5, 0.15))); bc.scale.set(0.9, 0.16, 0.32); bc.position.set(0, 1.62, -0.1); m.g.add(bc); }
   const e = Object.assign(m, { pos: p.clone(), vel: new V3(), h: Math.atan2(nx.x - p.x, nx.z - p.z), hp: 50, ti: idx + 1, fireCd: rand(1, 2), stuck: 0, rev: 0, dead: false });
   e.vel.set(Math.sin(e.h), 0, Math.cos(e.h)).multiplyScalar(20);
   enemyCars.push(e);
-  if (!state.firstChase) { state.firstChase = true; toast('Хвост! «Шакалы» на хвосте', 2); }
+  if (!state.firstChase) { state.firstChase = true; toast(MIS && MIS.chaseMsg ? MIS.chaseMsg : 'Хвост! «Шакалы» на хвосте', 2); }
 }
 function updateDrive(dt) {
   const steerKey = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
@@ -1753,7 +1894,9 @@ const LOOKS = {
 };
 
 // ---- stage helpers ----
+let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
+  for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
   for (const a of allies) scene.remove(a.g); allies.length = 0;
@@ -1764,6 +1907,7 @@ function clearStage() {
   if (hero) hero.g.visible = false;
   yardGate.position.y = -3; if (gateCollider) { colliders.splice(colliders.indexOf(gateCollider), 1); gateCollider = null; }
   warehouseDoor.position.y = 0;
+  if (BANKX.drill) { BANKX.drill.g.visible = false; BANKX.drill.on = false; BANKX.laptop.g.visible = false; BANKX.laptop.on = false; setVault(false); }
 }
 function freeSpot(x, z, r) {
   r = r === undefined ? 1 : r;
@@ -1816,17 +1960,24 @@ function damageAlly(a, d) {
 }
 // pickups: shipping papers and medkits
 const docGeo = new THREE.BoxGeometry(0.9, 0.14, 1.2);
+let BAG_TEX = null;
 function addPickup(kind, x, z, onTake) {
+  if (kind === 'bag' && !BAG_TEX) BAG_TEX = canvasTex(64, 64, (g, w) => { g.fillStyle = '#f0d060'; g.font = 'bold 52px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('₽', w / 2, w / 2 + 3); });
   const g = new THREE.Group();
   if (kind === 'doc') {
     g.add(new THREE.Mesh(docGeo, new THREE.MeshStandardMaterial({ color: 0xf4e6b0, emissive: 0x806a20, emissiveIntensity: 1 })));
     const st = new THREE.Mesh(box1, basic(new THREE.Color(2.4, 0.4, 0.4))); st.scale.set(0.5, 0.16, 0.16); st.position.set(0, 0.02, 0.3); g.add(st);
+  } else if (kind === 'bag') {
+    const bag = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 10), std(0x5a6a3a, { roughness: 0.9 })); bag.scale.set(1, 0.85, 0.9); g.add(bag);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 0.35, 10), std(0x5a6a3a, { roughness: 0.9 })); neck.position.y = 0.5; g.add(neck);
+    const tie = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.05, 6, 14), std(0xc8a030, { metalness: 0.8, roughness: 0.3 })); tie.rotation.x = PI / 2; tie.position.y = 0.45; g.add(tie);
+    const sgn = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: BAG_TEX, transparent: true })); sgn.position.set(0, 0, 0.51); g.add(sgn);
   } else {
     const mk = new THREE.Mesh(box1, std(0x2fbf6a)); mk.scale.set(1, 0.7, 0.7); g.add(mk);
     const c1 = new THREE.Mesh(box1, basic(0xffffff)); c1.scale.set(0.6, 0.18, 0.72); g.add(c1);
     const c2 = new THREE.Mesh(box1, basic(0xffffff)); c2.scale.set(0.18, 0.6, 0.72); g.add(c2);
   }
-  const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), new THREE.MeshBasicMaterial({ map: glowTex, color: kind === 'doc' ? new THREE.Color(1.8, 1.4, 0.4) : new THREE.Color(0.3, 1.5, 0.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), new THREE.MeshBasicMaterial({ map: glowTex, color: kind === 'med' ? new THREE.Color(0.3, 1.5, 0.6) : new THREE.Color(1.8, 1.4, 0.4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   glow.rotation.x = -PI / 2; glow.position.y = -0.6; g.add(glow);
   const p = freeSpot(x, z, 1); g.position.set(p.x, 0.8, p.z); scene.add(g);
   const k = { m: g, pos: p, kind, onTake }; pickups.push(k); return k;
@@ -2192,7 +2343,7 @@ function startEpisode(ep, ch) {
   else startGen(ep, ch - 1, true);
 }
 function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else startMission(); }
-const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет' };
+const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга' };
 function renderChapters() {
   const eb = $('epChips');
   eb.innerHTML = Object.keys(EP_NAMES).map((k) => `<button class="chip${selEp === +k ? ' active' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
@@ -2402,7 +2553,7 @@ const EPS = {
     title: 'Рассвет', faction: 'night',
     logline: 'Финал сезона. Последняя ночь Веры: её армия, её последний заказ и встреча на рассвете у старого парома.',
     endTitle: 'Смена окончена', endLead: 'Над Порт-Северным рассвет. Вера проиграла, а ночной тариф снова просто тариф.',
-    teaser: 'Конец первого сезона. Спасибо, что ездили с нами.',
+    teaser: 'Конец первого сезона. Дальше — сезон 2: «Большой куш», ограбление банка «Гранит».',
     chapters: [
       { t: 'Последний заказ', type: 'deliver', start: [0, -20, 'N'], chase: 3, ramp: 1,
         pts: [
@@ -2439,6 +2590,136 @@ const EPS = {
         outro: [['vera2', 'Посмотри на небо. Рассвет... Мой тариф закончился.'], ['mark', 'Полиция уже едет. На этот раз — настоящая.'], ['hero', 'Марк, отметь в журнале: смена окончена.'], ['mark', 'Отметил. Езжай домой, {name}.']] },
     ],
   },
+  // ---------------- season 2: the bank heist (episodes 8–10) ----------------
+  8: {
+    title: 'Большой куш', faction: 'granit', carStyle: 'granit', chaseMsg: 'Хвост! Охрана «Гранита»',
+    logline: 'Прошёл месяц. Банк «Гранит» забрал таксопарк Марка за долги, а его хозяин Аркадий Гранин скупает город. Вера звонит из тюрьмы: в хранилище «Гранита», в ячейке 117, лежат деньги Диспетчера и чёрная книга — кому Гранин платил. Команда готовится к большому делу.',
+    endTitle: 'План готов', endLead: 'Коды расшифрованы, команда собрана. Но Гранин знает, что вы придёте, и обещал оставить свет включённым.',
+    teaser: 'Эпизод 9. Хранилище',
+    chapters: [
+      { t: 'Маршрут отхода', type: 'deliver', start: [60, 0, 'E'], chase: 0, ramp: 1,
+        pts: [
+          { p: [120, 0], name: 'Банк «Гранит»', say: [['hero', 'Колонны, мрамор, вывеска золотом. Красиво жить не запретишь.'], ['mark', 'Засеки маршрут отхода: от банка до моего гаража. Время — главное. И не светись перед охраной.']] },
+          { p: [160, -80], name: 'Поворот у реки', t: 40 },
+          { p: [80, -160], name: 'Тоннель', t: 40 },
+          { p: [-80, -80], name: 'Гараж Марка', t: 60 },
+        ],
+        about: 'Вера звонит из тюрьмы и рассказывает про хранилище «Гранита». Проехать мимо банка и засечь маршрут отхода до гаража Марка: три точки, на каждую — своё время. После банка за такси увязывается охрана.',
+        intro: [['radio', '…банк «Гранит» объявил о покупке таксопарка «Ночной тариф» за долги. Аркадий Гранин: «Городу нужен порядок»…'], ['mark', '{g:Слышал|Слышала}? Мой таксопарк. Двадцать лет.'], ['vera2', 'Здравствуй, водитель. Звоню из тюрьмы, так что коротко.'], ['vera2', 'Гранин отмывал мои деньги. И деньги половины города. Всё лежит в его хранилище, ячейка 117. Там же его чёрная книга — кому он платил.'], ['hero', 'С чего такая щедрость, Вера?'], ['vera2', 'Пусть лучше достанется тебе, чем ему. Проедь мимо банка. Посмотри, как он блестит.']],
+        outro: [['mark', 'Маршрут есть. Три минуты от банка до гаража, если без пробок.'], ['leva', 'Одним такое дело не провернуть. Нужен медвежатник. Лучший в городе — Дед Савелий. Его как раз сегодня выпускают.']] },
+      { t: 'Дед', type: 'escape', start: [-160, -120, 'S'], secs: 90, chase: 4, goal: [0, 80], goalName: 'Мастерская Деда',
+        about: 'Деда Савелия, лучшего медвежатника города, у ворот тюрьмы встречают люди Гранина. Продержаться 1:30 и довезти его до мастерской.',
+        intro: [['leva', 'Тюремные ворота, западная окраина. Дед выходит через минуту.'], ['ded', 'Здорово, шеф. Двадцать лет не катался на такси.'], ['hero', 'Садитесь. Нас уже ждут.'], ['ded', 'Гранинские? Быстро слухи бегают. Гони, а я пока вспомню, как открываются сейфы.']],
+        outro: [['ded', 'Мастерская. Тут мои инструменты, если их не продали.'], ['ded', 'Дверь хранилища «Гранита» — швейцарская, сто двадцать болтов. Дрелью минуты полторы, если никто не мешает.'], ['hero', 'Кто-нибудь обязательно помешает.']] },
+      { t: 'Инкассатор', type: 'tail', start: [-80, -5, 'N'], car: [-80, -40, 'N'], speed: 18, name: 'Инкассатор', stops: { 2: 4, 4: 5, 6: 4 },
+        route: [[-80, -80], [0, -80], [0, -160], [80, -160], [80, -80], [160, -80], [160, 0], [120, 0]],
+        about: 'Проследить за инкассаторской машиной «Гранита» до самого банка: узнать её остановки и служебный вход. Стрелять нельзя.',
+        intro: [['leva', 'Инкассаторы «Гранита» каждый вечер возят выручку в банк одним и тем же путём. Посмотрим, где они стоят и сколько.'], ['hero', 'Держусь на расстоянии. Как в старые времена.']],
+        outro: [['leva', 'Три остановки, на каждой по две минуты. И заезжают через служебную дверь в задней стене.'], ['hero', 'А ключ-карты?'], ['leva', 'У охраны «Гранит-Секьюрити». Их офис — на северной улице.']] },
+      { t: 'Ключ-карты', type: 'arena', arena: [0, 80], docs: 3, docName: 'Ключ-карта', guards: 6, waves: [4, 5], heavyFrom: 2, exit: true,
+        about: 'Офис охранной фирмы «Гранита»: найти 3 ключ-карты у дежурных, отбиться от двух волн и вернуться к машине.',
+        intro: [['hero', 'Офис «Гранит-Секьюрити». Охраны больше, чем клиентов.'], ['leva', 'Ключ-карты у дежурных. Три штуки — по одной на каждую дверь до хранилища.']],
+        outro: [['hero', 'Три карты. Уходим.'], ['sonya', 'Подождите! Это Соня. Карты сами по себе не сработают: коды меняют каждую ночь. Новые коды везёт броневик Гранина — прямо сейчас.'], ['hero', 'Соня? Ты откуда взялась?'], ['sonya', 'Я разбираюсь в сигнализациях. И у меня с «Гранитом» свои счёты. Броневик на набережной!']] },
+      { t: 'Броневик', type: 'stop', start: [-80, 160, 'E'], car: [-40, 160, 'E'], hp: 600, speed: 28, shoot: true, name: 'Броневик',
+        route: [[0, 160], [80, 160], [80, 80], [160, 80], [160, -80], [80, -80], [80, 0], [0, 0], [0, 80], [-80, 80], [-80, 160], [0, 160]],
+        stopObj: 'Броневик встал. Подъезжай за кодами.',
+        about: 'Броневик Гранина везёт флешку с кодами хранилища. Остановить его, но не взорвать: стрелять и таранить.',
+        intro: [['sonya', 'Броневик «Гранита». Внутри флешка с кодами на эту ночь. Взорвёшь — коды сгорят.'], ['hero', 'Значит, аккуратно.']],
+        outro: [['sonya', 'Флешка цела! Коды на завтрашнюю ночь… но они зашифрованы.'], ['sonya', 'Расшифровать можно только на их же сервере. Серверная «Гранита» — в старой подстанции на юге.']] },
+      { t: 'Взлом', type: 'arena', arena: [0, -80], ally: { who: 'sonya', at: [3, -66], hp: 220, name: 'Соня', fem: true }, waves: [4], heavyFrom: 1,
+        drill: { kind: 'laptop', label: 'Взлом', secs: 70, jam: [14, 20], fixT: 2, startMsg: 'Соня подключилась к серверу', jamMsg: 'Связь оборвалась! Перезапусти ноутбук', jamShort: 'Взлом прерван — подойди к ноутбуку', obj: 'Соня взламывает сервер. Не подпускай охрану.', fixObj: 'Связь оборвалась. Подойди к ноутбуку и перезапусти взлом.', okMsg: 'Взлом продолжается', doneMsg: 'Коды расшифрованы!', doneObj: 'Коды есть! Добей охрану.' },
+        boss: { look: 'ten', name: 'Тень', hp: 620, scale: 1.05, burst: 3, dmg: 8, speed: 6,
+          say: [['ten', 'Гранин предупреждал: придут таксист и девчонка с ноутбуком.'], ['hero', 'А про тебя он ничего не говорил.']] },
+        about: 'Серверная «Гранита» в старой подстанции. Соня взламывает коды, ноутбук то и дело теряет связь — перезапускать его надо самому. В конце приходит Тень, телохранительница Гранина.',
+        intro: [['sonya', 'Сервер здесь. Мне нужна минута с небольшим. И чтобы никто не стрелял мне в спину.'], ['hero', 'Работай. Спину я беру на себя.']],
+        outro: [['sonya', 'Коды расшифрованы. Хранилище открывают раз в неделю — в ночь на понедельник. Это завтра.'], ['granin', 'Красивая работа. Правда, красивая.'], ['granin', 'Приходите завтра в банк. Я оставлю свет включённым.'], ['hero', 'Он слушал нас всё это время.'], ['ded', 'Пусть слушает. Хранилище от этого крепче не станет.']] },
+    ],
+  },
+  9: {
+    title: 'Хранилище', faction: 'granit', carStyle: 'granit', chaseMsg: 'Хвост! Охрана «Гранита»',
+    logline: 'Ночь Х. Команда в сборе, коды расшифрованы. Нужно обесточить квартал, вскрыть хранилище «Гранита» и уйти с деньгами. Гранин ждёт гостей, но не знает, откуда они зайдут.',
+    endTitle: 'Куклы', endLead: 'В сумках — резаная бумага. Гранин вывез деньги заранее, а Соня исчезла вместе с чёрной книгой.',
+    teaser: 'Эпизод 10. Чёрная книга',
+    chapters: [
+      { t: 'Ночь Х', type: 'deliver', start: [-80, -60, 'S'], chase: 0, ramp: 1,
+        pts: [
+          { p: [0, 80], name: 'Мастерская Деда', t: 50, say: [['ded', 'Инструмент наточен. Поехали, пока я не передумал.']] },
+          { p: [160, 40], name: 'Дом Сони', t: 55, say: [['sonya', 'Я с вами. Только сначала свет: без электричества у них не работает половина защиты.']] },
+          { p: [-160, 0], name: 'Лёва', t: 65, say: [['leva', 'Я посчитал: три минуты на подстанцию, полторы на дрель, две на отход. И ни секундой больше.']] },
+          { p: [-80, -60], name: 'Подстанция' },
+        ],
+        about: 'Ночь ограбления. Собрать команду по всему городу — Деда, Соню и Лёву, к каждому успеть вовремя.',
+        intro: [['mark', 'Ночь на понедельник. Я на рации, ты за рулём. Собери команду.'], ['hero', 'Счётчик включён.']],
+        outro: [['sonya', 'Подстанция. Три рубильника — и квартал банка без света.'], ['hero', 'Охрана?'], ['sonya', 'Есть. Куда же без неё.']] },
+      { t: 'Подстанция', type: 'arena', arena: [-80, -80], docs: 3, docName: 'Рубильник', guards: 5, waves: [4, 5], heavyFrom: 2, exit: true, exitObj: 'Свет погас. Назад к машине.',
+        about: 'Обесточить квартал банка: опустить 3 рубильника на подстанции и отбиться от охраны.',
+        intro: [['sonya', 'Рубильники красные, их три. Опускай все, я слежу за щитком.']],
+        outro: [['radio', '…в районе Северной улицы пропало электричество. Энергетики уже выехали на место…'], ['mark', 'Квартал банка в темноте. У вас двадцать минут, пока не дадут резерв.'], ['ded', 'Мне хватит и пяти. Если мешать не будут.']] },
+      { t: 'Банк', type: 'arena', arena: 'bank', mood: 'blackout', ally: { who: 'ded', at: [116, -60], hp: 240, name: 'Дед' }, waves: [4, 5], heavyFrom: 2,
+        drill: { label: 'Дрель', secs: 95, jam: [16, 24], fixT: 2.2, maxAlive: 6, every: 7, startMsg: 'Дрель пошла!', jamMsg: 'Дрель заклинило!', jamShort: 'Дрель стоит — подойди и почини', obj: 'Дед сверлит хранилище. Держи охрану подальше.', fixObj: 'Дрель заклинило. Подойди к ней и почини.', okMsg: 'Дрель снова работает', doneMsg: 'Хранилище открыто!', doneObj: 'Хранилище открыто! Добей охрану.' },
+        about: 'Банк в темноте, горят только красные аварийные лампы. Сначала охрана в зале, затем Дед сверлит хранилище. Дрель заедает — чинить её надо самому, не забывая прикрывать Деда.',
+        intro: [['hero', 'Темно, как в сейфе. Только аварийки горят.'], ['ded', 'Сначала охрана в зале, потом я ставлю дрель. И не стой у двери: вылетит болт — будет больно.']],
+        outro: [['ded', 'Сто двадцать болтов, и ни один не выдержал. Ячейка 117 — твоя, шеф.'], ['sonya', 'Сигнализация молчит, но у них резервный канал. Минуты через две здесь будет вся охрана «Гранита».']] },
+      { t: 'Хранилище', type: 'arena', arena: 'bank', mood: 'blackout', vault: 'open', docs: 4, docsAt: 'loot', docKind: 'bag', docName: 'Сумка', guards: 3,
+        survive: 50, surviveObj: 'Подкрепление «Гранита». Продержись, пока Марк подгоняет машину.', heavyFrom: 2, exit: true, exitObj: 'Сумки в машину. К такси!',
+        boss: { look: 'glyba', name: 'Глыба', hp: 1000, scale: 1.3, burst: 4, dmg: 9, speed: 4.2,
+          say: [['glyba', 'Ночная смена «Гранита». Сумочки на пол.'], ['hero', 'Это не твои сумочки, Глыба.']] },
+        about: 'Хранилище открыто: вынести 4 сумки с деньгами, продержаться до подхода машины и справиться с Глыбой, начальником охраны.',
+        intro: [['hero', 'Ячейка 117. Сумки, сумки… и тетрадь в чёрной коже.'], ['ded', 'Книгу Соня уже забрала, говорит, так надёжнее. Сумки — твои. Я к машине.']],
+        outro: [['mark', 'Такси у входа! Грузи и гони!']] },
+      { t: 'Отход', type: 'deliver', start: [130, 0, 'E'], chase: 3, ramp: 1, loot: 15, lootMin: 7,
+        pts: [
+          { p: [160, -80], name: 'Поворот у реки', t: 35 },
+          { p: [80, -160], name: 'Тоннель', t: 40, say: [['mark', 'Сзади три машины «Гранита». Не давай им бить в багажник!']] },
+          { p: [-80, -80], name: 'Гараж Марка', t: 60 },
+        ],
+        about: 'Отход с добычей по маршруту из эпизода 8. Каждый удар по такси рвёт сумки и деньги летят на дорогу: довезти нужно хотя бы 7 миллионов из 15.',
+        intro: [['ded', 'Сумки в багажнике. Пятнадцать миллионов, если я ещё умею считать.'], ['mark', 'За вами весь «Гранит». Каждый удар в багажник — минус пачка. Береги деньги.']],
+        outro: [['mark', 'Ворота закрываю. Вы дома.']] },
+      { t: 'Куклы', type: 'arena', arena: [-80, -80], ally: { who: 'leva', at: [-74, -72], hp: 220, name: 'Лёва' }, waves: [5, 6, 6], heavyFrom: 2,
+        about: 'В сумках — «куклы», Соня исчезла с чёрной книгой, а люди Гранина штурмуют гараж Марка. Три волны, Лёва должен уцелеть.',
+        intro: [['leva', 'Открываю первую сумку… Это бумага. Резаная бумага, сверху по одной купюре.'], ['ded', 'Куклы. Старый фокус. Гранин вывез деньги ещё вчера.'], ['hero', 'А где Соня?'], ['mark', 'Её машины нет. И чёрной книги тоже.'], ['granin', 'Таксист, ты {g:привёз|привезла} мне мои сумки. Спасибо. Мои люди уже у ворот.']],
+        outro: [['hero', 'Всё. Лёва цел?'], ['leva', 'Цел. И у меня новость: на рассвете колонна «Гранита» везёт настоящие деньги в порт, на его яхту.'], ['mark', 'А Соню видели у моста. Одну. Ехала на север.'], ['hero', 'Найдём её — найдём и книгу.']] },
+    ],
+  },
+  10: {
+    title: 'Чёрная книга', faction: 'granit', carStyle: 'granit', chaseMsg: 'Хвост! Охрана «Гранита»',
+    logline: 'Последний раунд с Гранином. Соня оказывается его дочерью, чёрная книга разорвана, а настоящие деньги на рассвете уходят в порт.',
+    endTitle: 'Возврат вклада', endLead: 'Страницы чёрной книги у прокурора, Гранин в наручниках, таксопарк и деньги вернулись водителям. А в тюрьме Вера смотрит новости и улыбается.',
+    teaser: 'Конец второго сезона. Спасибо, что ездили с нами.',
+    chapters: [
+      { t: 'Соня', type: 'tail', start: [80, -100, 'N'], car: [80, -135, 'N'], speed: 18, name: 'Машина Сони', stops: { 2: 4, 4: 5 },
+        route: [[80, -160], [0, -160], [0, -80], [-80, -80], [-80, 0], [0, 0], [0, 40]],
+        about: 'Соня пропала с чёрной книгой. Проследить за её машиной через полгорода и узнать, к кому она едет. Стрелять нельзя.',
+        intro: [['mark', 'Соня у моста, едет на север. Не догоняй — посмотрим, куда она приведёт.'], ['hero', 'Если она работает на Гранина, узнаем прямо сейчас.']],
+        outro: [['hero', 'Особняк Гранина. Она въехала в ворота, как к себе домой.'], ['leva', 'Потому что это её дом. Я проверил: Софья Аркадьевна Гранина. Дочь.'], ['hero', 'Вот это поворот.'], ['mark', 'В саду стреляют! Там что-то пошло не так.']] },
+      { t: 'Особняк', type: 'arena', arena: 'park', ally: { who: 'sonya', at: [-50, 40], hp: 240, name: 'Соня', fem: true }, docs: 3, docName: 'Страница', guards: 6, waves: [5, 6], heavyFrom: 2,
+        about: 'Сад особняка Гранина: собрать 3 вырванные страницы чёрной книги у охраны и защитить Соню.',
+        intro: [['sonya', 'Ты {g:пришёл|пришла}… Он забрал книгу и разорвал её. Самые важные страницы раздал охране.'], ['hero', 'Зачем ты её взяла, Соня?'], ['sonya', 'Хотела, чтобы отец сам всё вернул. Думала, меня он послушает. Не послушал.']],
+        outro: [['sonya', 'Все три страницы. Кому платил, сколько и когда.'], ['sonya', 'Он уже в колонне. Деньги в броневиках, едут в порт к яхте.'], ['hero', 'Тогда и мы в порт.']] },
+      { t: 'Облава', type: 'escape', start: [0, 60, 'S'], secs: 100, chase: 5, goal: [-80, 160], goalName: 'Набережная',
+        about: 'Гранин поднял всю охрану: каждая машина «Гранита» ищет жёлтое такси. Продержаться 1:40 и прорваться к набережной.',
+        intro: [['mark', 'Гранин поднял всех. Каждая машина «Гранита» ищет жёлтое такси.'], ['hero', 'Пусть ищут. Я не прячусь.']],
+        outro: [['leva', 'Колонна выходит на набережную. Три броневика охраны.']] },
+      { t: 'Колонна', type: 'stop', convoy: 3, start: [-80, 130, 'S'], car: [-40, 160, 'E'], hp: 300, speed: 26, name: 'Броневик',
+        route: [[0, 160], [80, 160], [80, 80], [160, 80], [160, 0], [80, 0], [0, 0], [0, 80], [-80, 80], [-80, 160], [0, 160]],
+        about: 'Колонна из трёх броневиков охраны прикрывает машину с деньгами. Разбить все три.',
+        intro: [['leva', 'Броневики охраны. Деньги не в них — их везут следом. Но пока колонна цела, к деньгам не подобраться.'], ['hero', 'Значит, сначала колонна.']],
+        outro: [['mark', 'Охрана разбита. Остался последний броневик — с деньгами. И за рулём сам Гранин.']] },
+      { t: 'Последний броневик', type: 'stop', start: [-20, 0, 'E'], car: [20, 0, 'E'], hp: 750, speed: 30, shoot: true, name: 'Броневик Гранина',
+        route: [[80, 0], [80, -80], [0, -80], [0, -160], [-160, -160], [-160, 0], [-80, 0], [-80, 80], [0, 80], [0, 0], [80, 0]],
+        stopObj: 'Броневик встал. Подъезжай.',
+        about: 'Броневик с настоящими деньгами, за рулём сам Гранин. Остановить его, не взрывая.',
+        intro: [['granin', 'Таксист! Сколько тебе платит Вера? Я дам вдвое больше. Двойной тариф — так это у вас называется?'], ['hero', 'Счётчик у меня уже включён, Гранин.']],
+        outro: [['granin', 'Деньги можешь забрать. Но город — нет. Яхта ждёт меня у причала.'], ['hero', 'Он уходит в порт пешком!'], ['sonya', 'Я с тобой. Это мой отец — мне и заканчивать.']] },
+      { t: 'Последний вклад', type: 'arena', arena: 'docks', mood: 'dawn', ally: { who: 'sonya', at: [-116, 150], hp: 260, name: 'Соня', fem: true }, waves: [5, 6], heavyFrom: 1, exit: true, exitObj: 'Всё кончено. Вернись к машине.',
+        boss: { look: 'granin', name: 'Гранин', hp: 1100, scale: 1.12, burst: 5, dmg: 9, speed: 5,
+          say: [['granin', 'Знаешь, сколько стоит этот город, таксист? Я знаю. Я его покупал.'], ['hero', 'Аренда закончилась, Гранин.']] },
+        about: 'Порт на рассвете: две волны охраны, Соня рядом и последний бой с Аркадием Граниным у его яхты.',
+        intro: [['hero', 'Рассвет над причалом. Яхта на месте, охраны полный пирс.'], ['sonya', 'Держись у контейнеров. Я прикрою.']],
+        outro: [['sonya', 'Он жив. Отец в наручниках — никогда не думала, что увижу.'], ['mark', 'Прокурор получил все страницы. Таксопарк возвращают, деньги — водителям.'], ['vera2', 'Здравствуй, водитель. Смотрю новости в камере. Ты {g:забрал|забрала} у Гранина то, что не смогла забрать я.'], ['vera2', 'Может, когда выйду, поработаем вместе?'], ['hero', 'Счётчик выключен, Вера. Смена окончена.']] },
+    ],
+  },
 };
 
 // ---- chapter engine for episodes 3–7 ----
@@ -2450,11 +2731,15 @@ function epMax(ep) { try { return clamp(parseInt(localStorage.getItem('nf-ep' + 
 function epSave(ep, n) { try { if (n > epMax(ep)) localStorage.setItem('nf-ep' + ep + '-ch', String(Math.min(6, n))); } catch (e) { /* storage unavailable */ } }
 
 const ALLY_LOOKS = {
+  ded: { model: 'savva', skin: '#e4b898', colors: { Shirt: '#5a4636', Pants: '#2e2e34', Hat: '#4a4a52', Detail: '#8a6a4a' }, face: { brow: '#e8e8e8', iris: '#4a6a8a', mouth: 'smirk', stache: '#ececec', wrinkles: true } },
   mark: LOOKS.mark, leva: LOOKS.leva,
   sonya: { model: 'maya', skin: '#e8c0a0', colors: { Shirt: '#2a8a8a', Pants: '#2a2a35', Hair: '#5a3a2a' }, face: { fem: true, brow: '#4a2a1a', iris: '#4a7a5a', mouth: 'neutral', blush: true, freckles: true } },
   host: { model: 'savva', skin: '#e0b090', colors: { Shirt: '#d8c8a8', Pants: '#3a3a42', Hat: '#3a2a20', Detail: '#6a4a2a' }, face: { brow: '#c8c8c8', iris: '#5a5a5a', mouth: 'grim', stache: '#d0d0d0', wrinkles: true } },
 };
 const BOSS_LOOKS = {
+  glyba: { model: 'boss', skin: '#c8987a', colors: { Black: '#1a2238', Shirt: '#2a3a5a', Details: '#c0c8d8', Belt: '#101010', Hair: '#1a1a1a' }, face: { brow: '#1a1a1a', iris: '#2a1a10', mouth: 'grim', angry: true, scar: true, stubble: '#1a1a1a' } },
+  ten: { model: 'vera', skin: '#ecc8b0', colors: { Black: '#14141c', Shirt: '#24243a', Details: '#b07ad8', Hair: '#101014', Belt: '#14141c' }, face: { fem: true, brow: '#101014', iris: '#6a4a9a', mouth: 'grim', angry: true } },
+  granin: { model: 'boss', skin: '#e0b494', colors: { Black: '#6a6a72', Shirt: '#ecece6', Details: '#c8a030', Belt: '#2a2a2a', Hair: '#c8c8c8' }, face: { brow: '#a8a8a8', iris: '#5a6a7a', mouth: 'smirk', angry: true, wrinkles: true } },
   kassir: { model: 'savva', skin: '#d8a888', colors: { Shirt: '#2a2a2a', Pants: '#1a1a1a', Detail: '#c8a030', Hat: '#101010', Belt: '#c8a030' }, face: { brow: '#2a2a2a', iris: '#2a1a10', mouth: 'smirk', angry: true, stache: '#2a2a2a' } },
   lisa: { model: 'vera', skin: '#f0d0b8', colors: { Black: '#6a1010', Shirt: '#1a1a1a', Details: '#ff6a3a', Hair: '#d04a1a', Belt: '#1a1a1a' }, face: { fem: true, brow: '#a03a10', iris: '#c06a10', mouth: 'smirk', angry: true } },
   lisa2: { model: 'vera', skin: '#f0d0b8', colors: { Black: '#1a1a1a', Shirt: '#6a1010', Details: '#ff3a1a', Hair: '#d04a1a', Belt: '#6a1010' }, face: { fem: true, brow: '#a03a10', iris: '#c06a10', mouth: 'grim', angry: true, scar: true } },
@@ -2463,6 +2748,7 @@ const BOSS_LOOKS = {
   verab: LOOKS.vera,
 };
 const FACTIONS = {
+  granit: { thug1: { Details: '#3a7ad0' }, thug2: { Shirt: '#1e2c4a', Pants: '#15151c', Hair: '#15151a' }, thug3: { Shirt: '#2a3a58', Pants: '#1a2030', Hair: '#15151a' }, heavy: { Shirt: '#101828', Pants: '#101828' } },
   night: { thug1: { Details: '#7a3fd0' }, thug2: { Shirt: '#3a2050', Pants: '#1b1b22', Hair: '#15151a' }, thug3: { Shirt: '#24182e', Pants: '#3a2a50', Hair: '#15151a' }, heavy: { Shirt: '#4a2070', Pants: '#1b1b22' } },
   tour: { thug1: { Details: '#1aa0a0' }, thug2: { Shirt: '#1a6a6a', Pants: '#1b1b22', Hair: '#15151a' }, thug3: { Shirt: '#14323a', Pants: '#1a4a4a', Hair: '#15151a' }, heavy: { Shirt: '#0a5a5a', Pants: '#14323a' } },
   park: { thug1: { Details: '#d0b030' }, thug2: { Shirt: '#a08a2a', Pants: '#3a3a42', Hair: '#15151a' }, thug3: { Shirt: '#5a5040', Pants: '#2a2a30', Hair: '#15151a' }, heavy: { Shirt: '#c0a020', Pants: '#2a2a30' } },
@@ -2476,6 +2762,11 @@ function factionLook(f, heavy) {
 }
 // on-foot locations: the warehouse yard, the docks, the park, or any inner crossroads [x, z]
 function arenaDef(a) {
+  if (a === 'bank') return { r: { x0: 93.5, x1: 146.5, z0: -66.5, z1: -4 }, start: [120, -8, PI], car: [120, 3, PI / 2], bank: true,
+    edges: [[97, -65], [103, -64], [146, -30], [94, -30], [110, -15], [130, -15], [146, -60], [94, -50]],
+    inner: [[104, -24], [136, -24], [108, -52], [132, -52], [120, -44], [100, -42], [140, -42]],
+    docs: [[100, -56], [140, -56], [104, -20], [138, -20]], loot: [[114, -61], [126, -61], [108, -55], [132, -55], [120, -51]],
+    mid: [120, -28], boss: [120, -58], drill: [120, -64] };
   if (a === 'yard') return { r: { x0: 90, x1: 150, z0: -133, z1: -90 }, start: [120, -92, PI], car: [GATE.x, GATE.z + 2, PI / 2], gate: true, exit: DOOR,
     edges: [[95, -131], [110, -131], [130, -131], [146, -131], [120, -119], [100, -100], [145, -100], [92, -112], [148, -112]],
     inner: [[95, -131], [110, -131], [130, -131], [146, -131], [120, -119], [104, -108]], docs: [[92, -128], [148, -128], [120, -112], [100, -95]], mid: [120, -106], boss: [120, -130] };
@@ -2501,6 +2792,7 @@ function setMood(m) {
   U.cTop.value.copy(MOOD0.top); U.cMid.value.copy(MOOD0.mid); U.cHor.value.copy(MOOD0.hor); U.cGlow.value.copy(MOOD0.glow);
   scene.fog.color.copy(MOOD0.fog); scene.background.copy(MOOD0.fog); hemi.intensity = MOOD0.hemi; hemi.color.copy(MOOD0.hemiC); moon.color.copy(MOOD0.moon); moon.intensity = MOOD0.moonI;
   if (KIT.neonMat) KIT.neonMat.color.setScalar(1); if (KIT.poolMat) KIT.poolMat.opacity = 0.55;
+  if (KIT.bankLight) { KIT.bankLight.color.setScalar(1); KIT.bankAlarm.visible = false; BANKX.poolM.opacity = 0.32; }
   if (BLD0) KIT.bld.forEach((b, i) => { b.emissiveIntensity = BLD0[i]; });
   let exp = 1.05;
   if (m === 'dawn') {
@@ -2512,6 +2804,7 @@ function setMood(m) {
     if (BLD0) KIT.bld.forEach((b) => { b.emissiveIntensity = 0.05; });
     hemi.intensity = MOOD0.hemi * 0.45; moon.intensity = MOOD0.moonI * 0.6; exp = 0.8;
     if (KIT.neonMat) KIT.neonMat.color.setScalar(0.03); if (KIT.poolMat) KIT.poolMat.opacity = 0;
+    if (KIT.bankLight) { KIT.bankLight.color.setScalar(0.04); KIT.bankAlarm.visible = true; BANKX.poolM.opacity = 0; }
   }
   if (finalPass) finalPass.uniforms.exposure.value = exp; renderer.toneMappingExposure = exp;
 }
@@ -2530,6 +2823,7 @@ function startGen(ep, i, withIntro) {
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
   };
   MIS = GEN[c.type](c, title, done, E);
+  if (E.carStyle) MIS.carStyle = E.carStyle; if (E.chaseMsg) MIS.chaseMsg = E.chaseMsg;
   const mode0 = state.mode;
   if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; });
 }
@@ -2552,22 +2846,35 @@ const GEN = {
   },
   deliver(c, title, done) {
     beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
-    const P_ = c.pts.map((q) => Object.assign({}, q, { v: new V3(q.p[0], 0, q.p[1]) })), chase = { max: c.chase || 2 };
-    let leg = 0, left = 0;
+    const P_ = c.pts.map((q) => Object.assign({}, q, { v: new V3(q.p[0], 0, q.p[1]) })), chase = { max: c.chase === undefined ? 2 : c.chase };
+    let leg = 0, left = 0, loot = c.loot || 0, lastHp = pc.hp;
     const startLeg = () => { const q = P_[leg]; left = q.t || 0; setBeam(q.v); setObjective(`Доберись: ${q.name}${q.t ? ` за ${fmt(q.t)}` : ''}.${c.fragile ? ' Береги машину.' : ''}`); };
     startLeg();
     return { title, chase, get navName() { return P_[leg].name; }, navGoal: () => P_[leg].v,
       update(dt) {
         if (c.fragile && pc.hp < c.fragile) return failChapter(c.fragileTitle || 'Груз повреждён', c.fragileText || 'Машину слишком сильно побили.');
+        if (c.loot) {
+          // every hit to the taxi tears a bag: banknotes fly out of the boot
+          if (pc.hp < lastHp) {
+            loot -= (lastHp - pc.hp) * c.loot / 140;
+            for (let k = 0; k < 4; k++) spawnP(pc.pos.clone().add(new V3(rand(-1, 1), 1.4, rand(-1, 1))), { color: pick([0x6ad08a, 0x9ae0a0, 0xd8c070]), size: 0.32, vel: new V3(rand(-3, 3), rand(3, 7), rand(-3, 3)), life: 1.4, opacity: 0.95 });
+          }
+          if (loot < c.lootMin) return failChapter('Добыча потеряна', `Осталось меньше ${c.lootMin} млн: так не расплатиться с таксистами. Меньше подставляйся под пули и тараны.`);
+        }
+        lastHp = pc.hp;
         if (left > 0) { left -= dt; if (left <= 0) return failChapter('Не успели', `Время вышло: «${P_[leg].name}» не дождались. Попробуй другой путь.`); }
         if (pc.pos.distanceTo(P_[leg].v) < 11) {
           const q = P_[leg]; leg++; pc.vel.set(0, 0, 0);
-          if (leg >= P_.length) return done();
+          if (leg >= P_.length) { if (c.loot) { addCoins(Math.round(loot * 10)); toast(`Довезли: ${loot.toFixed(1)} млн`, 2); } return done(); }
           chase.max = Math.min(5, chase.max + (c.ramp || 0));
           if (q.say) { left = 0; playDialog(q.say.map(fixLine), () => { state.mode = 'drive'; startLeg(); }); } else { toast(`${q.name} — есть`, 1.4); startLeg(); }
         }
       },
-      hud() { return { timer: left > 0 ? fmt(left) : '', bad: left > 0 && left < 12, bars: c.fragile ? [{ label: 'Машина (порог ' + c.fragile + '%)', frac: pc.hp / 100, color: 'var(--taxi)' }] : [] }; } };
+      hud() {
+        const bars = c.fragile ? [{ label: 'Машина (порог ' + c.fragile + '%)', frac: pc.hp / 100, color: 'var(--taxi)' }] : [];
+        if (c.loot) bars.push({ label: `Добыча: ${Math.max(0, loot).toFixed(1)} из ${c.loot} млн (минимум ${c.lootMin})`, frac: Math.max(0, loot) / c.loot, color: '#4ad07a' });
+        return { timer: left > 0 ? fmt(left) : '', bad: left > 0 && left < 12, bars };
+      } };
   },
   hunt(c, title, done) {
     beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
@@ -2635,21 +2942,33 @@ const GEN = {
     let rot = 0;
     const cfg = (k, w) => { const heavy = c.heavyFrom && w >= c.heavyFrom && k % 3 === 0; return Object.assign({ look: factionLook(fac, heavy), react: rand(0.6, 1.5), tgt: ally && k % 3 === 1 ? ally : undefined }, heavy ? { hp: 130, scale: 1.12, burst: 2 } : {}); };
     const group = (n, w) => { const pts = []; for (let k = 0; k < n; k++) pts.push(A.edges[(rot++ * 4 + k) % A.edges.length]); queueWave(pts, 0.5, (k) => cfg(k, w)); };
-    const phases = []; if (c.docs) phases.push('docs'); if (c.waves) phases.push('waves'); if (c.survive) phases.push('survive'); if (c.boss) phases.push('boss'); if (c.exit) phases.push('exit');
-    const st = { ph: -1, found: 0, wave: 0, gap: 0, left: 0, spT: 0, boss: null, exit: null, medkit: false };
+    const phases = []; if (c.docs) phases.push('docs'); if (c.waves) phases.push('waves'); if (c.drill) phases.push('drill'); if (c.survive) phases.push('survive'); if (c.boss) phases.push('boss'); if (c.exit) phases.push('exit');
+    const st = { ph: -1, found: 0, wave: 0, gap: 0, left: 0, spT: 0, boss: null, exit: null, medkit: false, prog: 0, jam: false, jamT: 0, fix: 0, dpos: null, rig: null };
+    if (A.bank) setVault(c.vault === 'open');
+    if (c.drill) {
+      // the rig stands from the start: the drill at the vault door, or the laptop wherever the chapter puts it
+      const D = c.drill, lap = D.kind === 'laptop' || !A.bank, at = D.at || (lap ? A.mid : A.drill);
+      st.rig = lap ? BANKX.laptop : BANKX.drill; st.rig.g.visible = true; st.rig.on = false;
+      if (lap) { st.rig.g.position.set(at[0], 0.17, at[1]); st.rig.g.rotation.y = 0; stageCols.push(addBox(at[0], at[1], 1.8, 1.0, 0.9)); }
+      st.dpos = lap ? new V3(at[0], 0, at[1] + 1.4) : new V3(A.drill[0], 0, A.drill[1] + 1.6);
+    }
     const next = () => {
       st.ph++;
       const P_ = phases[st.ph];
       if (!P_) return done();
       if (P_ === 'docs') {
         for (let k = 0; k < (c.guards || 5); k++) { const q = A.inner[k % A.inner.length]; spawnEnemy(q[0], q[1], false, { look: factionLook(fac, false), react: rand(1.5, 3) }); }
-        A.docs.slice(0, c.docs).forEach(([x, z]) => addPickup('doc', x, z, () => {
+        (c.docsAt === 'loot' ? A.loot : A.docs).slice(0, c.docs).forEach(([x, z]) => addPickup(c.docKind || 'doc', x, z, () => {
           st.found++; toast(`${c.docName}: ${st.found}/${c.docs}`, 1.6); addCoins(20); group(3, 2);
           if (st.found === 2) addMedkit(A.mid[0], A.mid[1]);
           setObjective(st.found < c.docs ? `Найди: ${c.docName.toLowerCase()} — ${st.found}/${c.docs}. На шум бегут враги.` : 'Всё найдено. Отбейся от охраны.');
         }));
         setObjective(`Найди: ${c.docName.toLowerCase()} — 0/${c.docs} (жёлтые огоньки на карте).`);
-      } else if (P_ === 'waves') { st.wave = 0; st.gap = 0.8; setObjective(`Отбейся: ${c.waves.length} волны.${ally ? ` Береги: ${ally.name}.` : ''}`); }
+      } else if (P_ === 'waves') { st.wave = 0; st.gap = 0.8; setObjective(`Отбейся: ${c.waves.length === 1 ? 'одну волну' : c.waves.length + (c.waves.length < 5 ? ' волны' : ' волн')}.${ally ? ` Береги: ${ally.name}.` : ''}`); }
+      else if (P_ === 'drill') {
+        const D = c.drill; st.prog = 0; st.jam = false; st.jamT = rand(D.jam[0], D.jam[1]); st.spT = 2; st.rig.on = true; st.medkit = false;
+        toast(D.startMsg || 'Пошло!', 1.6); setObjective(D.obj);
+      }
       else if (P_ === 'survive') { st.left = c.survive; st.spT = 1; setObjective(c.surviveObj || `Продержись ${fmt(c.survive)}.`); }
       else if (P_ === 'boss') {
         const B = c.boss, go = () => {
@@ -2684,6 +3003,21 @@ const GEN = {
             if (st.wave < c.waves.length) toast(`Волна ${st.wave}/${c.waves.length} отбита`, 1.5);
             st.gap = st.wave >= c.waves.length ? 0.01 : 3.5;
           }
+        } else if (P_ === 'drill') {
+          const D = c.drill;
+          if (st.prog < 1) {
+            if (!st.jam) {
+              st.prog = Math.min(1, st.prog + dt / D.secs); st.jamT -= dt;
+              if (st.jamT <= 0 && st.prog < 0.94) { st.jam = true; st.fix = 0; st.rig.on = false; toast(D.jamMsg, 2); setBeam(st.dpos); setObjective(D.fixObj); sfx.crash(6); }
+              if (st.prog >= 1) { st.rig.on = false; setBeam(null); setObjective(D.doneObj || 'Готово! Добей оставшихся.'); if (A.bank && !D.kind) setVault(true, true); toast(D.doneMsg || 'Готово!', 2.2); addCoins(40); }
+            } else if (hero.pos.distanceTo(st.dpos) < 3.4) {
+              st.fix += dt;
+              if (st.fix >= (D.fixT || 2)) { st.jam = false; st.rig.on = true; st.jamT = rand(D.jam[0], D.jam[1]); setBeam(null); toast(D.okMsg || 'Снова работает', 1.4); setObjective(D.obj); }
+            } else st.fix = Math.max(0, st.fix - dt * 0.5);
+            st.spT -= dt;
+            if (st.spT <= 0 && aliveFoes() + spawnQueue.length < (D.maxAlive || 6)) { st.spT = D.every || 7; group(st.prog > 0.5 ? 3 : 2, st.prog > 0.6 ? 3 : 2); }
+            if (!st.medkit && st.prog > 0.5) { st.medkit = true; addMedkit(A.mid[0], A.mid[1]); }
+          } else if (clear) next();
         } else if (P_ === 'survive') {
           st.left -= dt; st.spT -= dt;
           if (st.left > 0 && st.spT <= 0 && aliveFoes() + spawnQueue.length < (c.maxAlive || 7)) { st.spT = c.every || 6; group(2, 3); }
@@ -2698,6 +3032,10 @@ const GEN = {
         if (P_ === 'docs') timer = `${c.docName}: ${st.found}/${c.docs}`;
         else if (P_ === 'waves' && st.gap > 0 && st.wave > 0 && st.wave < c.waves.length) timer = `Следующая волна через ${Math.ceil(st.gap)}`;
         else if (P_ === 'survive' && st.left > 0) timer = `Продержись: ${fmt(st.left)}`;
+        else if (P_ === 'drill' && st.prog < 1) {
+          bars.push({ label: `${c.drill.label}: ${Math.floor(st.prog * 100)}%`, frac: st.prog, color: '#ffc43d' });
+          if (st.jam) { timer = st.fix > 0 ? `Чиню: ${Math.round(st.fix / (c.drill.fixT || 2) * 100)}%` : c.drill.jamShort; return { bars, timer, bad: true }; }
+        }
         return { bars, timer };
       } };
   },
@@ -3101,7 +3439,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateHumans(dt); updateParticles(dt); updateWrecks(dt);
+  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt);
   updateCamera(dt);
   updateRain(dt, focus);
   flash.intensity *= Math.exp(-dt * 12);
@@ -3126,7 +3464,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { KIT, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>
