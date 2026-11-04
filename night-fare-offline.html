@@ -2196,8 +2196,8 @@ arrow.add(arrowCore, arrowGlow); arrow.scale.setScalar(0.85); scene.add(arrow);
 const NAV = { pts: [], target: null, dist: 0, turn: 0, turnDist: 0, atGoal: false };
 const GOAL = new V3(120, 0, -80);
 let GA = [80, -80], GB = [160, -80], NG = GOAL.clone();
-const snapLo = (v) => ROADS.filter((r) => r <= v + 0.01).pop() ?? ROADS[0];
-const snapHi = (v) => ROADS.find((r) => r >= v - 0.01) ?? ROADS[ROADS.length - 1];
+const snapLo = (v) => { const r = ROADS.filter((q) => q <= v + 0.01).pop(); return r === undefined ? ROADS[0] : r; };
+const snapHi = (v) => { const r = ROADS.find((q) => q >= v - 0.01); return r === undefined ? ROADS[ROADS.length - 1] : r; };
 const gridD = (x, z) => Math.min(Math.abs(x - GA[0]) + Math.abs(z - GA[1]) + Math.hypot(NG.x - GA[0], NG.z - GA[1]), Math.abs(x - GB[0]) + Math.abs(z - GB[1]) + Math.hypot(NG.x - GB[0], NG.z - GB[1]));
 function setNavGoal(v) {
   NG = new V3(v.x, 0, v.z);
