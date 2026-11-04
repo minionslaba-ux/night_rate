@@ -380,7 +380,7 @@ body:has(#dialog:not([hidden])) .touch { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v17'; window.__errs = [];
+window.APP_VER = 'v18'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -2365,6 +2365,15 @@ joyEl.addEventListener('pointerup', joyEnd); joyEl.addEventListener('pointercanc
 function holdBtn(el, set) { el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); set(true); }); ['pointerup', 'pointercancel'].forEach((ev) => el.addEventListener(ev, () => set(false))); }
 holdBtn($('btnFire'), (v) => { touchFire = v; if (v && state.mode === 'dialog') advanceDialog(); });
 holdBtn($('btnDrift'), (v) => { touchDrift = v; });
+// the fire button doubles as a look pad: hold it and slide the thumb to turn the view while shooting (first/third person)
+const fireLook = { id: null, x: 0, y: 0 };
+$('btnFire').addEventListener('pointerdown', (e) => { fireLook.id = e.pointerId; fireLook.x = e.clientX; fireLook.y = e.clientY; });
+$('btnFire').addEventListener('pointermove', (e) => {
+  if (e.pointerId !== fireLook.id) return;
+  if (lookMode()) { viewYaw -= (e.clientX - fireLook.x) * 0.006; viewPitch = clamp(viewPitch - (e.clientY - fireLook.y) * 0.004, -0.85, 0.75); }
+  fireLook.x = e.clientX; fireLook.y = e.clientY;
+});
+['pointerup', 'pointercancel'].forEach((ev) => $('btnFire').addEventListener(ev, (e) => { if (e.pointerId === fireLook.id) fireLook.id = null; }));
 const fireHeld = () => mouse.down || keys.Space || keys.KeyF || touchFire;
 
 // ---------------- game state ----------------
@@ -2832,6 +2841,8 @@ function updateFoot(dt) {
   if (moving && aim && Math.abs(wrapA(aimAng - moveAng)) > 1.9) { bodyAng = aimAng; back = true; }
   hero.face = wrapA(hero.face + wrapA(bodyAng - hero.face) * Math.min(1, dt * 16));
   hero.aimAng = aimAng;
+  // phones: while firing, the view drifts gently onto the enemy near the crosshair
+  if (look3 && isTouch && fireHeld() && AIM.foot && !AIM.foot.dead) { const ta = Math.atan2(AIM.foot.pos.x - hero.pos.x, AIM.foot.pos.z - hero.pos.z); viewYaw += wrapA(ta - viewYaw) * Math.min(1, dt * 4); }
   hero.twist = clamp(wrapA(aimAng - hero.face), -1.75, 1.75);
   hero.g.position.copy(hero.pos); hero.g.rotation.y = hero.face;
   heroLight.position.set(hero.pos.x + 1.2, 4.5, hero.pos.z + 2.5); heroLight.intensity = 1.6;
@@ -5049,7 +5060,7 @@ function viewMove(mx, mz) {
   return F.multiplyScalar(-mz).add(R.multiplyScalar(mx));
 }
 function viewAim() {
-  let best = null, ba = 0.11;
+  let best = null, ba = isTouch ? 0.2 : 0.11;   // a wider assist on phones
   for (const e of enemies) {
     if (e.dead) continue; const d = e.pos.distanceTo(hero.pos); if (d > 45) continue;
     const a = Math.abs(wrapA(Math.atan2(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z) - viewYaw));
@@ -5442,7 +5453,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
