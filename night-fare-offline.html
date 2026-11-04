@@ -103,7 +103,19 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .tbtn.drift, .tbtn.aim { right: calc(128px + var(--sar)); bottom: calc(40px + var(--sab)); width: 72px; height: 72px; background: rgba(255,255,255,.12); }
 .tbtn.aim { display: none; background: rgba(77,255,166,.18); border-color: rgba(77,255,166,.6); font-size: 12px; }
 .tbtn.aim.held { background: rgba(77,255,166,.5); }
-.touch.on-foot .tbtn.aim { display: block; } .touch.on-foot .tbtn.drift { display: none; }
+.touch.on-foot .tbtn.aim { display: grid; } .touch.on-foot .tbtn.drift { display: none; }
+/* «Приборная панель»: metal buttons with a lit coloured rim, an icon and a label */
+.tbtn { --c: #ffc43d; display: grid; place-items: center; align-content: center; gap: 1px; padding: 0; color: #eceef4; font: 700 11px var(--font-body); text-shadow: 0 1px 0 #000;
+  background: linear-gradient(160deg, #5a5e6a, #24262e 55%, #15161b); border: 0;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.35), inset 0 -3px 6px rgba(0,0,0,.6), 0 4px 10px rgba(0,0,0,.6), 0 0 0 3px #0e0f13, 0 0 0 5px var(--c), 0 0 10px var(--c); }
+.tbtn svg { width: 26px; height: 26px; fill: none; stroke: var(--c); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 4px var(--c)); }
+.tbtn.fire svg { width: 34px; height: 34px; }
+.tbtn:active, .tbtn.held { background: linear-gradient(160deg, #3a3d46, #1a1b20); box-shadow: inset 0 3px 8px rgba(0,0,0,.8), 0 0 0 3px #0e0f13, 0 0 0 5px var(--c), 0 0 20px var(--c); }
+.tbtn.fire { --c: #ff4a3a; } .tbtn.drift { --c: #ffc43d; } .tbtn.nitro { --c: #3dbbff; } .tbtn.shield { --c: #7ad68a; } .tbtn.aim { --c: #4dffa6; }
+.tbtn.nitro, .tbtn.shield, .tbtn.aim, .tbtn.drift, .tbtn.fire { background: linear-gradient(160deg, #5a5e6a, #24262e 55%, #15161b); border: 0; font-size: 11px; }
+.tbtn .cnt { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; border-radius: 10px; background: #ffc43d; color: #1a1405; font: 800 12px var(--font-body); display: grid; place-items: center; box-shadow: 0 0 0 2px #0e0f13; text-shadow: none; }
+.joy { background: radial-gradient(circle, #2a2c34, #16171c); border: 0; box-shadow: inset 0 0 0 3px #0e0f13, inset 0 0 0 5px #4a4d58, 0 4px 12px rgba(0,0,0,.6); opacity: .92; }
+.knob { background: radial-gradient(circle at 40% 30%, #8a8e9a, #2a2c34); box-shadow: 0 3px 6px rgba(0,0,0,.7), inset 0 0 0 3px #ffc43d; }
 .cam-chip { display: inline-flex; align-items: center; gap: 6px; } .cam-chip svg { width: 16px; height: 16px; flex: none; } .cam-chip b { font-weight: 700; }
 .tbtn.nitro { right: calc(26px + var(--sar)); bottom: calc(214px + var(--sab)); width: 62px; height: 62px; background: rgba(90,216,255,.4); font-size: 11px; }
 .tbtn.shield { right: calc(98px + var(--sar)); bottom: calc(214px + var(--sab)); width: 62px; height: 62px; background: rgba(120,140,255,.35); font-size: 11px; }
@@ -305,11 +317,11 @@ body:has(#dialog:not([hidden])) .touch { display: none; }
 
 <div id="touch" class="touch" hidden>
   <div id="joy" class="joy"><div id="knob" class="knob"></div></div>
-  <button id="btnFire" class="tbtn fire" type="button">Огонь</button>
-  <button id="btnDrift" class="tbtn drift" type="button">Занос</button>
-  <button id="btnAim" class="tbtn aim" type="button">Прицел</button>
-  <button id="btnNitro" class="tbtn nitro" type="button">Нитро</button>
-  <button id="btnShield" class="tbtn shield" type="button">Щит</button>
+  <button id="btnFire" class="tbtn fire" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/><circle cx="12" cy="12" r="1.4"/></svg><span>Огонь</span></button>
+  <button id="btnDrift" class="tbtn drift" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c4 0 5-10 10-10h6"/><path d="m17 4 3 3-3 3"/><path d="M4 21h6"/></svg><span>Занос</span></button>
+  <button id="btnAim" class="tbtn aim" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>Прицел</span></button>
+  <button id="btnNitro" class="tbtn nitro" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 14h6l-1 8 8-12h-6z"/></svg><span>Нитро</span><b class="cnt" id="nitroN">0</b></button>
+  <button id="btnShield" class="tbtn shield" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg><span>Щит</span><b class="cnt" id="shieldN">0</b></button>
 </div>
 
 <div id="preview" class="preview" hidden>
@@ -385,7 +397,7 @@ body:has(#dialog:not([hidden])) .touch { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v19'; window.__errs = [];
+window.APP_VER = 'v21'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -619,7 +631,7 @@ function shopSet() {
   return new THREE.MeshStandardMaterial({ map, emissiveMap: em, emissive: 0xffffff, emissiveIntensity: 1.6, roughness: 0.4, envMapIntensity: 0.6 });
 }
 // neon sign atlas: 4 x 8 cells of 256 x 64
-const SIGNS = [['АПТЕКА', '#5dff9a'], ['КОФЕ', '#ffb35a'], ['24 ЧАСА', '#ff4d8b'], ['ПРОДУКТЫ', '#7ad6ff'], ['БАР', '#ff5ae0'], ['ШАУРМА', '#ffd23a'], ['ЦВЕТЫ', '#ff7ab8'], ['ОТЕЛЬ', '#b48bff'], ['СУШИ', '#ff6a4a'], ['РЕМОНТ', '#7ad6ff'], ['ПИЦЦА', '#ffb35a'], ['КИНО', '#ff4d6d'], ['ФИТНЕС', '#5dff9a'], ['ЛОМБАРД', '#ffd23a'], ['ТАКСИ', '#ffc43d'], ['КАРАОКЕ', '#ff5ae0'], ['ХИМЧИСТКА', '#7ad6ff'], ['ОПТИКА', '#b48bff'], ['ПЕКАРНЯ', '#ffb35a'], ['ХОСТЕЛ', '#5dff9a'], ['БИЛЬЯРД', '#ff4d8b'], ['АВТОМОЙКА', '#7ad6ff'], ['КЛУБ', '#ff5ae0'], ['РАМЕН', '#ff6a4a']];
+const SIGNS = [['АПТЕКА', '#5dff9a'], ['КОФЕ', '#ffb35a'], ['24 ЧАСА', '#ff4d8b'], ['ПРОДУКТЫ', '#7ad6ff'], ['БАР', '#ff5ae0'], ['ШАУРМА', '#ffd23a'], ['ЦВЕТЫ', '#ff7ab8'], ['ОТЕЛЬ', '#b48bff'], ['СУШИ', '#ff6a4a'], ['РЕМОНТ', '#7ad6ff'], ['ПИЦЦА', '#ffb35a'], ['КИНО', '#ff4d6d'], ['ФИТНЕС', '#5dff9a'], ['ЛОМБАРД', '#ffd23a'], ['ТАКСИ', '#ffc43d'], ['КАРАОКЕ', '#ff5ae0'], ['ХИМЧИСТКА', '#7ad6ff'], ['ОПТИКА', '#b48bff'], ['ПЕКАРНЯ', '#ffb35a'], ['ХОСТЕЛ', '#5dff9a'], ['БИЛЬЯРД', '#ff4d8b'], ['АВТОМОЙКА', '#7ad6ff'], ['КЛУБ', '#ff5ae0'], ['РАМЕН', '#ff6a4a'], ['ОБУВЬ', '#7ad6ff'], ['КНИГИ', '#ffd23a'], ['ГРИЛЬ', '#ff6a4a'], ['САЛОН', '#ff7ab8'], ['ЧАЙХАНА', '#5dff9a'], ['БУРГЕРЫ', '#ffb35a'], ['ЭЛЕКТРОНИКА', '#7ad6ff'], ['ЗООМАГАЗИН', '#b48bff']];
 const signAtlas = canvasTex(1024, 512, (g) => {
   g.fillStyle = '#000'; g.fillRect(0, 0, 1024, 512);
   SIGNS.forEach(([text, col], i) => {
@@ -629,6 +641,21 @@ const signAtlas = canvasTex(1024, 512, (g) => {
     g.fillStyle = '#fff'; g.font = '700 30px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(text, x + 128, y + 33, 220); g.shadowBlur = 0;
     g.globalCompositeOperation = 'multiply'; g.fillStyle = col; g.fillRect(x + 8, y + 8, 240, 48); g.globalCompositeOperation = 'source-over';
+  });
+});
+// rooftop billboards: 2 x 4 ads, fictional brands of the game's city only
+const ADS = [
+  ['НОЧНОЙ ТАРИФ', 'такси 24/7 · 505-505', '#ffc43d', '#1a1405'], ['БАНК «ГРАНИТ»', 'ваши деньги под защитой', '#d8dde8', '#1a2236'],
+  ['РАДИО «ПОЛНОЧЬ»', '101.7 FM · музыка до утра', '#ff4d8b', '#200a18'], ['АЭРОПОРТ «СЕВЕРНЫЙ»', 'рейсы каждый час', '#7ad6ff', '#06202e'],
+  ['КОФЕ «ФОНАРЬ»', 'открыто всю ночь', '#ffb35a', '#2a1406'], ['АВТОСАЛОН «МОТОР»', 'кредит за 15 минут', '#5dff9a', '#062014'],
+  ['ПОРТ-СЕВЕРНЫЙ', 'город, который не спит', '#b48bff', '#140a26'], ['ШИНОМОНТАЖ', 'круглосуточно · без очереди', '#ffd23a', '#201a04']];
+const adAtlas = canvasTex(1024, 512, (g) => {
+  ADS.forEach(([t1, t2, c, bg], i) => {
+    const x = (i % 2) * 512, y = Math.floor(i / 2) * 128;
+    const gr = g.createLinearGradient(x, y, x + 512, y + 128); gr.addColorStop(0, bg); gr.addColorStop(1, '#05060c'); g.fillStyle = gr; g.fillRect(x, y, 512, 128);
+    g.fillStyle = c; g.fillRect(x, y + 118, 512, 10); g.fillRect(x + 14, y + 18, 8, 82);
+    g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = c; g.font = '900 46px Arial, sans-serif'; g.fillText(t1, x + 36, y + 46, 460);
+    g.fillStyle = '#e8ecf6'; g.font = '500 26px Arial, sans-serif'; g.fillText(t2, x + 38, y + 92, 460);
   });
 });
 const asphaltTex = rep(canvasTex(512, 512, (g, w, h) => { g.fillStyle = '#3a3a40'; g.fillRect(0, 0, w, h); noiseFill(g, w, h, 9000, 0.06, 0.12); g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 1; for (let i = 0; i < 10; i++) { g.beginPath(); let x = Math.random() * w, y = Math.random() * h; g.moveTo(x, y); for (let k = 0; k < 6; k++) { x += rand(-30, 30); y += rand(-30, 30); g.lineTo(x, y); } g.stroke(); } }), 60, 42);
@@ -743,6 +770,10 @@ function kitInstances(name, list, mat, shadow) {
 // ---------------- world ----------------
 const ROADS = [-160, -80, 0, 80, 160];
 const RW = 16, LIM = 170;
+// streets differ in width: the north-south avenue at x = 0 is wide with a green median, two side streets are narrow
+const ROAD_HWX = { 0: 11, '-80': 5, 160: 5.5 };
+const hwX = (x) => ROAD_HWX[x] || 8, hwZ = () => 8;
+const AVENUE = 0;
 const colliders = [];
 function addBox(cx, cz, sx, sz, h) { colliders.push({ minX: cx - sx / 2, maxX: cx + sx / 2, minZ: cz - sz / 2, maxZ: cz + sz / 2, h }); return colliders[colliders.length - 1]; }
 function std(color, extra) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.7, envMapIntensity: 0.5 }, extra || {})); }
@@ -764,7 +795,7 @@ const DOOR = new V3(120, 0, -131);
 const START = { x: -160, z: 158, h: PI };
 
 const B = {};
-['brick', 'office', 'glass', 'shop', 'trim', 'roof', 'metal', 'neon', 'sign', 'awning', 'walk', 'grass', 'leaf', 'mark', 'container', 'wood', 'water', 'bankL', 'bankA'].forEach((k) => { B[k] = batch(); });
+['brick', 'office', 'glass', 'shop', 'trim', 'roof', 'metal', 'neon', 'sign', 'awning', 'walk', 'grass', 'leaf', 'mark', 'container', 'wood', 'water', 'bankL', 'bankA', 'ad'].forEach((k) => { B[k] = batch(); });
 const FAC = ['brick', 'office', 'glass'];
 const AWN = [0xb8323a, 0x2f6a4a, 0x2a4f8a, 0xd08a2a, 0x6a3a8a, 0x2a7a7a];
 const NEON = [0xff3d8b, 0x3de8ff, 0xffd23a, 0x7cff6a, 0xb46bff];
@@ -779,6 +810,41 @@ function addSign(x, y, z, ry, w, h, idx) {
   face(B.sign, o, ax, w, [0, 1, 0], h, [sx, 0, cx], 0.25 / w, (v1 - v0) / h, u0, v0, WHITE);
 }
 
+function addAd(x, y, z, ry, w, h, idx) {
+  const i = idx % ADS.length, u0 = (i % 2) * 0.5, v1 = 1 - Math.floor(i / 2) * 0.25, v0 = v1 - 0.25;
+  const cx = Math.cos(ry), sx = Math.sin(ry), ax = [cx, 0, -sx];
+  face(B.ad, [x - ax[0] * w / 2, y - h / 2, z - ax[2] * w / 2], ax, w, [0, 1, 0], h, [sx, 0, cx], 0.5 / w, (v1 - v0) / h, u0, v0, WHITE);
+}
+// shop signs, hanging blade signs and rooftop billboards on the kit houses; own hash so the city layout (srand) stays the same
+const KIT_H = { A: 1.65, B: 1.65, C: 2.98, D: 2.97, E: 2.35, F: 2.35, G: 2.98, H: 3.05 }, WIDE_T = { E: 1, F: 1, G: 1, H: 1 };
+const hr = (x, z, k) => { const v = Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453; return v - Math.floor(v); };
+function dressHouse(t, x, z, ry, sy, S) {
+  const fx = Math.sin(ry), fz = Math.cos(ry), lx = Math.cos(ry), lz = -Math.sin(ry);
+  const front = 0.82 * S, hw = (WIDE_T[t] ? 1.0 : 0.62) * S, H = -0.4 + KIT_H[t] * S * sy;
+  const at = (fwd, lat) => [x + fx * fwd + lx * lat, z + fz * fwd + lz * lat];
+  if (S <= 8) {
+    if (hr(x, z, 1) < 0.78) { // shop sign over the ground-floor windows, on a dark backing plate
+      const w = Math.min(hw * 2 - 1.4, 5.6), y = -0.4 + 0.575 * S * sy, off = (hr(x, z, 2) - 0.5) * (hw * 2 - w - 1.2);
+      const [px, pz] = at(front + 0.16, off), [bx, bz] = at(front + 0.08, off);
+      putB(B.metal, G.box, bx, y, bz, w + 0.3, 1.15, 0.1, ry, col(0x16161c));
+      addSign(px, y, pz, ry, w, 0.95, Math.floor(hr(x, z, 3) * 32));
+    }
+    if (hr(x, z, 4) < 0.4) { // a blade sign sticking out over the pavement, readable along the street
+      const side = hr(x, z, 5) < 0.5 ? -1 : 1, y = -0.4 + 0.78 * S * sy, [px, pz] = at(front + 1.25, side * (hw - 0.7)), [mx, mz] = at(front + 0.6, side * (hw - 0.7));
+      putB(B.metal, G.box, mx, y + 0.95, mz, 0.08, 0.08, 1.4, ry, col(0x22222a));
+      putB(B.metal, G.box, px, y, pz, 0.12, 0.95, 2.75, ry, col(0x16161c));
+      const idx = Math.floor(hr(x, z, 6) * 32);
+      addSign(px + lx * 0.07, y, pz + lz * 0.07, ry + PI / 2, 2.6, 0.65, idx); addSign(px - lx * 0.07, y, pz - lz * 0.07, ry - PI / 2, 2.6, 0.65, idx);
+    }
+  }
+  if (KIT_H[t] > 2.3 && hr(x, z, 7) < (S > 8 ? 0.3 : 0.2)) { // rooftop billboard on two posts, facing the street
+    const w = S > 8 ? 18 : 11, h = w / 4, [px, pz] = at(front - 2.2, 0), y = H + 2.2 + h / 2;
+    for (const k of [-0.32, 0.32]) { const [qx, qz] = at(front - 2.5, k * w); putB(B.metal, G.box, qx, H + 1.2 + h / 2, qz, 0.35, 2.4 + h, 0.35, ry, col(0x2a2a32)); }
+    putB(B.metal, G.box, px - fx * 0.12, y, pz - fz * 0.12, w + 0.5, h + 0.5, 0.2, ry, col(0x1c1c22));
+    addAd(px, y, pz, ry, w, h, Math.floor(hr(x, z, 8) * ADS.length));
+    for (const k of [-0.3, 0, 0.3]) { const [qx, qz] = at(front - 1.2, k * w); putB(B.neon, G.box, qx, y + h / 2 + 0.35, qz, 0.5, 0.12, 0.5, ry, HDR(0xfff0d0, 3)); }
+  }
+}
 function building(cx, cz, w, d, h, opt) {
   const style = h > 46 ? (srand() < 0.6 ? 2 : 1) : (srand() < 0.55 ? 0 : 1);
   const tint = style === 0 ? col(pick([0xffffff, 0xf2e2da, 0xe6d6cc, 0xd8c9c0])) : style === 1 ? col(pick([0xffffff, 0xece6dc, 0xdfe4ec, 0xd2d6de])) : col(pick([0xffffff, 0xd8e8ff, 0xe0f2f0]));
@@ -864,21 +930,30 @@ function buildWorld() {
   };
   for (const bx of centers) for (const bz of centers) {
     const kind = (bx === -40 && bz === 40) ? 'grass' : (bx === YARD.x && bz === YARD.z) ? 'yard' : (bx === -120 && bz === 120) ? 'concrete' : 'walk';
-    slab(bx - 32, bz - 32, bx + 32, bz + 32, kind);
+    slab(bx - 40 + hwX(bx - 40), bz - 32, bx + 40 - hwX(bx + 40), bz + 32, kind);
   }
-  slab(-260, -260, 260, -168); slab(-260, -168, -168, 168); slab(168, -168, 260, 168); slab(-260, 168, 260, 176, 'concrete');
+  slab(-260, -260, 260, -168); slab(-260, -168, -160 - hwX(-160), 168); slab(160 + hwX(160), -168, 260, 168); slab(-260, 168, 260, 176, 'concrete');
 
   // road markings: dashed centre lines and zebra crossings
-  const near = (t) => ROADS.some((r2) => Math.abs(t - r2) < 11);
+  const nearZ = (t) => ROADS.some((r2) => Math.abs(t - r2) < hwZ(r2) + 3), nearX = (t) => ROADS.some((r2) => Math.abs(t - r2) < hwX(r2) + 3);
   const markW = col(0xe8e8ec), markY = col(0xf0c040);
   for (const r of ROADS) for (let t = -166; t <= 166; t += 6) {
-    if (near(t)) continue;
-    boxB(B.mark, r - 0.12, 0, t - 1.5, r + 0.12, 0.02, t + 1.5, { sides: false, col: markY });
-    boxB(B.mark, t - 1.5, 0, r - 0.12, t + 1.5, 0.02, r + 0.12, { sides: false, col: markY });
+    if (!nearZ(t)) {
+      if (r === AVENUE) { for (const sd of [-1, 1]) { boxB(B.mark, r + sd * 6.4 - 0.1, 0, t - 1.5, r + sd * 6.4 + 0.1, 0.02, t + 1.5, { sides: false, col: markW }); boxB(B.mark, r + sd * (hwX(r) - 0.6) - 0.1, 0, t - 3, r + sd * (hwX(r) - 0.6) + 0.1, 0.02, t + 3, { sides: false, col: markW }); } }
+      else boxB(B.mark, r - 0.12, 0, t - 1.5, r + 0.12, 0.02, t + 1.5, { sides: false, col: markY });
+    }
+    if (!nearX(t)) boxB(B.mark, t - 1.5, 0, r - 0.12, t + 1.5, 0.02, r + 0.12, { sides: false, col: markY });
   }
-  for (const rx of ROADS) for (const rz of ROADS) for (const s of [-1, 1]) for (let k = -6; k <= 6; k += 1.6) {
-    boxB(B.mark, rx + k - 0.35, 0, rz + s * 10.2 - 1.6, rx + k + 0.35, 0.02, rz + s * 10.2 + 1.6, { sides: false, col: markW });
-    boxB(B.mark, rx + s * 10.2 - 1.6, 0, rz + k - 0.35, rx + s * 10.2 + 1.6, 0.02, rz + k + 0.35, { sides: false, col: markW });
+  // the avenue's median: a low kerb with grass, clipped shrubs and twin lamps (no colliders: chases cross it freely)
+  for (const [z0, z1] of [[-150, -90], [-70, -10], [10, 70], [90, 150]]) {
+    boxB(B.trim, AVENUE - 1.3, 0, z0, AVENUE + 1.3, 0.22, z1, { col: col(0x8a8a92) });
+    boxB(B.grass, AVENUE - 1.0, 0.22, z0 + 0.3, AVENUE + 1.0, 0.24, z1 - 0.3, { topWorld: 1 / 6, sides: false });
+    for (let z = z0 + 4; z < z1 - 2; z += 7) putB(B.leaf, G.sph, AVENUE, 0.8, z, 0.9, 0.7, 1.6, 0, col([0x2f5a32, 0x3a6a34, 0x2a4d34][Math.floor(hr(AVENUE, z, 9) * 3)]));
+  }
+  for (const rx of ROADS) for (const rz of ROADS) for (const s of [-1, 1]) {
+    const wx = hwX(rx) - 2, wz = hwZ(rz) - 2;
+    for (let k = -wx; k <= wx + 0.01; k += 1.6) boxB(B.mark, rx + k - 0.35, 0, rz + s * 10.2 - 1.6, rx + k + 0.35, 0.02, rz + s * 10.2 + 1.6, { sides: false, col: markW });
+    for (let k = -wz; k <= wz + 0.01; k += 1.6) boxB(B.mark, rx + s * (hwX(rx) + 2.2) - 1.6, 0, rz + k - 0.35, rx + s * (hwX(rx) + 2.2) + 1.6, 0.02, rz + k + 0.35, { sides: false, col: markW });
   }
 
   // buildings: KayKit houses around each block, facing the streets (1 kit tile = 2 units -> 14 m)
@@ -888,6 +963,7 @@ function buildWorld() {
     const v = Math.floor(srand() * 4);
     if (inBankBlock(x, z) || inSquare(x, z) || inCanalBand(x, z, 9) || isTowerSite(x, z) || isFactorySite(x, z) || (Math.abs(x - EXPRESS.x) < 14 && z < -180)) return;
     bld[t][v].push({ x, y: -0.4, z, ry, sx: S, sy: S * sy, sz: S });
+    dressHouse(t, x, z, ry, sy, S);
     if (!collide) return;
     const hw = (WIDE[t] ? 1.0 : 0.62) * S, z0 = -0.66 * S, z1 = 0.82 * S, c = Math.round(Math.cos(ry)), sn = Math.round(Math.sin(ry));
     const pts = [[-hw, z0], [hw, z0], [-hw, z1], [hw, z1]].map(([lx, lz]) => [x + lx * c + lz * sn, z - lx * sn + lz * c]);
@@ -919,33 +995,35 @@ function buildWorld() {
   for (const r of ROADS) for (let t = -158; t <= 160; t += 17) {
     if (ROADS.some((r2) => Math.abs(t - r2) < 15)) continue;
     const s = Math.round(t / 17) % 2 ? 1 : -1;
-    for (const [lx, lz, ax, az] of [[r + s * 9.3, t, -s, 0], [t, r + s * 9.3, 0, -s]]) {
-      if (nearGate(lx, lz) || inCanalBand(lx, lz, 1) || inTunnel(lx, lz, 1.5)) continue;
+    for (const [lx, lz, ax, az] of [[r + s * (hwX(r) + 1.3), t, -s, 0], [t, r + s * 9.3, 0, -s]]) {
+      if (nearGate(lx, lz) || inCanalBand(lx, lz, 1) || inTunnel(lx, lz, 1.5) || (az && ROADS.some((r2) => Math.abs(lx - r2) < hwX(r2) + 4))) continue;
       // lamp: pole, arm over the road, glowing head and a light pool
       lamps.push({ x: lx, y: 0.15, z: lz, ry: Math.atan2(az, -ax), sx: 8 }); LAMP_HEADS.push([lx + ax * 1.72, 7.15, lz + az * 1.72]);
       putB(B.neon, G.box, lx + ax * 1.72, 7.22, lz + az * 1.72, ax ? 0.62 : 0.3, 0.08, az ? 0.62 : 0.3, 0, lampHead);
       const pool = new THREE.Mesh(poolGeo, poolMat); pool.position.set(lx + ax * 2.6, 0.05, lz + az * 2.6); scene.add(pool);
     }
     const tt = t + 8.5;
-    if (!ROADS.some((r2) => Math.abs(tt - r2) < 14)) for (const [tx, tz] of [[r - s * 10.6, tt], [tt, r - s * 10.6]]) {
+    if (!ROADS.some((r2) => Math.abs(tt - r2) < 14)) for (const [tx, tz] of [[r - s * (hwX(r) + 2.6), tt], [tt, r - s * 10.6]]) {
       if (nearGate(tx, tz)) continue;
+      const skipT = (tz === tt && r === AVENUE) || (tx === tt && ROADS.some((r2) => Math.abs(tt - r2) < hwX(r2) + 5));   // the avenue keeps its trees on the median
       const bk = (Math.abs(tx - BANK.x) < 12 && Math.abs(tz - (BANK.z + 30)) < 4) || inCanalBand(tx, tz, 1.5); // keep the bank entrance and the canal clear
-      putB(bk ? SINK : B.trim, G.cyl, tx, 0.35, tz, 1.6, 0.4, 1.6, 0, col(0x6a6a72));
-      putB(bk ? SINK : B.wood, G.cyl6, tx, 1.8, tz, 0.3, 3.2, 0.3, 0, col(0x5a3a26));
+      const bkS = bk || skipT;
+      putB(bkS ? SINK : B.trim, G.cyl, tx, 0.35, tz, 1.6, 0.4, 1.6, 0, col(0x6a6a72));
+      putB(bkS ? SINK : B.wood, G.cyl6, tx, 1.8, tz, 0.3, 3.2, 0.3, 0, col(0x5a3a26));
       const lc = col(pick([0x2f5a32, 0x3a6a34, 0x2a4d34, 0x4a6a2a]));
-      putB(bk ? SINK : B.leaf, G.sph, tx, 4.4, tz, 1.9, 1.6, 1.9, srand() * 3, lc);
-      putB(bk ? SINK : B.leaf, G.sph, tx + sr(-0.8, 0.8), 5.4, tz + sr(-0.8, 0.8), 1.3, 1.2, 1.3, srand() * 3, lc.clone().multiplyScalar(1.15));
-      if (!bk) addBox(tx, tz, 0.9, 0.9, 3);
+      putB(bkS ? SINK : B.leaf, G.sph, tx, 4.4, tz, 1.9, 1.6, 1.9, srand() * 3, lc);
+      putB(bkS ? SINK : B.leaf, G.sph, tx + sr(-0.8, 0.8), 5.4, tz + sr(-0.8, 0.8), 1.3, 1.2, 1.3, srand() * 3, lc.clone().multiplyScalar(1.15));
+      if (!bkS) addBox(tx, tz, 0.9, 0.9, 3);
     }
     // parked cars along the curb
     for (const side of [-1, 1]) {
-      if (srand() < 0.45) { const x = r + side * 6.2, z = t + sr(-3, 3); if (!noPark(x, z)) parked.push([x, z, side > 0 ? 0 : PI]); }
+      if (srand() < 0.45) { const x = r + side * (hwX(r) - 1.8), z = t + sr(-3, 3); if (hwX(r) >= 7 && !noPark(x, z)) parked.push([x, z, side > 0 ? 0 : PI]); }
       if (srand() < 0.45) { const x = t + sr(-3, 3), z = r + side * 6.2; if (!noPark(x, z)) parked.push([x, z, side > 0 ? -PI / 2 : PI / 2]); }
     }
   }
   // traffic lights at every corner
   for (const rx of ROADS) for (const rz of ROADS) for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-    const x = rx + sx * 9.4, z = rz + sz * 9.4;
+    const x = rx + sx * (hwX(rx) + 1.4), z = rz + sz * 9.4;
     if (Math.abs(x - 120) < 16 && z < -70 && z > -96) continue;
     tlights.push({ x, y: 0.15, z, ry: Math.atan2(-sx, -sz), sx: 7 });
   }
@@ -962,6 +1040,8 @@ function buildWorld() {
   meshB(B.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, envMapIntensity: 0.2 }), false);
   meshB(B.metal, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.7, envMapIntensity: 0.8 }), true);
   KIT.neonMat = meshB(B.neon, new THREE.MeshBasicMaterial({ vertexColors: true }), false).material;
+  meshB(B.sign, new THREE.MeshBasicMaterial({ map: signAtlas, vertexColors: true, color: new THREE.Color(1.7, 1.7, 1.7) }), false);
+  meshB(B.ad, new THREE.MeshBasicMaterial({ map: adAtlas, vertexColors: true, color: new THREE.Color(1.25, 1.25, 1.25) }), false);
   meshB(B.walk, new THREE.MeshStandardMaterial({ map: pavingTex, vertexColors: true, color: 0x9a948c, roughness: 0.6, envMapIntensity: 0.9 }), false);
   meshB(B.grass, new THREE.MeshStandardMaterial({ map: grassTex, vertexColors: true, roughness: 1 }), false);
   meshB(B.leaf, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -1075,7 +1155,7 @@ function buildBusStops() {
   for (const r of BUS_ROUTES) r.nodes.forEach((a, i) => {
     const b = r.nodes[(i + 1) % r.nodes.length], d = laneDir(a, b);
     for (let s = 40; s < d.L - 20; s += 160) {
-      const rx = -d.fz, rz = d.fx, x = a[0] + d.fx * s + rx * 10.4, z = a[1] + d.fz * s + rz * 10.4;
+      const hwR = a[0] === b[0] ? hwX(a[0]) : hwZ(a[1]), off = hwR + (hwR >= 10 ? 1.4 : 2.4), rx = -d.fz, rz = d.fx, x = a[0] + d.fx * s + rx * off, z = a[1] + d.fz * s + rz * off;
       if (inCanalBand(x, z, 2) || inTunnel(x, z, 3) || (inBankBlock(x, z) && Math.abs(x - BANK.x) < 14) || (inSquare(x, z) && z > 48)) continue;
       const ry = Math.atan2(rx, rz);
       putB(B.trim, G.box, x + rx * 0.7, 1.4, z + rz * 0.7, 4.2, 2.5, 0.1, ry, glass);
@@ -1631,7 +1711,7 @@ function buildLandmarks() {
   const stone = col(0xd8d0c0), stoneD = col(0x9a9284), plinth = col(0x5a544c), win = HDR(0xffd9a0, 1.5), metal = col(0x30323a);
   // ---- central square: granite paving, monument, flower beds, benches, trees ----
   const X = SQUARE.x, Z = SQUARE.z;
-  boxB(B.walk, X - 30, 0.15, Z - 30, X + 30, 0.17, Z + 30, { topWorld: 1 / 3, col: col(0xc8bca8), sides: false });
+  boxB(B.walk, X - 40 + hwX(X - 40) + 0.5, 0.15, Z - 30, X + 30, 0.17, Z + 30, { topWorld: 1 / 3, col: col(0xc8bca8), sides: false });
   for (let r = 6; r <= 14; r += 8) for (let k = 0; k < 40; k++) { const a = k / 40 * PI * 2; putB(B.trim, G.box, X + Math.cos(a) * r, 0.18, Z - 10 + Math.sin(a) * r, 1.0, 0.03, 0.35, -a, col(0x8a8070)); }
   // monument: stepped plinth, granite stele with a gold star
   putB(B.trim, G.cyl, X, 0.45, Z - 10, 9, 0.6, 9, 0, stoneD); putB(B.trim, G.cyl, X, 0.95, Z - 10, 6.5, 0.5, 6.5, 0, stone);
@@ -2689,6 +2769,7 @@ function updateDrive(dt) {
   const thrKey = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   const throttle = clamp(thrKey - joy.y * 1.3, -1, 1), steer = clamp(steerKey + joy.x * 1.2, -1, 1);
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
+  pc.steerIn = steer;
   const nitro = state.nitroT > 0, imp = carPhysics(pc, dt, nitro ? 1 : throttle, steer, drift, P.maxSpeed + (nitro ? 16 : 0), P.drift);
   if (P.regen && pc.hp < 100) pc.hp = Math.min(100, pc.hp + 1.6 * dt);
   if (imp > 9) { damagePlayer((imp - 9) * 1.1); sfx.crash(imp); sparks(pc.pos.clone().add(new V3(0, 1, 0))); }
@@ -2993,7 +3074,10 @@ function freeSpot(x, z, r) {
   }
   return p;
 }
+// the avenue has a median: a car set down on its centre line moves into the lane for its direction (right-hand traffic)
+const avenueLane = (x, z, dz) => (Math.abs(x - AVENUE) < 1.5 && z > -170 && z < 170 && !ROADS.some((r) => Math.abs(z - r) < 10) ? AVENUE + (dz > 0 ? -5 : 5) : x);
 function placeCar(x, z, h) {
+  if (Math.abs(Math.cos(h)) > 0.7) x = avenueLane(x, z, Math.cos(h));
   pc.pos.set(x, 0, z); pc.vel.set(0, 0, 0); pc.h = h; pc.hp = 100; pc.dead = false; pc.fireCd = 0; pc.vf = 0; pc.vr = 0;
   pc.g.visible = true; pc.g.position.copy(pc.pos); pc.g.rotation.set(0, h, 0);
 }
@@ -3070,11 +3154,12 @@ const aliveFoes = () => enemies.filter((e) => !e.dead).length;
 
 // cars that follow a scripted route (the courier to tail, Mark's van)
 function makeScripted(kind, path, x, z, h, o) {
+  if (Math.abs(Math.cos(h)) > 0.7) x = avenueLane(x, z, Math.cos(h));
   const m = makeCar(0x555a66, kind === 'van' ? 'van' : false);
   if (kind === 'van') m.g.scale.set(1.12, 1.2, 1.12);
   const e = Object.assign(m, {
     pos: new V3(x, 0, z), vel: new V3(), h, hp: o.hp || 1, max: o.hp || 1, script: true, kind,
-    path: path.map(([a, b]) => new V3(a, 0, b)), pi: 0, speed: o.speed, stops: Object.assign({}, o.stops || {}), loop: !!o.loop,
+    path: path.map(([a, b], i) => { const pz = i ? path[i - 1][1] : z, nz = path[i + 1] ? path[i + 1][1] : b; const dz = b !== pz ? b - pz : nz - b; return new V3(dz ? avenueLane(a, b, dz) : a, 0, b); }), pi: 0, speed: o.speed, stops: Object.assign({}, o.stops || {}), loop: !!o.loop,
     wait: 0, fireCd: 2.5, shoot: !!o.shoot, invuln: !o.hp, noTarget: !o.hp, noExplode: true, dead: false, stuck: 0, rev: 0, vf: 0,
   });
   e.g.position.copy(e.pos); e.g.rotation.y = h; enemyCars.push(e); return e;
@@ -4270,6 +4355,30 @@ function showEndGen(ep) {
 
 // ---------------- camera ----------------
 let camYaw = 0, snapCam = true;
+// the car camera: behind the car or from the driver's seat (the «Камера» button and V switch it while driving)
+let carView = (() => { try { return localStorage.getItem('nf-carview') === 'cab' ? 'cab' : 'chase'; } catch (e) { return 'chase'; } })();
+const COCKPIT = { g: null, wheel: null };
+function cockpitFor(car) {
+  if (!COCKPIT.g) {
+    const g = new THREE.Group(), dark = std(0x16171c, { roughness: 0.8 }), trim = std(0x2a2b32, { roughness: 0.5 });
+    const add = (geo, m, x, y, z, rx) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.x = rx || 0; g.add(o); return o; };
+    add(new THREE.BoxGeometry(1.8, 0.22, 0.5), dark, 0, 0.96, 1.2);                          // dashboard
+    add(new THREE.BoxGeometry(1.8, 0.04, 0.26), trim, 0, 1.08, 1.36, -0.3);                  // top of the dash under the windscreen
+    add(new THREE.BoxGeometry(0.5, 0.16, 0.12), dark, 0.36, 1.1, 1.0);                      // instrument hood
+    for (const sx of [-0.88, 0.88]) add(new THREE.BoxGeometry(0.05, 0.9, 0.05), dark, sx, 1.62, 1.2, -0.6);   // windscreen pillars
+    add(new THREE.BoxGeometry(1.8, 0.06, 0.3), dark, 0, 2.02, 0.8);                         // roof edge
+    const gauges = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.0, 0.35) });
+    for (const sx of [0.28, 0.44]) { const gm = add(new THREE.CircleGeometry(0.055, 16), gauges, sx, 1.1, 0.935); gm.rotation.set(-0.2, PI, 0); }
+    const wheel = new THREE.Group(); wheel.position.set(0.36, 1.1, 0.8); wheel.rotation.set(-0.5, PI, 0); g.add(wheel);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.024, 8, 24), trim); wheel.add(rim);
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.03), trim); wheel.add(spoke);
+    const spoke2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.18, 0.03), trim); spoke2.position.y = -0.09; wheel.add(spoke2);
+    COCKPIT.g = g; COCKPIT.wheel = wheel;
+  }
+  if (COCKPIT.g.parent !== car.g) car.g.add(COCKPIT.g);
+  COCKPIT.g.visible = true;
+  COCKPIT.wheel.rotation.z = (car.steerIn || 0) * -1.4;
+}
 const camPos = new V3(), camLook = new V3(), focus = new V3();
 function updateCamera(dt) {
   let desired, look;
@@ -4285,6 +4394,15 @@ function updateCamera(dt) {
     desired = narrow ? SHOW.clone().add(new V3(0, 1.6, 4.6)) : SHOW.clone().add(new V3(-1.3, 1.35, 3.3));
     look = narrow ? SHOW.clone().add(new V3(0, -0.45, 0)) : SHOW.clone().add(new V3(-1.3, 0.98, 0));
     focus.copy(SHOW);
+  } else if (state.act === 1 && state.mode === 'drive' && carView === 'cab') {
+    // from the driver's seat: the hood, the dashboard and the wheel in front, the road through the windscreen
+    camYaw = pc.h;
+    const f = new V3(Math.sin(camYaw), 0, Math.cos(camYaw)), speedK = clamp(Math.abs(pc.vf || 0) / 36, 0, 1);
+    desired = pc.pos.clone().addScaledVector(f, 0.15).add(new V3(Math.cos(camYaw) * 0.36, 1.5 + Math.sin(state.t * 23) * 0.006 * speedK, -Math.sin(camYaw) * 0.36));   // driver's seat on the left
+    look = desired.clone().addScaledVector(f, 20).add(new V3(0, -0.9, 0)); focus.copy(pc.pos);
+    camPos.copy(desired); camLook.copy(look); snapCam = false;
+    camera.fov += ((window.innerWidth < window.innerHeight ? 80 : 68) + speedK * 10 - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
+    cockpitFor(pc);
   } else if (state.act === 1) {
     camYaw += wrapA(pc.h - camYaw) * Math.min(1, dt * 3.2);
     const f = new V3(Math.sin(camYaw), 0, Math.cos(camYaw));
@@ -4309,6 +4427,7 @@ function updateCamera(dt) {
     ensureViewGun().visible = fpsNow && !hero.dead;
   }
   if (viewGun && (state.act !== 2 || state.mode !== 'foot')) viewGun.visible = false;
+  if (COCKPIT.g && !(state.act === 1 && state.mode === 'drive' && carView === 'cab')) COCKPIT.g.visible = false;
   if (snapCam) { camPos.copy(desired); camLook.copy(look); snapCam = false; }
   const k = state.mode === 'preview' ? 1 : 1 - Math.exp(-dt * (state.mode === 'select' ? 4 : 7));
   camPos.lerp(desired, k); camLook.lerp(look, k);
@@ -4336,7 +4455,7 @@ const mmStatic = document.createElement('canvas'); mmStatic.width = mmStatic.hei
   g.fillStyle = '#4a4030'; g.fillRect(P(90), P(-70), 60 * s, 60 * s);                                                                    // bank
   g.fillStyle = '#2a6a9a'; g.fillRect(P(-124.5), P(-185), 9 * s, 256 * s);                                                               // canal
   g.strokeStyle = '#4a5078'; g.lineWidth = RW * s;
-  for (const r of ROADS) { g.beginPath(); g.moveTo(P(r), P(-LIM)); g.lineTo(P(r), P(LIM)); g.stroke(); g.beginPath(); g.moveTo(P(-LIM), P(r)); g.lineTo(P(LIM), P(r)); g.stroke(); }
+  for (const r of ROADS) { g.lineWidth = hwX(r) * 2 * s; g.beginPath(); g.moveTo(P(r), P(-LIM)); g.lineTo(P(r), P(LIM)); g.stroke(); g.lineWidth = hwZ(r) * 2 * s; g.beginPath(); g.moveTo(P(-LIM), P(r)); g.lineTo(P(LIM), P(r)); g.stroke(); }
   g.fillStyle = '#2a2c3a'; g.fillRect(P(13), P(-169.5), 54 * s, 19 * s);                                                                 // tunnel
   g.fillStyle = '#d82a2a'; for (const [x, z] of [[66, 15], [68, 33]]) { g.beginPath(); g.arc(P(x), P(z), 3, 0, PI * 2); g.fill(); }        // metro
 })();
@@ -4391,6 +4510,7 @@ function renderBars(list, timer, bad) {
   if (timer) { $('barT').textContent = timer; $('barT').classList.toggle('bad', bad); }
 }
 function updateHud(dt) {
+  camLabel();
   $('touch').classList.toggle('on-foot', state.mode === 'foot');
   if (state.mode !== 'foot' && aimHeld && window.__nfSetAim) window.__nfSetAim(false);
   if (state.mode === 'foot' && isTouch && toastT <= 0 && !store.get('nf-aimhint')) { store.set('nf-aimhint', true); toast('Держи «Прицел», чтобы целиться от первого лица. Кнопка «Камера» вверху меняет вид', 4); }
@@ -4684,7 +4804,7 @@ function updateBoosts(dt) {
 let boostsShown = '';
 function updateBoostsHud() {
   const I = PROF.inv, txt = `Нитро ×${I.nitro} (N) · Щит ×${I.shield} (B) · Рем ×${I.repair} · Аптечки ×${I.medkit}`;
-  if (txt !== boostsShown) { boostsShown = txt; $('boosts').textContent = txt; $('btnNitro').textContent = `Нитро ${I.nitro}`; $('btnShield').textContent = `Щит ${I.shield}`; }
+  if (txt !== boostsShown) { boostsShown = txt; $('boosts').textContent = txt; $('nitroN').textContent = I.nitro; $('shieldN').textContent = I.shield; }
   $('godBadge').hidden = !PROF.god;
 }
 // ---------------- profile panel ----------------
@@ -5027,7 +5147,8 @@ let aimHeld = false;
 const curView = () => (aimHeld && state.mode === 'foot' ? 'fps' : footView);
 const lookK = () => (aimHeld ? 0.55 : 1);
 const CAM_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
-function camLabel() { if ($('btnView')) $('btnView').innerHTML = CAM_ICON + '<b>' + VIEW_SHORT[footView] + '</b>'; }
+let camLabelK = '';
+function camLabel() { const t = state.mode === 'drive' ? (carView === 'cab' ? 'Кабина' : 'Сзади') : VIEW_SHORT[footView]; if (t === camLabelK || !$('btnView')) return; camLabelK = t; $('btnView').innerHTML = CAM_ICON + '<b>' + t + '</b>'; }
 let footView = (() => { const def = isTouch ? 'tps' : 'fps'; try { const v = JSON.parse(localStorage.getItem('nf-view2')); return VIEWS.includes(v) ? v : def; } catch (e) { return def; } })();
 let viewYaw = PI, viewPitch = -0.04, viewGun = null;
 function setView(v) {
@@ -5037,7 +5158,13 @@ function setView(v) {
   const next = VIEWS[(VIEWS.indexOf(v) + 1) % VIEWS.length];
   if (state.mode === 'foot') toast('Камера: ' + VIEW_NAMES[v] + ' · ещё раз: ' + VIEW_NAMES[next] + (v !== 'top' && !isTouch ? ' · кликни, чтобы управлять мышью' : ''), 2);
 }
-const cycleView = () => setView(VIEWS[(VIEWS.indexOf(footView) + 1) % VIEWS.length]);
+const cycleView = () => {
+  if (state.mode === 'drive') {
+    carView = carView === 'cab' ? 'chase' : 'cab'; try { localStorage.setItem('nf-carview', carView); } catch (e) { /* storage unavailable */ }
+    snapCam = true; camLabel(); toast(carView === 'cab' ? 'Камера: из кабины · ещё раз: сзади машины' : 'Камера: сзади машины · ещё раз: из кабины', 2); return;
+  }
+  setView(VIEWS[(VIEWS.indexOf(footView) + 1) % VIEWS.length]);
+};
 const lookMode = () => state.mode === 'foot' && curView() !== 'top';
 // mouse look (pointer lock); without it the cursor's distance from the centre turns the view
 document.addEventListener('mousemove', (e) => {
@@ -5345,11 +5472,13 @@ function showDead() {
       ${PROF.inv.revive > 0 ? `<button id="mChance" class="btn primary" type="button">Второй шанс (×${PROF.inv.revive})</button>` : ''}
       <button id="mRevive" class="btn primary" type="button" ${used ? 'disabled' : ''}>${PROF.noAds ? 'Продолжить' : 'Продолжить за рекламу'}</button>
       <button id="mRetry" class="btn" type="button">${state.ep >= 2 ? 'Начать главу заново' : 'Начать акт заново'}</button>
+      <button id="mMenu" class="btn" type="button">В меню</button>
     </div>
     <div class="note">${used ? 'Продолжение за рекламу — один раз за акт.' : 'Продолжение вернёт 60% прочности на месте.'}</div>`, {
     mChance: () => { PROF.inv.revive--; saveProfile(); hideModal(); revive(); },
     mRevive: () => { hideModal(); showAd(() => { state.reviveUsed[rk] = true; revive(); }); },
     mRetry: () => { hideModal(); if (state.ep >= 2) startChapter(state.ch); else if (act === 1) { setupAct1(); state.mode = 'drive'; } else { setupAct2(); } state.fireLock = true; },
+    mMenu: () => { hideModal(); showSelect(); },   // progress stays: the menu offers «Продолжить» from this chapter
   });
 }
 function revive() {
@@ -5480,7 +5609,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
