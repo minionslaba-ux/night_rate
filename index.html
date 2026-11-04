@@ -70,7 +70,26 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .nav span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; }
 @media (max-width: 560px) { .nav { top: calc(116px + env(safe-area-inset-top, 0px)); left: calc(12px + env(safe-area-inset-left, 0px)); transform: none; } .nav svg { width: 36px; height: 36px; } .nav b { font-size: 15px; } }
 .hurt { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 30, 70, .55) 100%); opacity: 0; }
-.crosshair { position: fixed; width: 22px; height: 22px; margin: -11px 0 0 -11px; border: 2px solid var(--taxi); border-radius: 50%; pointer-events: none; box-shadow: 0 0 8px rgba(255,196,61,.6); }
+.crosshair { position: fixed; width: 44px; height: 44px; margin: -22px 0 0 -22px; pointer-events: none; --s: 0px; --c: #f4f4f8; z-index: 5; }
+.crosshair i { position: absolute; background: var(--c); box-shadow: 0 0 2px rgba(0,0,0,.95); border-radius: 1px; }
+.crosshair i:nth-child(1) { left: 21px; top: calc(5px - var(--s)); width: 2px; height: 10px; }
+.crosshair i:nth-child(2) { left: 21px; bottom: calc(5px - var(--s)); width: 2px; height: 10px; }
+.crosshair i:nth-child(3) { top: 21px; left: calc(5px - var(--s)); width: 10px; height: 2px; }
+.crosshair i:nth-child(4) { top: 21px; right: calc(5px - var(--s)); width: 10px; height: 2px; }
+.crosshair b { position: absolute; left: 20px; top: 20px; width: 4px; height: 4px; border-radius: 50%; background: var(--c); box-shadow: 0 0 2px rgba(0,0,0,.95); }
+.crosshair.on { --c: #ff4d5e; }
+.hitmark { position: fixed; width: 30px; height: 30px; margin: -15px 0 0 -15px; pointer-events: none; z-index: 6; --c: #fff; }
+.hitmark i { position: absolute; left: 14px; top: 0; width: 2px; height: 30px; background: linear-gradient(var(--c) 0 34%, transparent 34% 66%, var(--c) 66%); }
+.hitmark i:nth-child(1) { transform: rotate(45deg); } .hitmark i:nth-child(2) { transform: rotate(-45deg); }
+.hitmark.kill { --c: #ff3d4d; }
+.lock { position: fixed; pointer-events: none; z-index: 4; --w: 60px; --c: #ffc43d; width: var(--w); height: var(--w); margin: calc(var(--w) / -2) 0 0 calc(var(--w) / -2);
+  background: linear-gradient(var(--c), var(--c)) 0 0 / 14px 2px no-repeat, linear-gradient(var(--c), var(--c)) 0 0 / 2px 14px no-repeat,
+    linear-gradient(var(--c), var(--c)) 100% 0 / 14px 2px no-repeat, linear-gradient(var(--c), var(--c)) 100% 0 / 2px 14px no-repeat,
+    linear-gradient(var(--c), var(--c)) 0 100% / 14px 2px no-repeat, linear-gradient(var(--c), var(--c)) 0 100% / 2px 14px no-repeat,
+    linear-gradient(var(--c), var(--c)) 100% 100% / 14px 2px no-repeat, linear-gradient(var(--c), var(--c)) 100% 100% / 2px 14px no-repeat;
+  filter: drop-shadow(0 0 2px rgba(0,0,0,.9)); transition: width .12s, height .12s, margin .12s; }
+.lock.fire { --c: #ff4d5e; }
+.lock span { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 4px); font: 600 11px var(--font-body); color: var(--c); white-space: nowrap; text-shadow: 0 0 3px #000; }
 
 /* Touch controls */
 .touch { position: fixed; inset: 0; pointer-events: none; }
@@ -112,6 +131,8 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .swatches { display: flex; flex-wrap: wrap; gap: 5px; } .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); cursor: pointer; padding: 0; } .swatch.on { border-color: #fff; box-shadow: 0 0 0 2px var(--go); } .swatch.locked { opacity: .45; }
 .pitem .pips { display: flex; gap: 4px; } .pitem .pips i { width: 18px; height: 6px; border-radius: 2px; background: rgba(255,255,255,.15); } .pitem .pips i.on { background: var(--go); }
 .plogin { display: flex; flex-wrap: wrap; gap: 8px; } .plogin input { flex: 1 1 140px; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 9px 10px; font: 14px var(--font-body); }
+.pcode { font: 700 20px var(--font-body); letter-spacing: .12em; color: var(--taxi); } .btn.danger { border-color: #b8233a; color: #ff8a9a; }
+.age-badge { position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); z-index: 60; border: 2px solid #fff; border-radius: 6px; padding: 2px 6px; font: 700 13px var(--font-body); color: #fff; background: rgba(0,0,0,.4); pointer-events: none; }
 .pmsg { min-height: 1em; font-size: 13px; color: var(--taxi); } .prow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
 .touch-on .speedo { bottom: calc(220px + env(safe-area-inset-bottom, 0px)); }
 .touch-on .hint { display: none; }
@@ -234,7 +255,9 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 <div id="stage"></div>
 <div id="loading" class="loading">Загрузка города…</div>
 <div id="hurt" class="hurt"></div>
-<div id="crosshair" class="crosshair" hidden></div>
+<div id="crosshair" class="crosshair" hidden><i></i><i></i><i></i><i></i><b></b></div>
+<div id="hitmark" class="hitmark" hidden><i></i><i></i></div>
+<div id="lockOn" class="lock" hidden><span id="lockDist"></span></div>
 
 <div id="hud" class="hud" hidden>
   <div class="hud-tl">
@@ -305,6 +328,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
   <div class="sel-stage"><div class="stage-name"><b id="stageName"></b><span id="stageNick"></span></div></div>
 </div>
 
+<div id="ageBadge" class="age-badge" hidden>12+</div>
 <div id="gate" class="gate" hidden><div id="gateCard" class="gate-card" role="dialog" aria-label="Вход в игру"></div></div>
 
 <div id="prof" class="prof" hidden>
@@ -335,6 +359,14 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
   </div>
 </div>
 
+<script>
+window.APP_VER = 'v14'; window.__errs = [];
+(function () {
+  function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
+  addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
+  addEventListener('unhandledrejection', function (e) { var m = String((e.reason && e.reason.message) || e.reason || ''); if (/fetch|network|load|abort/i.test(m)) return; add('promise: ' + m, ''); });
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
@@ -2101,13 +2133,28 @@ function initAudio() {
   if (audio.ctx) { if (audio.ctx.state === 'suspended') audio.ctx.resume(); return; }
   try {
     const C = window.AudioContext || window.webkitAudioContext; const ctx = new C();
-    const master = ctx.createGain(); master.gain.value = 0.45; master.connect(ctx.destination);
-    const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = nb.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const { master, nb, verb } = buildMix(ctx);
     const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 40;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320;
     const eg = ctx.createGain(); eg.gain.value = 0; osc.connect(lp); lp.connect(eg); eg.connect(master); osc.start();
-    Object.assign(audio, { ctx, master, nb, osc, eg });
+    Object.assign(audio, { ctx, master, nb, osc, eg, verb });
   } catch (e) { /* no audio */ }
+}
+// master -> a compressor (loud shots without clipping) -> speakers; a street echo (convolution reverb) on a send
+function buildMix(ctx) {
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 6; comp.attack.value = 0.002; comp.release.value = 0.18; comp.connect(ctx.destination);
+    const master = ctx.createGain(); master.gain.value = 0.45; master.connect(comp);
+    const ir = ctx.createBuffer(2, Math.floor(ctx.sampleRate * 1.6), ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const b = ir.getChannelData(ch); for (let i = 0; i < b.length; i++) { const t = i / b.length; b[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.2) * (t < 0.012 ? t / 0.012 : 1); } }
+    const verb = ctx.createConvolver(); verb.buffer = ir; const verbGain = ctx.createGain(); verbGain.gain.value = 0.5; verb.connect(verbGain); verbGain.connect(master);
+    const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = nb.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return { master, nb, verb };
+}
+// for recordings: route the sound effects into another (offline) context for a moment
+let audioSaved = null;
+function audioSwap(oc) {
+  if (oc) { audioSaved = { ctx: audio.ctx, master: audio.master, nb: audio.nb, verb: audio.verb, muted }; const m = buildMix(oc); Object.assign(audio, { ctx: oc }, m); muted = false; }
+  else if (audioSaved) { Object.assign(audio, audioSaved); muted = audioSaved.muted; audioSaved = null; }
 }
 function noise(dur, freq, vol, type) {
   if (!audio.ctx || muted) return;
@@ -2116,13 +2163,40 @@ function noise(dur, freq, vol, type) {
   const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(f); f.connect(g); g.connect(audio.master); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
 }
+// a gunshot from layers: the supersonic crack, the muzzle blast, a low punch and the echo between the buildings.
+// far = 0 (our gun) .. 1 (far away): distant shots lose the crack and highs and keep more echo.
+function gunshot(vol, far) {
+  if (!audio.ctx || muted) return;
+  const c = audio.ctx, t = c.currentTime + 0.001, j = 0.85 + Math.random() * 0.3, out = c.createGain();
+  out.gain.value = vol; out.connect(audio.master);
+  const send = c.createGain(); send.gain.value = 0.35 + far * 0.6; out.connect(send); send.connect(audio.verb);
+  const air = c.createBiquadFilter(); air.type = 'lowpass'; air.frequency.value = 12000 - far * 9500; air.connect(out);
+  const src = (dur, off) => { const s = c.createBufferSource(); s.buffer = audio.nb; s.start(t, off || Math.random() * 0.6); s.stop(t + dur + 0.02); return s; };
+  // 1) crack: a 6 ms burst of high noise
+  if (far < 0.8) { const s = src(0.012), hp = c.createBiquadFilter(), g = c.createGain(); hp.type = 'highpass'; hp.frequency.value = 3000 * j; g.gain.setValueAtTime(1.6 * (1 - far), t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.012); s.connect(hp); hp.connect(g); g.connect(air); }
+  // 2) blast: broadband noise whose tone drops fast
+  { const s = src(0.22), lp = c.createBiquadFilter(), g = c.createGain(); lp.type = 'lowpass'; lp.Q.value = 0.8; lp.frequency.setValueAtTime(5200 * j, t); lp.frequency.exponentialRampToValueAtTime(380, t + 0.16);
+    g.gain.setValueAtTime(1.1, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22); s.connect(lp); lp.connect(g); g.connect(air); }
+  // 3) punch: a sine sweeping down, felt more than heard
+  { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(150 * j, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.11);
+    g.gain.setValueAtTime(0.9 * (1 - far * 0.6), t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.14); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.16); }
+}
 const sfx = {
-  shot: () => noise(0.08, 1900, 0.22),
-  eshot: () => noise(0.1, 1100, 0.12),
+  shot: () => gunshot(0.55, 0),
+  eshot: () => gunshot(0.32, 0.55),
   hit: () => noise(0.05, 3200, 0.12),
   crash: (v) => noise(0.25, 500, Math.min(0.5, v * 0.03), 'lowpass'),
   boom: (b) => noise(0.9 * b, 180, 0.7, 'lowpass'),
+  // a typewriter key: a bright click and a short low thud, slightly different every time
+  key: () => { noise(0.028, 2400 + Math.random() * 1400, 0.07); tone(90 + Math.random() * 40, 0.035, 0.05); },
+  bell: () => tone(1760, 0.35, 0.04),
 };
+function tone(freq, dur, vol) {
+  if (!audio.ctx || muted) return;
+  const c = audio.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+  o.frequency.value = freq; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(audio.master); o.start(t); o.stop(t + dur + 0.02);
+}
 function setEngine(speed, on) {
   if (!audio.ctx) return;
   const t = audio.ctx.currentTime;
@@ -2327,9 +2401,9 @@ function updateBullets(dt) {
         const list = state.act === 1 ? enemyCars : enemies;
         for (const t of list) {
           if (t.dead || t.noTarget) continue; const r = state.act === 1 ? 2.5 : (t.boss ? 1.05 : 0.8);
-          if (segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos); sfx.hit(); if (state.act === 1) damageEnemyCar(t, b.dmg); else damageEnemy(t, b.dmg); break; }
+          if (segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos); sfx.hit(); if (state.act === 1) damageEnemyCar(t, b.dmg); else damageEnemy(t, b.dmg); hitMarker(t.dead || t.disabled); break; }
         }
-        if (!hit && HELI && heliHit(prevP, b.pos)) { hit = true; sfx.hit(); damageHeli(b.dmg); }
+        if (!hit && HELI && heliHit(prevP, b.pos)) { hit = true; sfx.hit(); damageHeli(b.dmg); hitMarker(HELI && HELI.crash); }
       } else {
         const t = state.act === 1 ? pc : hero, r = state.act === 1 ? 2.4 : 0.85;
         if (t && !t.dead && segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos, 0xff6a6a); damagePlayer(b.dmg); }
@@ -2434,7 +2508,14 @@ function advanceDialog() {
 }
 function updateDialog(dt) {
   const text = dlg.lines[dlg.i] && dlg.lines[dlg.i][1];
-  if (text && dlg.shown < text.length) { dlg.shown = Math.min(text.length, dlg.shown + dt * 55); $('dlgText').textContent = text.slice(0, Math.floor(dlg.shown)); }
+  if (text && dlg.shown < text.length) {
+    const before = Math.floor(dlg.shown);
+    dlg.shown = Math.min(text.length, dlg.shown + dt * 55); const now = Math.floor(dlg.shown);
+    $('dlgText').textContent = text.slice(0, now);
+    // the typewriter: a key sound for new letters (not spaces), at most one every 40 ms; a bell at the end of the line
+    if (now > before && /\S/.test(text.slice(before, now)) && state.t - (dlg.keyT || 0) > 0.04) { dlg.keyT = state.t; sfx.key(); }
+    if (now >= text.length && before < text.length) sfx.bell();
+  }
 }
 
 // ---------------- act 1: the chase ----------------
@@ -2646,7 +2727,7 @@ function updateFoot(dt) {
       if (dh < 50 && (Math.abs(wrapA(hb - hero.aimAng)) < 0.3 || (noFoe && isTouch))) dir = HELI.pos.clone().sub(muzzle).normalize();
     }
     dir.x += rand(-0.025, 0.025); dir.z += rand(-0.025, 0.025); dir.normalize();
-    fire(muzzle.addScaledVector(dir, 0.9), dir, 95, 20 * P.dmg, 'p');
+    fire(muzzle.addScaledVector(dir, 0.9), dir, 95, 20 * P.dmg, 'p'); AIM.spread = Math.min(1, AIM.spread + 0.45);
   }
   // enemies
   for (const e of enemies) {
@@ -4186,8 +4267,7 @@ function updateHud(dt) {
   renderBars(bars, timer, tbad);
   $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : (footView === 'top' ? 'W A S D — бег · мышь — прицел · клик — огонь' : 'W A S D — бег · мышь — обзор · клик — огонь') + ' · V — вид · B — щит · Esc — пауза';
   updateBoostsHud();
-  const ch = $('crosshair'); const centre = state.mode === 'foot' && footView !== 'top', showCh = centre || (state.mode === 'foot' && mouse.has && !isTouch);
-  ch.hidden = !showCh; if (showCh) { ch.style.left = (centre ? window.innerWidth / 2 : mouse.x) + 'px'; ch.style.top = (centre ? window.innerHeight / 2 : mouse.y) + 'px'; }
+  updateSight(dt);
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
   hurt = Math.max(0, hurt - dt * 1.5); $('hurt').style.opacity = hurt;
   drawMinimap();
@@ -4238,11 +4318,28 @@ function applyProgress(pr) {
 async function cloudLoadProfile(user) {
   const { data: row, error } = await CLOUD.sb.from('profiles').select('login, name, data, progress, is_tester').eq('id', user.id).maybeSingle();
   if (error || !row) return 'Профиль не найден на сервере.';
-  const d = profDefaults(row.name || row.login, row.login), s = row.data || {};
-  PROF = Object.assign(d, s, { up: Object.assign(d.up, s.up), inv: Object.assign(d.inv, s.inv), st: Object.assign(d.st, s.st) });
-  PROF.login = row.login; PROF.name = row.name || row.login; PROF.god = !!row.is_tester; PROF.cloud = true;
-  CLOUD.user = user; applyProgress(row.progress); store.set('nf-last-login', row.login);
-  applyLoadout(); updateProfChip(); return null;
+  const guest = store.get(profKey(null)), cloudData = row.data || {};
+  const score = (x) => (x && x.st ? (x.st.earned || 0) + (x.st.chapters || 0) * 100 : 0);
+  const cs = score(cloudData), gs = score(guest);
+  CLOUD.hold = true;   // nothing goes to the cloud until we know which side to keep
+  const finish = (src) => {
+    const d = profDefaults(row.name || row.login, row.login);
+    PROF = Object.assign(d, src, { up: Object.assign(d.up, src.up), inv: Object.assign(d.inv, src.inv), st: Object.assign(d.st, src.st) });
+    PROF.login = row.login; PROF.name = row.name || row.login; PROF.god = !!row.is_tester; PROF.cloud = true;
+    CLOUD.user = user; CLOUD.hold = false; applyProgress(row.progress); store.set('nf-last-login', row.login);
+    applyLoadout(); updateProfChip();
+    if (src === guest) { try { localStorage.removeItem(profKey(null)); } catch (e) { /* storage unavailable */ } saveProfile(); }
+  };
+  if (gs > 0 && cs === 0) { finish(guest); toast('Прогресс гостя перенесён в профиль', 2); }
+  else if (gs > 0 && cs > 0 && Math.abs(gs - cs) > 50) {
+    // both sides have progress: the player decides
+    const desc = (x) => `${(x.coins || 0).toLocaleString('ru-RU')} монет, глав пройдено: ${(x.st && x.st.chapters) || 0}, машин: ${(x.cars || ['taxi']).length}`;
+    await new Promise((ok) => showModal(`<div class="kicker">Сохранения</div><h2 class="h2">Где продолжить?</h2>
+      <p class="lead">На сервере: ${desc(cloudData)}.<br>На этом устройстве (гость): ${desc(guest)}.</p>
+      <div class="btns"><button id="kCloud" class="btn primary" type="button">Взять с сервера</button><button id="kLocal" class="btn" type="button">Взять с устройства</button></div>
+      <div class="note">Второй вариант заменит сохранение на сервере.</div>`, { kCloud: () => { hideModal(); finish(cloudData); ok(); }, kLocal: () => { hideModal(); finish(guest); ok(); } }));
+  } else finish(cloudData);
+  return null;
 }
 async function cloudRestore() {
   if (!cloudInit()) return false;
@@ -4250,7 +4347,7 @@ async function cloudRestore() {
   return false;
 }
 async function cloudSave() {
-  CLOUD.saveT = 0; if (!CLOUD.sb || !CLOUD.user || !PROF.cloud) return;
+  CLOUD.saveT = 0; if (!CLOUD.sb || !CLOUD.user || !PROF.cloud || CLOUD.hold) return;
   const { god, cloud, login, name, ...data } = PROF;
   try { await CLOUD.sb.from('profiles').update({ name: String(name || '').slice(0, 24), data, progress: collectProgress() }).eq('id', CLOUD.user.id); } catch (e) { /* will retry on the next save */ }
 }
@@ -4473,9 +4570,14 @@ function renderProfile() {
     <div class="pstats">${[['Глав пройдено', S.chapters], ['Эпизодов', S.eps.length + ' из 10'], ['Машин сбито', S.carKills], ['Противников', S.footKills], ['Боссов', S.bosses], ['Достижений', Object.keys(PROF.ach).length + ' из ' + ACH.length], ['В игре', Math.round(S.time / 60) + ' мин']].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div>
     <div class="plabel">Костюм героя</div><div class="pitems"><div class="pitem${!PROF.outfit ? ' on' : ''}"><b>Свой</b><span>как на портрете</span><button class="btn sm" data-act="outfit" data-id="" type="button">${!PROF.outfit ? 'Надет' : 'Надеть'}</button></div>${outfits}</div>
     <div class="plabel">Вход</div>
-    ${PROF.login ? `<div class="prow"><span>Вы вошли как <b>${esc(PROF.login)}</b>.</span><button class="btn sm" data-act="logout" type="button">Выйти</button></div>` : ''}
-    <div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
-      <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>
+    ${PROF.cloud ? `<div class="prow"><span>Профиль <b>${esc(PROF.login)}</b> на сервере.</span>${inMiniApp ? '' : '<button class="btn sm" data-act="logout" type="button">Выйти</button>'}</div>` : ''}
+    ${inMiniApp ? (PROF.cloud ? '' : `<div class="prow"><span>Вход через ${PLATFORM === 'vk' ? 'ВКонтакте' : PLATFORM === 'tg' ? 'Telegram' : 'MAX'}.</span><button class="btn sm primary" data-act="pflogin" type="button">Войти</button></div>`)
+      : `<div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
+      <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>`}
+    <div class="plabel">Один аккаунт на всех устройствах</div>
+    <div class="prow">${PROF.cloud ? `<button class="btn sm" data-act="getcode" type="button">Получить код для другого устройства</button>${CLOUD.code ? `<b class="pcode">${CLOUD.code}</b><small>действует 10 минут</small>` : ''}` : '<span>Войди в профиль, чтобы получить код.</span>'}</div>
+    <div class="plogin"><input id="pCode" type="text" placeholder="Код с другого устройства" maxlength="9" autocapitalize="characters"><button class="btn sm" data-act="usecode" type="button">Войти по коду</button></div>
+    ${PROF.cloud ? '<div class="prow"><button class="btn sm danger" data-act="delete" type="button">Удалить аккаунт</button></div>' : ''}
     <div class="pmsg">${esc(profMsg)}</div>
     <div class="note">${PROF.cloud ? 'Профиль хранится на сервере и доступен на любом устройстве.' : 'Гость: прогресс хранится только в этом браузере. Войди или создай профиль, чтобы сохранить его на сервере.'}</div>`;
   } else if (profTab === 'garage') {
@@ -4507,6 +4609,14 @@ function profAction(act, id) {
     (act === 'login' ? profLogin : profRegister)($('pLogin').value, $('pPass').value).then((err) => { CLOUD.busy = false; profMsg = err || (PROF.god ? 'Тестовый профиль: бессмертие и бесплатные покупки включены.' : 'Готово: профиль загружен с сервера.'); renderProfile(); });
     return;
   }
+  else if (act === 'pflogin') { platformLogin().then((err) => { profMsg = err || 'Готово: профиль загружен.'; renderProfile(); }); return; }
+  else if (act === 'getcode') { getLinkCode().then((j) => { if (j.code) CLOUD.code = j.code.slice(0, 4) + '-' + j.code.slice(4); profMsg = j.error || 'Введи этот код на другом устройстве или в другой площадке в течение 10 минут.'; renderProfile(); }); return; }
+  else if (act === 'usecode') { const v = $('pCode').value; profMsg = 'Связываюсь с сервером…'; renderProfile(); loginWithCode(v).then((err) => { profMsg = err || 'Готово: вошли в аккаунт по коду.'; renderProfile(); }); return; }
+  else if (act === 'delete') {
+    showModal(`<h2 class="h2 bad">Удалить аккаунт?</h2><p class="lead">Профиль, монеты, машины и прогресс будут удалены с сервера навсегда.</p><div class="btns"><button id="dYes" class="btn primary" type="button">Удалить</button><button id="dNo" class="btn" type="button">Отмена</button></div>`,
+      { dYes: () => { hideModal(); deleteAccount().then((err) => { profMsg = err || 'Аккаунт удалён. Сейчас играет гость.'; renderProfile(); }); }, dNo: hideModal });
+    return;
+  }
   else if (act === 'logout') { profLogout().then(() => { profMsg = 'Вы вышли. Сейчас играет гость.'; renderProfile(); }); return; }
   else if (act === 'outfit') { PROF.outfit = id || null; saveProfile(); applyLoadout(); }
   else if (act === 'buy-outfit') { if (pay(OUTFITS[id].price)) { PROF.outfits.push(id); PROF.outfit = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
@@ -4526,6 +4636,123 @@ function profAction(act, id) {
   renderProfile();
 }
 
+// ---------------- platforms: own site, Telegram, VK and MAX mini apps; one account everywhere ----------------
+// The platform signs the launch data; the server (nf-login) checks the signature and returns the player's session.
+// Inside VK: no login/password forms, an age badge, sound pauses when the app is hidden (VK Mini Apps rules).
+const PLATFORM = (() => {
+  const q = location.search, h = location.hash;
+  let p = /[?&]vk_app_id=\d+/.test(q) && /[?&]sign=/.test(q) ? 'vk' : /tgWebAppData=/.test(h) ? 'tg' : (/WebAppData=/.test(h) || /[?&]src=max\b/.test(q)) ? 'max' : '';
+  try { if (p) { sessionStorage.setItem('nf-platform', p); sessionStorage.setItem('nf-launch', JSON.stringify({ q, h })); } else p = sessionStorage.getItem('nf-platform') || ''; } catch (e) { /* storage unavailable */ }
+  return p || 'web';
+})();
+const LAUNCH = (() => { try { return JSON.parse(sessionStorage.getItem('nf-launch')) || { q: location.search, h: location.hash }; } catch (e) { return { q: location.search, h: location.hash }; } })();
+const inMiniApp = PLATFORM !== 'web';
+document.documentElement.classList.add('pf-' + PLATFORM);
+function loadScript(src) { return new Promise((ok) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = () => ok(true); s.onerror = () => ok(false); document.head.appendChild(s); }); }
+// Telegram and MAX bridges: ready/expand; the signed launch data also comes in the address (#tgWebAppData / #WebAppData)
+const hashParam = (k) => { try { return new URLSearchParams(LAUNCH.h.slice(1)).get(k) || ''; } catch (e) { return ''; } };
+if (PLATFORM === 'tg') loadScript('https://telegram.org/js/telegram-web-app.js').then(() => { try { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } catch (e) { /* no bridge */ } });
+if (PLATFORM === 'max') loadScript('https://st.max.ru/js/max-web-app.js').then(() => { try { window.WebApp.ready(); window.WebApp.expand(); } catch (e) { /* no bridge */ } });
+function platformProof() {
+  if (PLATFORM === 'tg') { const d = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || hashParam('tgWebAppData'); return d ? { initData: d } : null; }
+  if (PLATFORM === 'max') { const d = (window.WebApp && window.WebApp.initData) || hashParam('WebAppData'); return d ? { max_init: d } : null; }
+  if (PLATFORM === 'vk') return { vk_launch: { params: LAUNCH.q, name: '' } };
+  return null;
+}
+// a VK bridge without libraries (the protocol of @vkontakte/vk-bridge): native handlers in the apps, postMessage on the web
+const VK = { seq: 0, frame: undefined, wait: {} };
+function vkBridge(method, params, ms) {
+  return new Promise((ok) => {
+    const request_id = 'nf' + (++VK.seq), data = Object.assign({}, params || {}, { request_id });
+    VK.wait[request_id] = ok; setTimeout(() => { if (VK.wait[request_id]) { delete VK.wait[request_id]; ok(null); } }, ms || 8000);
+    try {
+      if (window.AndroidBridge && window.AndroidBridge[method]) window.AndroidBridge[method](JSON.stringify(data));
+      else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[method]) window.webkit.messageHandlers[method].postMessage(data);
+      else window.parent.postMessage({ handler: method, params: data, type: 'vk-connect', webFrameId: VK.frame, connectVersion: '2.15.0' }, '*');
+    } catch (e) { ok(null); }
+  });
+}
+function vkEvent(d) {
+  if (!d || typeof d.type !== 'string') return;
+  if (d.type === 'VKWebAppViewHide') appHidden(true); else if (d.type === 'VKWebAppViewRestore') appHidden(false);
+  const r = d.data && d.data.request_id; if (r && VK.wait[r]) { VK.wait[r](d.data); delete VK.wait[r]; }
+}
+if (PLATFORM === 'vk') {
+  window.addEventListener('VKWebAppEvent', (e) => vkEvent(e && e.detail));
+  window.addEventListener('message', (e) => {
+    let d = e.data; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (err) { return; } }
+    if (!d || typeof d !== 'object') return;
+    if (d.type === 'vk-connect' || d.type === 'VKWebAppEvent') d = d.detail || d.data || d;
+    if (d && d.type === 'VKWebAppSettings') { VK.frame = d.frameId; return; }
+    if (d && /^VKWebApp/.test(d.type || '')) vkEvent(d);
+  });
+  vkBridge('VKWebAppInit');
+  vkBridge('VKWebAppSetViewSettings', { status_bar_style: 'light', action_bar_color: '#0b0d1f', navigation_bar_color: '#0b0d1f' });
+}
+// sound and the game pause whenever the app or the tab is hidden
+let hiddenPaused = false;
+function appHidden(hide) {
+  if (hide) { if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend(); if (state.mode === 'drive' || state.mode === 'foot') { hiddenPaused = true; pauseGame(); } }
+  else if (audio.ctx && audio.ctx.state === 'suspended' && !muted) audio.ctx.resume();
+}
+document.addEventListener('visibilitychange', () => appHidden(document.hidden));
+// sign in through the platform once per launch; failing that, the player is a guest
+async function platformLogin(code) {
+  const proof = platformProof(); if (!proof || !cloudInit()) return 'Вход через площадку недоступен.';
+  if (PLATFORM === 'vk' && !code) { const info = await vkBridge('VKWebAppGetUserInfo'); if (info) proof.vk_launch.name = [info.first_name, info.last_name].filter(Boolean).join(' '); }
+  try {
+    const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(Object.assign({ code }, proof)) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) return j.error === 'not_configured' ? 'Вход через эту площадку ещё не настроен.' : j.error === 'bad_code' ? 'Код неверный или устарел.' : 'Не удалось войти через площадку.';
+    const { data, error } = await CLOUD.sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
+    if (error || !data.user) return 'Не удалось войти через площадку.';
+    return await cloudLoadProfile(data.user);
+  } catch (e) { return NO_SERVER; }
+}
+// codes: get one here, enter it on another device or platform — one account everywhere
+async function getLinkCode() {
+  if (!CLOUD.sb || !PROF.cloud) return { error: 'Сначала войди в профиль.' };
+  const { data } = await CLOUD.sb.auth.getSession(); const tok = data && data.session && data.session.access_token;
+  try {
+    const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ action: 'link_code', access_token: tok }) });
+    const j = await r.json().catch(() => ({})); return r.ok ? j : { error: j.error === 'too_often' ? 'Слишком много кодов за час. Попробуй позже.' : 'Не удалось получить код.' };
+  } catch (e) { return { error: NO_SERVER }; }
+}
+async function loginWithCode(code) {
+  code = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 8) return 'Код — 8 букв и цифр.';
+  if (inMiniApp) return platformLogin(code);
+  if (!cloudInit()) return NO_SERVER;
+  try {
+    const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ code }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) return 'Код неверный или устарел.';
+    const { data, error } = await CLOUD.sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
+    return error || !data.user ? 'Не удалось войти.' : await cloudLoadProfile(data.user);
+  } catch (e) { return NO_SERVER; }
+}
+async function deleteAccount() {
+  if (!CLOUD.sb || !PROF.cloud) return 'Нет профиля на сервере.';
+  const { data } = await CLOUD.sb.auth.getSession(); const tok = data && data.session && data.session.access_token;
+  try {
+    const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ action: 'delete_account', access_token: tok }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return j.error === 'tester' ? 'Тестовый профиль удаляется только разработчиком.' : 'Не удалось удалить аккаунт.';
+  } catch (e) { return NO_SERVER; }
+  try { await CLOUD.sb.auth.signOut(); } catch (e) { /* already gone */ }
+  try { localStorage.removeItem(profKey(null)); for (let e = 2; e <= 30; e++) localStorage.removeItem('nf-ep' + e + '-ch'); localStorage.removeItem('nf-last'); } catch (e) { /* storage unavailable */ }
+  store.set('nf-last-login', null); loadProfile(); return null;
+}
+// script errors go to the server (client_errors): version, platform, browser, message, place
+window.__errFlush = () => {
+  if (!window.__errs || !window.__errs.length || window.__errSending) return;
+  const rows = window.__errs.splice(0, 8).map((e) => ({ ver: APP_VER, platform: PLATFORM, browser: navigator.userAgent.slice(0, 200), msg: e.m, place: e.p }));
+  window.__errSending = true;
+  fetch(SB_URL + '/rest/v1/client_errors', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify(rows) })
+    .catch(() => {}).then(() => { window.__errSending = false; });
+};
+setTimeout(() => window.__errFlush(), 3000);
+
 // ---------------- entry: «install the game» banner, then registration ----------------
 let deferredInstall = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; if (!$('gate').hidden && gateStep === 'install') renderGate(); });
@@ -4539,6 +4766,7 @@ function platformHint() {
 }
 let gateStep = 'install', gateMode = 'register', gateMsg = '';
 function startGate() {
+  if (inMiniApp) { platformLogin().then((err) => { if (!err) toast(PROF.god ? 'Тестовый профиль' : `Привет, ${PROF.name}!`, 2); updateProfChip(); }); return; }
   const needInstall = !isStandalone() && !store.get('nf-installed');
   gateStep = needInstall ? 'install' : 'register';
   if (store.get('nf-last-login') && !PROF.login) gateMode = 'login';
@@ -4654,8 +4882,49 @@ function viewAim() {
     const a = Math.abs(wrapA(Math.atan2(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z) - viewYaw));
     if (a < ba && los(hero.pos, e.pos)) { ba = a; best = e; }
   }
+  AIM.foot = best;
   const ang = best ? Math.atan2(best.pos.x - hero.pos.x, best.pos.z - hero.pos.z) : viewYaw;
   return hero.pos.clone().add(new V3(Math.sin(ang), 0, Math.cos(ang)).multiplyScalar(12));
+}
+// the sight: what the gun is aimed at, recoil spread and hit markers
+const AIM = { foot: null, car: null, spread: 0, hit: 0, kill: false };
+function carAimTarget() {
+  if (!pc) return null;
+  let best = null, bd = 60 * P.aim;
+  for (const e of enemyCars) { const d = e.pos.distanceTo(pc.pos); if (!e.dead && !e.noTarget && !e.disabled && d < bd && los(pc.pos, e.pos)) { bd = d; best = e; } }
+  if (HELI && !HELI.crash) { const dh = Math.hypot(HELI.pos.x - pc.pos.x, HELI.pos.z - pc.pos.z); if (dh < 60 && (!best || dh < bd)) return HELI; }
+  return best;
+}
+function hitMarker(kill) { AIM.hit = 0.18; AIM.kill = !!kill; }
+const _sp = new V3();
+function updateSight(dt) {
+  AIM.spread = Math.max(0, AIM.spread - dt * 4); AIM.hit = Math.max(0, AIM.hit - dt);
+  const ch = $('crosshair'), lk = $('lockOn'), hm = $('hitmark');
+  const foot = state.mode === 'foot', drive = state.mode === 'drive' && !(MIS && MIS.noFire && state.ep >= 2);
+  const centre = foot && footView !== 'top', showCh = centre || (foot && mouse.has && !isTouch);
+  ch.hidden = !showCh;
+  let cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  if (showCh) {
+    if (!centre) { cx = mouse.x; cy = mouse.y; }
+    ch.style.left = cx + 'px'; ch.style.top = cy + 'px';
+    let on = centre ? !!(AIM.foot && !AIM.foot.dead) : false;
+    if (!centre && hero) { ndc.set(mouse.x / window.innerWidth * 2 - 1, -(mouse.y / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera); if (ray.ray.intersectPlane(aimPlane, aimPt)) on = enemies.some((e) => !e.dead && Math.hypot(e.pos.x - aimPt.x, e.pos.z - aimPt.z) < 1.4); }
+    ch.classList.toggle('on', on); ch.style.setProperty('--s', (AIM.spread * 7).toFixed(1) + 'px');
+  }
+  // in the car: a lock-on frame around whatever the gun will fire at
+  const t = drive ? carAimTarget() : null;
+  lk.hidden = !t;
+  if (t) {
+    _sp.set(t.pos.x, t === HELI ? t.pos.y : 1.1, t.pos.z).project(camera);
+    if (_sp.z > 1) lk.hidden = true;
+    else {
+      const x = (_sp.x + 1) / 2 * window.innerWidth, y = (1 - _sp.y) / 2 * window.innerHeight, d = Math.hypot(t.pos.x - pc.pos.x, t.pos.z - pc.pos.z);
+      lk.style.left = x + 'px'; lk.style.top = y + 'px'; lk.style.setProperty('--w', Math.round(clamp(1600 / Math.max(8, d), 34, 110)) + 'px');
+      lk.classList.toggle('fire', fireHeld()); $('lockDist').textContent = Math.round(d) + ' м';
+      if (AIM.hit > 0) { cx = x; cy = y; }
+    }
+  }
+  hm.hidden = !(AIM.hit > 0); if (AIM.hit > 0) { hm.style.left = cx + 'px'; hm.style.top = cy + 'px'; hm.classList.toggle('kill', AIM.kill); hm.style.opacity = Math.min(1, AIM.hit * 8); }
 }
 function footCamera() {
   const F = new V3(Math.sin(viewYaw), 0, Math.cos(viewYaw)), R = new V3(-Math.cos(viewYaw), 0, Math.sin(viewYaw));
@@ -4978,7 +5247,7 @@ function loop(now) {
   beam.material.opacity = 0.18 + Math.sin(state.t * 3) * 0.06;
   const sel = state.mode === 'select', kk = Math.min(1, dt * 4);
   keyLight.intensity += ((sel ? 1.5 : 0) - keyLight.intensity) * kk; rimLight.intensity += ((sel ? 2.4 : 0) - rimLight.intensity) * kk;
-  if (!$('hud').hidden) updateHud(dt);
+  if (!$('hud').hidden) updateHud(dt); else if (!$('crosshair').hidden || !$('lockOn').hidden) { $('crosshair').hidden = true; $('lockOn').hidden = true; $('hitmark').hidden = true; }
   render();
 }
 
@@ -4993,14 +5262,14 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   pvEnemy = Object.assign(makeCar(0x2b2b33, false), { pos: new V3(), h: PI / 2 });
   applyChar(); updateProfChip(); updateBoostsHud();
   $('loading').hidden = true;
-  showPreview();
+  showPreview(); $('ageBadge').hidden = PLATFORM !== 'vk';
   // a signed-in player skips the entry screen; wait for the server at most 4 s
   Promise.race([cloudRestore(), new Promise((r) => setTimeout(() => r(false), 4000))]).then(() => { updateProfChip(); startGate(); });
   requestAnimationFrame(loop);
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>
