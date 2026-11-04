@@ -109,7 +109,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .tbtn.melee { display: none; --c: #ff8a3a; right: calc(128px + var(--sar)); bottom: calc(122px + var(--sab)); width: 62px; height: 62px; }
 .touch.on-foot .tbtn.melee { display: grid; }
 .tbtn.horn { display: none; --c: #ffd23a; right: calc(194px + var(--sar)); bottom: calc(40px + var(--sab)); width: 62px; height: 62px; }
-body.online .tbtn.horn { display: grid; } body.online .tbtn.nitro, body.online .tbtn.shield, body.online .tbtn.fire, body.online:not(.job) #nav, body.online .boosts { display: none; }
+body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, body.online:not(.task) .tbtn.shield, body.online:not(.task) .tbtn.fire, body.online:not(.job):not(.task) #nav, body.online:not(.task) .boosts { display: none; }
 .chat { position: fixed; left: calc(12px + var(--sal)); top: calc(110px + var(--sat)); width: min(380px, calc(100% - 24px - var(--sal) - var(--sar))); max-height: calc(100% - 260px - var(--sat) - var(--sab)); min-height: 160px; display: grid; grid-template-rows: 1fr auto auto; gap: 6px; background: rgba(8,10,24,.88); border: 1px solid var(--line); border-radius: 10px; padding: 10px; z-index: 30; }
 .chat-list { overflow-y: auto; display: grid; gap: 4px; align-content: start; font-size: 14px; line-height: 1.35; }
 .cmsg b { color: var(--taxi); } .clink { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 3px; }
@@ -321,7 +321,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
     <div class="stats"><b id="coins">0</b> монет · <b id="kills">0</b> сбито</div>
     <div id="boosts" class="stats boosts"></div>
     <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
-    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnJob" class="chip hud-chip" type="button" hidden>Отказаться от заказа</button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
+    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnJob" class="chip hud-chip" type="button" hidden>Отказаться от заказа</button><button id="btnTask" class="chip hud-chip" type="button" hidden>Задания</button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
     <button id="mute" class="mute" type="button">Звук: вкл</button>
   </div>
   <div id="bars" class="bars" hidden></div>
@@ -398,6 +398,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <div id="chat" class="chat" hidden><div id="chatList" class="chat-list" aria-live="polite"></div><div class="chat-row"><input id="chatInput" type="text" maxlength="140" placeholder="Сообщение…" autocomplete="off" autocapitalize="sentences"><button id="chatSend" class="btn sm primary" type="button">Отправить</button><button id="chatClose" class="btn sm" type="button">✕</button></div><small id="chatHint" class="note"></small></div>
+<div id="tasks" class="chat party" hidden><div class="ptitle"><b>Задания</b><button id="tasksClose" class="btn sm" type="button">✕</button></div><div id="tasksBody" class="pbody"></div></div>
 <div id="party" class="chat party" hidden><div class="ptitle"><b>Группа и голос</b><button id="partyClose" class="btn sm" type="button">✕</button></div><div id="partyBody" class="pbody"></div></div>
 <div id="dialog" class="dialog" hidden>
   <div id="dlgPortrait" class="portrait">К</div>
@@ -420,7 +421,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v27'; window.__errs = [];
+window.APP_VER = 'v28'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -3230,7 +3231,7 @@ function damageEnemyCar(e, d) {
   if (e.invuln || e.disabled) return;
   e.hp -= d;
   if (e.noExplode) { if (e.hp <= 0) { e.hp = 0; e.disabled = true; e.noTarget = true; toast(e.kind === 'van' ? 'Фургон заглох!' : e.kind === 'plane' ? 'Самолёт обездвижен!' : e.kind === 'train' ? 'Локомотив встал!' : 'Машина встала', 2); sfx.crash(12); shake = Math.min(1.2, shake + 0.4); } return; }
-  if (e.hp <= 0 && !e.dead) { e.dead = true; explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); }
+  if (e.hp <= 0 && !e.dead) { e.dead = true; explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); if (TASK.cur && TASK.cur.group && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'kill', payload: { id: TASK.cur.id } }); }
 }
 function damageEnemy(e, d) {
   e.hp -= d; e.hitT = 0.12; if (e.hp > 0) hitHuman(e);
@@ -3798,6 +3799,7 @@ function finishChapter(n, coins, lines, next) {
   playDialog(lines, next);
 }
 function failChapter(title, text) {
+  if (MIS && MIS.online) { taskFail(title); return; }
   state.mode = 'dead'; setEngine(0, false);
   showModal(`
     <div class="kicker">Эпизод ${state.ep} · ${MIS.title}</div>
@@ -6186,7 +6188,8 @@ function startOnline() {
   ONL.id = (CLOUD.user && CLOUD.user.id) || ONL.id || ('g' + Math.random().toString(36).slice(2, 10));
   joinRoom(1);
   botsClear(); for (let i = 0, k = 0; i < 8 && k < 30; k++) if (botSpawn(i + k)) i++;
-  $('btnChat').hidden = false; $('btnParty').hidden = false; renderChat();
+  $('btnChat').hidden = false; $('btnParty').hidden = false; $('btnTask').hidden = false; TASK.cur = null; renderChat();
+  setTimeout(() => { if (ONL.on) toast('Задания — кнопка «Задания» вверху: одиночные, а в группе — групповые', 3); }, 2500);
 }
 function joinRoom(n) {
   leaveRoom(true);
@@ -6217,7 +6220,7 @@ function leaveRoom(keep) {
   if (ONL.ch) { try { CLOUD.sb.removeChannel(ONL.ch); } catch (e) { /* gone */ } ONL.ch = null; }
   if (ONL.chat) { try { CLOUD.sb.removeChannel(ONL.chat); } catch (e) { /* gone */ } ONL.chat = null; }
   for (const id of [...ONL.others.keys()]) dropOther(id);
-  if (!keep) { ONL.on = false; document.body.classList.remove('online'); partyLeave(true); botsClear(); JOBS.cur = null; document.body.classList.remove('job'); if ($('btnJob')) $('btnJob').hidden = true; if ($('btnChat')) { $('btnChat').hidden = true; $('chat').hidden = true; ONL.chatOpen = false; $('btnParty').hidden = true; $('party').hidden = true; PARTY.open = false; } }
+  if (!keep) { ONL.on = false; document.body.classList.remove('online'); partyLeave(true); botsClear(); JOBS.cur = null; if (TASK.cur) { TASK.cur = null; document.body.classList.remove('task'); } if ($('btnTask')) { $('btnTask').hidden = true; $('tasks').hidden = true; TASK.open = false; } document.body.classList.remove('job'); if ($('btnJob')) $('btnJob').hidden = true; if ($('btnChat')) { $('btnChat').hidden = true; $('chat').hidden = true; ONL.chatOpen = false; $('btnParty').hidden = true; $('party').hidden = true; PARTY.open = false; } }
 }
 function onlinePos(q) {
   if (!q || !q.i || q.i === ONL.id || typeof q.x !== 'number') return;
@@ -6287,6 +6290,7 @@ async function reportMsg(id) {
 function toggleChat(v) {
   ONL.chatOpen = v === undefined ? !ONL.chatOpen : v; $('chat').hidden = !ONL.chatOpen; $('btnChat').classList.remove('new');
   if (ONL.chatOpen && PARTY.open) { PARTY.open = false; $('party').hidden = true; }
+  if (ONL.chatOpen && TASK.open) { TASK.open = false; $('tasks').hidden = true; }
   if (ONL.chatOpen) { renderChat(); if (!isTouch) $('chatInput').focus(); } else $('chatInput').blur();
 }
 
@@ -6310,6 +6314,9 @@ function partyJoin(code, fresh) {
   ch.on('presence', { event: 'sync' }, partySync);
   ch.on('broadcast', { event: 'sig' }, ({ payload }) => { if (payload && payload.to === ONL.id) voiceSignal(payload); });
   ch.on('broadcast', { event: 'talk' }, ({ payload }) => { const m = payload && PARTY.members.get(payload.i); if (m) { m.talking = !!payload.on; renderParty(); const o = ONL.others.get(payload.i); if (o && payload.on && !PARTY.muted.has(payload.i)) chatBubble(o, '🎙'); } });
+  ch.on('broadcast', { event: 'task' }, ({ payload }) => { if (payload && !TASK.cur && payload.id > T_SOLO) { toast('Группа начала задание', 1.6); taskStart(payload.id, true); } });
+  ch.on('broadcast', { event: 'tdone' }, ({ payload }) => { if (payload && TASK.cur && TASK.cur.id === payload.id) taskDone(true, true); });
+  ch.on('broadcast', { event: 'kill' }, ({ payload }) => { if (payload && TASK.cur && TASK.cur.id === payload.id) state.carKills++; });
   ch.subscribe((st) => { if (st === 'SUBSCRIBED') { ch.track(partyMe()); setTimeout(partyCheckFull, 900); } });
   PARTY.ch = ch; renderParty();
   toast(fresh ? `Группа создана: ${code}. Отправь код друзьям` : `Ты в группе ${code}`, 2.4);
@@ -6561,6 +6568,111 @@ function jobsUpdate(dt) {
   }
 }
 
+// ---------------- tasks in «Открытый город»: 30 000 numbered tasks from a generator ----------------
+// Numbers 1–20 000 are solo tasks (a player without a group takes them in order), 20 001–30 000 are group tasks
+// (the group's first member picks, everyone in the group plays it; kills in a hunt are shared, anyone finishing finishes it for all).
+// A task number always builds the same task: type, places, client, cargo, difficulty, reward and the briefing.
+const T_SOLO = 20000, T_ALL = 30000;
+const TASK = { cur: null, id: 0, offer: 0, free: null, open: false };
+const T_CLIENTS = ['Марк из диспетчерской', 'Лёва-бухгалтер', 'Соня', 'капитан Орлова', 'хозяин кафе «Фонарь»', 'дежурная по вокзалу', 'бригадир порта', 'мэрия', 'антиквар с Восточной', 'цветочница с площади', 'аптекарь', 'знакомый механик', 'радио «Полночь»', 'ночной сторож склада', 'студентка консерватории', 'шеф-повар «Рамена»', 'пожилая пара с вокзала', 'курьер банка «Гранит»', 'администратор отеля', 'тренер фитнес-клуба', 'владелец ломбарда', 'водитель автобуса №7', 'журналист «Ночных новостей»', 'дед Савелий', 'диспетчер аэропорта'];
+const T_CARGO = ['кейс с документами', 'торт на свадьбу', 'редкую пластинку', 'лекарства', 'ключи от склада', 'сумку с выручкой', 'старинные часы', 'посылку без адреса', 'букет на юбилей', 'запчасти для автобуса', 'флешку с записями', 'скрипку', 'горячую пиццу', 'чемодан туриста', 'папку с чертежами', 'коробку с пирожными', 'котёнка в переноске', 'конверт с печатью', 'фотоплёнку', 'подарок для мэра'];
+const T_GANGS = ['Шакалы', 'Маски', 'Стрелочники', 'Ночные', 'Портовые', 'Гастролёры', 'Красные фары', 'Глушители', 'Тени', 'Монтировки'];
+const T_TARGETS = ['чёрный седан', 'серый фургон', 'белый универсал', 'угнанное такси', 'бронированный внедорожник', 'грузовик без номеров', 'красный хэтч', 'машина инкассаторов', 'эвакуатор', 'старая «Девятка»'];
+const T_LOOT = ['украденной кассой', 'чужими документами', 'краденым товаром', 'фальшивыми номерами', 'заложником в багажнике', 'деньгами банды', 'угнанными колёсами', 'ящиком контрабанды'];
+const taskRng = (id) => { let s = (id * 2654435761) >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; };
+function taskRect(r, near) {
+  // a closed loop over four crossroads around the player (two streets each way)
+  const xs = ROADS.filter((x) => Math.abs(x - near.x) < 130), zs = ROADS.filter((z) => Math.abs(z - near.z) < 130);
+  const i = Math.floor(r() * (xs.length - 1)), j = Math.floor(r() * (zs.length - 1));
+  const x1 = xs[i], x2 = xs[Math.min(xs.length - 1, i + 1)], z1 = zs[j], z2 = zs[Math.min(zs.length - 1, j + 1)];
+  return [[x1, z1], [x2, z1], [x2, z2], [x1, z2]];
+}
+function taskWalk(r, from, n) {
+  const path = []; let a = from, prev = null;
+  for (let k = 0; k < n; k++) {
+    const opts = [[80, 0], [-80, 0], [0, 80], [0, -80]].map(([dx, dz]) => [a[0] + dx, a[1] + dz]).filter(([x, z]) => Math.abs(x) <= 160 && Math.abs(z) <= 160 && !(prev && x === prev[0] && z === prev[1]));
+    const b = opts[Math.floor(r() * opts.length)]; path.push(b); prev = a; a = b;
+  }
+  return path;
+}
+function genTask(id, near) {
+  const r = taskRng(id), pk = (a) => a[Math.floor(r() * a.length)], group = id > T_SOLO;
+  const n = group ? id - T_SOLO : id, tier = Math.min(5, 1 + Math.floor((n - 1) / (group ? 2000 : 4000)));
+  const type = pk(group ? ['hunt', 'stop', 'escape', 'deliver', 'hunt', 'stop', 'escape'] : ['deliver', 'hunt', 'stop', 'escape', 'tail', 'deliver', 'stop']);
+  const client = pk(T_CLIENTS), cargo = pk(T_CARGO), gang = pk(T_GANGS), target = pk(T_TARGETS), loot = pk(T_LOOT);
+  const places = JOB_PLACES.slice().sort(() => r() - 0.5), to = places[0], via = places[1];
+  const start = near ? [near.x, near.z, near.h] : [0, 0, 0];
+  const mult = (1 + tier * 0.3) * (group ? 1.6 : 1);
+  let c, title, brief, base;
+  if (type === 'deliver') {
+    const two = tier >= 3 || r() < 0.3, d1 = Math.hypot(via[1][0] - start[0], via[1][1] - start[1]), d2 = Math.hypot(to[1][0] - via[1][0], to[1][1] - via[1][1]);
+    c = { start, chase: Math.min(4, tier - 1 + (group ? 1 : 0)), pts: two ? [{ p: via[1], name: via[0], t: Math.round(d1 / 9 + 30) }, { p: to[1], name: to[0], t: Math.round(d2 / 9 + 30) }] : [{ p: to[1], name: to[0], t: Math.round(Math.hypot(to[1][0] - start[0], to[1][1] - start[1]) / 9 + 30) }] };
+    title = `Доставка: ${cargo}`; brief = `${client[0].toUpperCase() + client.slice(1)} просит отвезти ${cargo}${two ? ` — сначала ${via[0]}, потом ${to[0]}` : ` — ${to[0]}`}.${c.chase ? ` По пути увяжется «${gang}».` : ''}`; base = 70;
+  } else if (type === 'hunt') {
+    const kills = Math.min(10, 2 + tier + (group ? 2 : 0));
+    c = { start, kills, chase: Math.min(5, 2 + Math.floor(tier / 2) + (group ? 1 : 0)) };
+    title = `Охота на «${gang}»`; brief = `Банда «${gang}» гоняет по городу. ${client[0].toUpperCase() + client.slice(1)} просит разобраться: сбей ${kills} машин.${group ? ' Сбитые машины всей группы считаются вместе.' : ''}`; base = 40 + kills * 12;
+  } else if (type === 'stop') {
+    const route = taskRect(r, { x: start[0], z: start[1] });
+    c = { start, car: [route[0][0], route[0][1], Math.atan2(route[1][0] - route[0][0], route[1][1] - route[0][1])], route, hp: 280 + tier * 90 + (group ? 250 : 0), speed: 22 + tier * 1.5, shoot: tier >= 3, name: target[0].toUpperCase() + target.slice(1), chase: Math.min(3, Math.floor(tier / 2)) };
+    title = `Перехват: ${target}`; brief = `${target[0].toUpperCase() + target.slice(1)} с ${loot} кружит по кварталу. Останови его, не взрывая.${c.shoot ? ' Из него отстреливаются.' : ''}`; base = 90;
+  } else if (type === 'escape') {
+    const secs = 45 + tier * 12 + (group ? 20 : 0);
+    c = { start, secs, chase: Math.min(5, 2 + Math.floor(tier / 2) + (group ? 1 : 0)), goal: to[1], goalName: to[0] };
+    title = `Уйти от «${gang}»`; brief = `В машине ${client}, за вами «${gang}». Продержись ${fmt(secs)}, потом довези до места: ${to[0]}.`; base = 60 + secs * 0.6;
+  } else {
+    const startNode = [ROADS[Math.floor(r() * 5)], ROADS[Math.floor(r() * 5)]], route = taskWalk(r, startNode, 4 + Math.min(3, tier));
+    c = { start, car: [startNode[0], startNode[1], Math.atan2(route[0][0] - startNode[0], route[0][1] - startNode[1])], route, speed: 14 + tier, name: target[0].toUpperCase() + target.slice(1), stops: { 1: 3 } };
+    title = `Слежка: ${target}`; brief = `${client[0].toUpperCase() + client.slice(1)} хочет знать, куда едет ${target}. Держись дальше 15 м и не отставай больше 80 м. Стрелять нельзя.`; base = 80;
+  }
+  return { id, group, tier, type, c, title, brief, reward: Math.round(base * mult) };
+}
+function taskNextSolo() { return Math.min(T_SOLO, (PROF.taskN || 0) + 1); }
+function taskNextGroup() { return T_SOLO + Math.min(T_ALL - T_SOLO, (PROF.gtaskN || 0) + 1); }
+function taskOfferId() { return PARTY.code && PARTY.members.size ? taskNextGroup() : taskNextSolo(); }
+function taskStart(id, fromGroup) {
+  if (TASK.cur || !ONL.on || state.mode !== 'drive') return;
+  if (JOBS.cur) jobEnd();
+  const t = genTask(id, { x: pc.pos.x, z: pc.pos.z, h: pc.h }); TASK.cur = t; TASK.free = MIS;
+  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
+  const m = GEN[t.type](Object.assign({}, t.c), `Задание №${id.toLocaleString('ru-RU')} · ${t.title}`, () => taskDone(true));
+  m.online = true; m.task = true; m.noFireMsg = 'Слежка: стрелять нельзя';
+  MIS = m; state.invuln = 2; state.spawnT = 3; document.body.classList.add('task'); toggleTasks(false);
+  toast(`${t.group ? 'Групповое задание' : 'Задание'} №${id.toLocaleString('ru-RU')}: ${t.title}`, 2.6);
+  if (t.group && !fromGroup && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'task', payload: { id, by: ONL.id } });
+  $('btnTask').textContent = 'Задание: идёт';
+}
+function taskDone(ok, fromGroup) {
+  const t = TASK.cur; if (!t) return;
+  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0; clearBullets();
+  if (ok) {
+    addCoins(t.reward); profStat('tasks');
+    if (t.group) PROF.gtaskN = Math.max(PROF.gtaskN || 0, t.id - T_SOLO); else PROF.taskN = Math.max(PROF.taskN || 0, t.id);
+    saveProfile(); toast(`Задание выполнено! +${t.reward}`, 2.6);
+    if (t.group && !fromGroup && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'tdone', payload: { id: t.id } });
+  }
+  TASK.cur = null; MIS = TASK.free; state.invuln = 1e9; state.mode = 'drive'; pc.hp = Math.max(pc.hp, 60);
+  document.body.classList.remove('task'); beam.visible = false; $('btnTask').textContent = 'Задания';
+  setObjective('Открытый город: бери задания и заказы такси, сигналь (H) и общайся в чате.'); JOBS.wait = 10;
+}
+function taskFail(title) { if (!TASK.cur) return; toast(`Задание провалено: ${title}. Можно взять его заново`, 3); taskDone(false); }
+// the panel with the next task
+function renderTasks() {
+  const box = $('tasksBody'); if (!box) return;
+  const inGroup = PARTY.code && PARTY.members.size, all = [...PARTY.members.keys(), ONL.id].sort(), lead = !inGroup || all[0] === ONL.id;
+  const id = taskOfferId(), t = genTask(id, pc ? { x: pc.pos.x, z: pc.pos.z, h: pc.h } : null);
+  const done = (PROF.taskN || 0) + (PROF.gtaskN || 0);
+  box.innerHTML = `<div class="kicker">${t.group ? 'Групповое' : 'Одиночное'} задание №${id.toLocaleString('ru-RU')} из 30 000 · сложность ${'★'.repeat(t.tier)}</div>
+    <b>${esc(t.title)}</b><p class="note">${esc(t.brief)}</p><div class="prow2"><span>Награда: <b>${t.reward}</b> монет${t.group ? ' каждому' : ''}</span><span>Выполнено: ${done}</span></div>
+    <div class="btns">${TASK.cur ? '<button class="btn sm" data-ta="quit" type="button">Бросить задание</button>' : lead ? `<button class="btn sm primary" data-ta="go" type="button">${inGroup ? 'Начать для группы' : 'Взять задание'}</button><button class="btn sm" data-ta="skip" type="button">Пропустить</button>` : '<span class="note">Задание выбирает тот, кто первым зашёл в группу.</span>'}</div>`;
+  box.querySelectorAll('[data-ta]').forEach((b) => { b.onclick = () => {
+    const a = b.dataset.ta;
+    if (a === 'go') taskStart(id); else if (a === 'quit') taskFail('брошено');
+    else if (a === 'skip') { if (t.group) PROF.gtaskN = (PROF.gtaskN || 0) + 1; else PROF.taskN = (PROF.taskN || 0) + 1; saveProfile(); renderTasks(); }
+  }; });
+}
+function toggleTasks(v) { TASK.open = v === undefined ? !TASK.open : v; $('tasks').hidden = !TASK.open; if (TASK.open) { toggleChat(false); if (PARTY.open) toggleParty(false); renderTasks(); } }
+
 // pause menu
 let pausedFrom = null;
 function pauseGame() {
@@ -6762,6 +6874,7 @@ function startMission() {
   ], () => { state.mode = 'drive'; });
 }
 function showDead() {
+  if (MIS && MIS.online) { taskFail('машина разбита'); pc.hp = 100; pc.dead = false; pc.g.visible = true; state.mode = 'drive'; return; }
   state.mode = 'dead'; setEngine(0, false);
   const act = state.act, rk = state.ep >= 2 ? 'c' + state.ch : act, used = state.reviveUsed[rk];
   showModal(`
@@ -6831,6 +6944,8 @@ $('btnGo').addEventListener('click', startSelected);
 $('btnOnline').addEventListener('click', startOnline);
 $('btnParty').addEventListener('click', () => toggleParty());
 $('btnJob').addEventListener('click', () => jobEnd('Заказ отменён. Следующий скоро.'));
+$('btnTask').addEventListener('click', () => toggleTasks());
+$('tasksClose').addEventListener('click', () => toggleTasks(false));
 $('partyClose').addEventListener('click', () => toggleParty(false));
 window.addEventListener('keyup', (e) => { if (e.code === 'KeyG') talk(false); });
 $('btnTalk').addEventListener('pointerdown', (e) => { e.preventDefault(); try { $('btnTalk').setPointerCapture(e.pointerId); } catch (err) { /* synthetic */ } talk(true); });
@@ -6922,7 +7037,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
