@@ -1,0 +1,151 @@
+// «Ночной тариф»: вход через площадки и один аккаунт на всех площадках (основа — tg-login из «Выжить до пятницы»).
+// • Telegram Mini App: initData подписан токеном бота (секрет TELEGRAM_BOT_TOKEN).
+// • Telegram Login на сайте: данные входа подписаны тем же токеном (ключ — SHA-256 токена). Аккаунт тот же, что в Mini App.
+// • VK Mini App: параметры запуска vk_* подписаны защищённым ключом приложения (секрет VK_APP_SECRET).
+// • MAX Mini App: initData (WebAppData) подписан токеном бота MAX тем же способом, что в Telegram (секрет MAX_BOT_TOKEN).
+// Секреты добавляет владелец в Supabase → Edge Functions → Secrets; пока их нет, вход этой площадки отвечает not_configured.
+// Аккаунт площадки — пользователь Supabase Auth с служебным адресом tg<id>@tg.nightfare.invalid (писем не шлём) и строка profiles;
+// выдаём обычную сессию Supabase (как после входа по ссылке из письма).
+// Коды: action 'link_code' + access_token — выдать одноразовый код (8 символов, 10 минут);
+//   code + подтверждение площадки — эта площадка навсегда привязывается к аккаунту кода; code без площадки (сайт) — вход в аккаунт кода.
+// action 'delete_account' + access_token — удалить аккаунт целиком (правила VK Mini Apps: удаление прямо из приложения).
+// action 'tg_config' — номер бота для кнопки «Войти через Telegram» (публичная часть токена до двоеточия, не секрет).
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+const json = (x: unknown, status = 200) => new Response(JSON.stringify(x), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+const enc = new TextEncoder();
+const hex = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+async function hmac(key: Uint8Array, msg: string) {
+  const k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode(msg)));
+}
+const DAY = 86400;
+
+// Telegram / MAX initData: HMAC-SHA256(HMAC-SHA256('WebAppData', token), отсортированные поля)
+async function initDataUser(token: string, initData: string) {
+  const p = new URLSearchParams(initData), hash = p.get('hash') || '';
+  p.delete('hash');
+  const check = [...p.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join('\n');
+  if (hex(await hmac(await hmac(enc.encode('WebAppData'), token), check)) !== hash) return null;
+  if (Date.now() / 1000 - Number(p.get('auth_date') || 0) > 7 * DAY) return null;
+  return JSON.parse(p.get('user') || 'null');
+}
+// Telegram Login (сайт): HMAC-SHA256(SHA-256(token), отсортированные поля), hex; данные не старше суток
+async function widgetUser(token: string, w: any) {
+  if (!w || typeof w !== 'object' || typeof w.hash !== 'string') return null;
+  const fields = Object.entries(w).filter(([k, v]) => k !== 'hash' && v !== undefined && v !== null && v !== '').map(([k, v]) => [k, String(v)]).sort(([a], [b]) => (a < b ? -1 : 1));
+  const check = fields.map(([k, v]) => `${k}=${v}`).join('\n');
+  const secret = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(token)));
+  if (hex(await hmac(secret, check)) !== w.hash) return null;
+  if (Date.now() / 1000 - Number(w.auth_date || 0) > DAY) return null;
+  const id = Number(w.id);
+  return id > 0 ? { id, first_name: w.first_name, last_name: w.last_name, username: w.username } : null;
+}
+// VK Mini App: подпись — HMAC-SHA256 от отсортированных vk_*-параметров, base64url без «=»
+async function vkLaunchUser(v: any) {
+  const secret = (Deno.env.get('VK_APP_SECRET') || '').trim();
+  if (!secret || !v || typeof v.params !== 'string') return null;
+  const q = new URLSearchParams(v.params.replace(/^\?/, ''));
+  const vkp = [...q.entries()].filter(([k]) => k.startsWith('vk_')).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(new URLSearchParams(vkp).toString())));
+  const sign = btoa(String.fromCharCode(...mac)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  if (sign !== q.get('sign')) return null;
+  const ts = Number(q.get('vk_ts') || 0);
+  if (ts && Date.now() / 1000 - ts > 7 * DAY) return null;
+  const id = Number(q.get('vk_user_id'));
+  return id > 0 ? { id, first_name: String(v.name || '').replace(/[<>]/g, '').slice(0, 24) } : null;
+}
+
+const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const newCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((x) => CODE_ABC[x % CODE_ABC.length]).join('');
+const URL0 = Deno.env.get('SUPABASE_URL')!, OPTS = { auth: { persistSession: false, autoRefreshToken: false } };
+
+// обычная сессия Supabase для аккаунта uid
+async function sessionFor(db: any, uid: string, name: string) {
+  const email = (await db.auth.admin.getUserById(uid)).data.user?.email || '';
+  if (!email) return json({ error: 'no_account' }, 404);
+  const gl = await db.auth.admin.generateLink({ type: 'magiclink', email });
+  if (gl.error) return json({ error: gl.error.message }, 500);
+  const auth = createClient(URL0, Deno.env.get('SUPABASE_ANON_KEY')!, OPTS);
+  const { data: s, error } = await auth.auth.verifyOtp({ type: 'magiclink', token_hash: gl.data.properties.hashed_token });
+  if (error || !s.session) return json({ error: error?.message || 'no_session' }, 500);
+  return json({ access_token: s.session.access_token, refresh_token: s.session.refresh_token, expires_at: s.session.expires_at, name });
+}
+// одноразовый код → аккаунт; использованный или старше 10 минут не подходит
+async function useCode(db: any, code: string): Promise<string | null> {
+  if (!/^[A-Z0-9]{8}$/.test(code)) return null;
+  const since = new Date(Date.now() - 600e3).toISOString();
+  const { data } = await db.from('link_codes').update({ used_at: new Date().toISOString() }).eq('code', code).is('used_at', null).gt('created_at', since).select('user_id');
+  return data?.[0]?.user_id || null;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  try {
+    const body = await req.json();
+    if (body.action === 'tg_config') {
+      const t = (Deno.env.get('TELEGRAM_BOT_TOKEN') || '').trim();
+      return t ? json({ bot_id: t.split(':')[0] }) : json({ error: 'not_configured' }, 503);
+    }
+    const db = createClient(URL0, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, OPTS);
+    const me = async () => (body.access_token ? (await db.auth.getUser(String(body.access_token))).data.user : null);
+
+    if (body.action === 'link_code') {
+      const cur = await me(); if (!cur) return json({ error: 'bad_session' }, 401);
+      const { count } = await db.from('link_codes').select('code', { count: 'exact', head: true }).eq('user_id', cur.id).gt('created_at', new Date(Date.now() - 3600e3).toISOString());
+      if ((count || 0) >= 10) return json({ error: 'too_often' }, 429);
+      for (let i = 0; i < 5; i++) { const code = newCode(); const { error } = await db.from('link_codes').insert({ code, user_id: cur.id }); if (!error) return json({ code, expires_in: 600 }); }
+      return json({ error: 'code_failed' }, 500);
+    }
+    if (body.action === 'delete_account') {
+      const cur = await me(); if (!cur) return json({ error: 'bad_session' }, 401);
+      const { data: p } = await db.from('profiles').select('is_tester').eq('id', cur.id).maybeSingle();
+      if (p?.is_tester) return json({ error: 'tester' }, 403);   // тестовый профиль из игры не удаляется
+      const { error } = await db.auth.admin.deleteUser(cur.id);   // profiles, связки и коды удаляются каскадом
+      return error ? json({ error: 'delete_failed' }, 500) : json({ deleted: true });
+    }
+
+    const code = typeof body.code === 'string' ? body.code.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+    const widget = body.tg_widget && typeof body.tg_widget === 'object';
+    const plat = typeof body.max_init === 'string' && body.max_init ? 'max' : body.vk_launch ? 'vk' : (typeof body.initData === 'string' && body.initData) || widget ? 'tg' : '';
+    if (code && !plat) { const target = await useCode(db, code); return target ? await sessionFor(db, target, '') : json({ error: 'bad_code' }, 403); }
+    if (!plat) return json({ error: 'no_proof' }, 400);
+
+    let u: any = null;
+    if (plat === 'tg') {
+      const t = (Deno.env.get('TELEGRAM_BOT_TOKEN') || '').trim(); if (!t) return json({ error: 'not_configured' }, 503);
+      u = widget ? await widgetUser(t, body.tg_widget) : await initDataUser(t, body.initData);
+    }
+    else if (plat === 'max') { const t = (Deno.env.get('MAX_BOT_TOKEN') || '').trim(); if (!t) return json({ error: 'not_configured' }, 503); u = await initDataUser(t, body.max_init); }
+    else { if (!(Deno.env.get('VK_APP_SECRET') || '').trim()) return json({ error: 'not_configured' }, 503); u = await vkLaunchUser(body.vk_launch); }
+    if (!u?.id) return json({ error: 'bad_signature' }, 403);
+
+    const T = plat === 'max' ? { table: 'max_accounts', key: 'max_id' } : plat === 'vk' ? { table: 'vk_accounts', key: 'vk_id' } : { table: 'tg_accounts', key: 'tg_id' };
+    const name = [u.first_name, u.last_name].filter(Boolean).join(' ').slice(0, 24) || u.username || (plat === 'max' ? 'MAX' : plat === 'vk' ? 'VK' : 'Telegram');
+    const extra = plat === 'tg' ? { username: String(u.username || '').slice(0, 64) } : {};
+    const { data: link } = await db.from(T.table).select('user_id').eq(T.key, u.id).maybeSingle();
+
+    if (code) {   // эта площадка теперь входит в аккаунт кода
+      const target = await useCode(db, code); if (!target) return json({ error: 'bad_code' }, 403);
+      if (link && link.user_id !== target) await db.from(T.table).delete().eq(T.key, u.id);
+      const { error } = await db.from(T.table).upsert({ [T.key]: u.id, user_id: target, name, ...extra });
+      if (error) return json({ error: 'already_linked' }, 409);
+      return await sessionFor(db, target, name);
+    }
+
+    let uid = link?.user_id as string | undefined;
+    if (!uid) {
+      const email = `${plat}${u.id}@${plat}.nightfare.invalid`;
+      const made = await db.auth.admin.createUser({ email, email_confirm: true, user_metadata: { [T.key]: u.id, name } });
+      if (made.error || !made.data.user) return json({ error: 'create_failed' }, 500);
+      uid = made.data.user.id;
+      await db.from(T.table).insert({ [T.key]: u.id, user_id: uid, name, ...extra });
+      await db.from('profiles').insert({ id: uid, login: `${plat}${u.id}`.slice(0, 24), name });
+    } else await db.from(T.table).update({ name, ...extra }).eq(T.key, u.id);
+    return await sessionFor(db, uid, name);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+});
