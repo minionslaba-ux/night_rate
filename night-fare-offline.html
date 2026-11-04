@@ -104,6 +104,13 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .tbtn.aim { display: none; background: rgba(77,255,166,.18); border-color: rgba(77,255,166,.6); font-size: 12px; }
 .tbtn.aim.held { background: rgba(77,255,166,.5); }
 .touch.on-foot .tbtn.aim { display: grid; } .touch.on-foot .tbtn.drift { display: none; }
+.tbtn.horn { display: none; --c: #ffd23a; right: calc(194px + var(--sar)); bottom: calc(40px + var(--sab)); width: 62px; height: 62px; }
+body.online .tbtn.horn { display: grid; } body.online .tbtn.nitro, body.online .tbtn.shield, body.online .tbtn.fire, body.online #nav, body.online .boosts { display: none; }
+.chat { position: fixed; left: calc(12px + var(--sal)); top: calc(110px + var(--sat)); width: min(380px, calc(100% - 24px - var(--sal) - var(--sar))); max-height: calc(100% - 260px - var(--sat) - var(--sab)); min-height: 160px; display: grid; grid-template-rows: 1fr auto auto; gap: 6px; background: rgba(8,10,24,.88); border: 1px solid var(--line); border-radius: 10px; padding: 10px; z-index: 30; }
+.chat-list { overflow-y: auto; display: grid; gap: 4px; align-content: start; font-size: 14px; line-height: 1.35; }
+.cmsg b { color: var(--taxi); } .clink { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 3px; }
+.chat-row { display: flex; gap: 6px; } .chat-row input { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 8px 10px; font: 16px var(--font-body); }
+#btnChat.new { background: var(--taxi); color: #1a1405; }
 /* «Приборная панель»: metal buttons with a lit coloured rim, an icon and a label */
 .tbtn { --c: #ffc43d; display: grid; place-items: center; align-content: center; gap: 1px; padding: 0; color: #eceef4; font: 700 11px var(--font-body); text-shadow: 0 1px 0 #000;
   background: linear-gradient(160deg, #5a5e6a, #24262e 55%, #15161b); border: 0;
@@ -305,7 +312,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
     <div class="stats"><b id="coins">0</b> монет · <b id="kills">0</b> сбито</div>
     <div id="boosts" class="stats boosts"></div>
     <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
-    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
+    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
     <button id="mute" class="mute" type="button">Звук: вкл</button>
   </div>
   <div id="bars" class="bars" hidden></div>
@@ -321,6 +328,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   <button id="btnDrift" class="tbtn drift" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c4 0 5-10 10-10h6"/><path d="m17 4 3 3-3 3"/><path d="M4 21h6"/></svg><span>Занос</span></button>
   <button id="btnAim" class="tbtn aim" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>Прицел</span></button>
   <button id="btnNitro" class="tbtn nitro" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 14h6l-1 8 8-12h-6z"/></svg><span>Нитро</span><b class="cnt" id="nitroN">0</b></button>
+  <button id="btnHorn" class="tbtn horn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10h4l6-4v12l-6-4H4z"/><path d="M17 9c1.2 1.6 1.2 4.4 0 6M19.5 7c2.2 2.8 2.2 7.2 0 10"/></svg><span>Сигнал</span></button>
   <button id="btnShield" class="tbtn shield" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg><span>Щит</span><b class="cnt" id="shieldN">0</b></button>
 </div>
 
@@ -357,6 +365,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
     </div>
     <div class="btns go-row">
       <button id="btnGo" class="btn primary" type="button">В путь</button>
+      <button id="btnOnline" class="btn" type="button">Онлайн: открытый город</button>
       <button id="btnProfile" class="btn" type="button">Профиль и магазин</button>
       <button id="btnBack" class="btn" type="button">Назад</button>
     </div>
@@ -376,6 +385,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   </div>
 </div>
 
+<div id="chat" class="chat" hidden><div id="chatList" class="chat-list" aria-live="polite"></div><div class="chat-row"><input id="chatInput" type="text" maxlength="140" placeholder="Сообщение…" autocomplete="off" autocapitalize="sentences"><button id="chatSend" class="btn sm primary" type="button">Отправить</button><button id="chatClose" class="btn sm" type="button">✕</button></div><small id="chatHint" class="note"></small></div>
 <div id="dialog" class="dialog" hidden>
   <div id="dlgPortrait" class="portrait">К</div>
   <div>
@@ -397,7 +407,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v23'; window.__errs = [];
+window.APP_VER = 'v24'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -2613,11 +2623,11 @@ function buildNine(paint) {
   return root;
 }
 const W9 = 1.9;
-function makeCar(color, kind) {
+function makeCar(color, kind, forceModel) {
   const g = new THREE.Group();
   const wreck = kind === 'wreck', player = kind === true || kind === 'player';
   const civ = kind === 'civ' || kind === 'police', pol = kind === 'police';
-  const name = player ? PLAYER_CAR.model : wreck ? 'car_sedan' : pol ? 'car_police' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon', 'nine']);
+  const name = forceModel || (player ? PLAYER_CAR.model : wreck ? 'car_sedan' : pol ? 'car_police' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon', 'nine']));
   const m0 = name === 'nine' ? null : ASSETS.kit[name].clone(true);
   const mat = wreck ? KIT.carWreck : player ? (PLAYER_CAR.mat || KIT.taxi) : pol ? KIT.car : civ ? civMat(color) : KIT.carDark;
   const wheels = [];
@@ -2905,6 +2915,7 @@ const sfx = {
   eshot: () => gunshot(0.32, 0.55),
   hit: () => noise(0.05, 3200, 0.12),
   crash: (v) => noise(0.25, 500, Math.min(0.5, v * 0.03), 'lowpass'),
+  horn: (v) => { tone(415, 0.42, 0.12 * (v || 1)); tone(523, 0.42, 0.1 * (v || 1)); },
   boom: (b) => noise(0.9 * b, 180, 0.7, 'lowpass'),
   // a typewriter key: a bright click and a short low thud, slightly different every time
   key: () => { noise(0.028, 2400 + Math.random() * 1400, 0.07); tone(90 + Math.random() * 40, 0.035, 0.05); },
@@ -2930,6 +2941,9 @@ const mouse = { x: 0, y: 0, down: false, has: false };
 const joy = { x: 0, y: 0, id: null };
 let touchFire = false, touchDrift = false;
 window.addEventListener('keydown', (e) => {
+  if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) { if (e.code === 'Escape' && ONL.on) toggleChat(false); return; }
+  if (ONL.on && state.mode === 'drive' && !e.repeat && (e.code === 'Enter' || e.code === 'KeyT')) { e.preventDefault(); toggleChat(true); return; }
+  if (ONL.on && !e.repeat && e.code === 'KeyH') onlineHonkMine();
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (state.mode === 'dialog' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) advanceDialog();
@@ -3298,7 +3312,7 @@ function updateDrive(dt) {
   pc.fireCd -= dt;
   if (!fireHeld()) state.fireLock = false;
   const noFire = state.ep >= 2 && MIS && MIS.noFire;
-  if (noFire && fireHeld() && toastT <= 0) toast('Слежка: стрелять нельзя', 1.2);
+  if (noFire && fireHeld() && toastT <= 0) toast(MIS.noFireMsg || 'Слежка: стрелять нельзя', 1.2);
   if (!noFire && fireHeld() && !state.fireLock && pc.fireCd <= 0) {
     pc.fireCd = 0.11 * P.fireMult;
     let best = null, bd = 60 * P.aim;
@@ -3567,6 +3581,7 @@ const LOOKS = {
 // ---- stage helpers ----
 let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
+  if (ONL.on) leaveRoom();
   removeHeli(); AIR.on = false; STA.on = false;
   for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
@@ -6066,13 +6081,151 @@ function footCamera() {
   const p = hero.pos.clone().add(new V3(0, 2.6, 0)).addScaledVector(F, -5.2).addScaledVector(R, 1.35);
   return { desired: p, look: p.clone().addScaledVector(dir, 20), direct: false, fov: 66 };
 }
+// ---------------- «Открытый город»: everyone in one city (Supabase Realtime) ----------------
+// Positions go over a broadcast channel (ghost cars: no collisions and no shooting between players, so nobody can grief);
+// presence counts the players; chat is a table with a server-side filter, rate limit, reports and bans (see docs/online.md).
+const ONL = { on: false, ch: null, chat: null, room: 1, id: '', others: new Map(), sendT: 0, last: null, count: 1, msgs: [], muted: new Set(), chatOpen: false };
+const ROOM_MAX = 20;
+try { (JSON.parse(localStorage.getItem('nf-muted')) || []).forEach((m) => ONL.muted.add(m)); } catch (e) { /* none */ }
+function onlineName() { return (PROF.cloud ? PROF.name : 'Гость ' + ONL.id.slice(-4)).slice(0, 20); }
+function nameTag(text, colr) {
+  const t = canvasTex(256, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.font = 'bold 30px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 6; g.strokeStyle = 'rgba(5,6,16,.85)'; g.strokeText(text, w / 2, h / 2, w - 12); g.fillStyle = colr || '#ffffff'; g.fillText(text, w / 2, h / 2, w - 12); });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false })); s.scale.set(7, 1.75, 1); s.renderOrder = 10; return s;
+}
+function onlineSpawnPoint() {
+  for (let k = 0; k < 30; k++) {
+    const r = ROADS[Math.floor(Math.random() * ROADS.length)], t = rand(-140, 140);
+    if (ROADS.some((q) => Math.abs(t - q) < 14)) continue;
+    return Math.random() < 0.5 ? [avenueLane(r, t, 1), t, 0] : [t, r, PI / 2];
+  }
+  return [0, -40, 0];
+}
+function startOnline() {
+  if (!cloudInit()) { toast('Онлайн недоступен: нет связи с сервером', 2.5); return; }
+  initAudio(); hideModal(); setMood('night');
+  $('select').hidden = true; $('preview').hidden = true; $('hud').hidden = false; $('touch').hidden = !isTouch;
+  document.body.classList.toggle('touch-on', isTouch); document.body.classList.add('online');
+  applyChar();
+  if (showFig) showFig.g.visible = false; showDisc.visible = false; pvEnemy.g.visible = false;
+  if (hero) { scene.remove(hero.g); hero = null; }
+  clearStage(); state.ep = 99; state.ch = 1; state.coins = 0; state.time = 0; state.reviveUsed = {}; state.nitroT = 0; state.shieldT = 0;
+  const [x, z, h] = onlineSpawnPoint(); beginDrive(x, z, h); state.invuln = 1e9;
+  MIS = { title: 'Открытый город', online: true, noFire: true, noFireMsg: 'В открытом городе не стреляют', chase: { max: 0 }, navName: '', navGoal: () => pc.pos,
+    update() {}, hud() { return { timer: `Онлайн: ${ONL.count} в комнате ${ONL.room}` }; } };
+  setObjective('Открытый город: катайся, сигналь (H) и общайся в чате. Машины других игроков — призраки, сквозь них можно проехать.');
+  beam.visible = false;
+  state.mode = 'drive'; ONL.on = true;
+  ONL.id = (CLOUD.user && CLOUD.user.id) || ONL.id || ('g' + Math.random().toString(36).slice(2, 10));
+  joinRoom(1);
+  $('btnChat').hidden = false; renderChat();
+}
+function joinRoom(n) {
+  leaveRoom(true);
+  ONL.room = n;
+  const ch = CLOUD.sb.channel('nf-city-' + n, { config: { broadcast: { self: false, ack: false }, presence: { key: ONL.id } } });
+  ch.on('broadcast', { event: 'p' }, ({ payload }) => onlinePos(payload));
+  ch.on('broadcast', { event: 'hk' }, ({ payload }) => onlineHonk(payload));
+  ch.on('presence', { event: 'sync' }, () => {
+    const st = ch.presenceState(), ids = Object.keys(st); ONL.count = ids.length;
+    // a full room: move on to the next one (the first arrivals stay)
+    if (!ONL.checked) { ONL.checked = true; if (ids.length > ROOM_MAX && n < 9) { toast(`Комната ${n} заполнена, переходим в ${n + 1}`, 1.6); joinRoom(n + 1); return; } }
+    for (const id of [...ONL.others.keys()]) if (!st[id]) dropOther(id);
+  });
+  ONL.checked = false;
+  ch.subscribe((status) => { if (status === 'SUBSCRIBED') ch.track({ n: onlineName(), at: Date.now() }); });
+  ONL.ch = ch;
+  // chat: last messages of the room, then live inserts (already filtered by the server)
+  ONL.msgs = [];
+  CLOUD.sb.from('chat_messages').select('id, user_id, name, body, created_at').eq('room', 'city-' + n).order('created_at', { ascending: false }).limit(30)
+    .then(({ data }) => { if (data) { ONL.msgs = data.reverse(); renderChat(); } });
+  ONL.chat = CLOUD.sb.channel('nf-chat-' + n).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'room=eq.city-' + n }, ({ new: m }) => {
+    ONL.msgs.push(m); if (ONL.msgs.length > 40) ONL.msgs.shift(); renderChat();
+    const o = ONL.others.get(m.user_id); if (o && !ONL.muted.has(m.user_id)) chatBubble(o, m.body);
+    if (!ONL.chatOpen && m.user_id !== ONL.id && !ONL.muted.has(m.user_id)) { $('btnChat').classList.add('new'); }
+  }).subscribe();
+}
+function leaveRoom(keep) {
+  if (ONL.ch) { try { CLOUD.sb.removeChannel(ONL.ch); } catch (e) { /* gone */ } ONL.ch = null; }
+  if (ONL.chat) { try { CLOUD.sb.removeChannel(ONL.chat); } catch (e) { /* gone */ } ONL.chat = null; }
+  for (const id of [...ONL.others.keys()]) dropOther(id);
+  if (!keep) { ONL.on = false; document.body.classList.remove('online'); if ($('btnChat')) { $('btnChat').hidden = true; $('chat').hidden = true; ONL.chatOpen = false; } }
+}
+function onlinePos(q) {
+  if (!q || !q.i || q.i === ONL.id || typeof q.x !== 'number') return;
+  let o = ONL.others.get(q.i);
+  if (!o) {
+    const m = makeCar(PAINTS[q.p] ? new THREE.Color(...PAINTS[q.p].c).getHex() : 0xffc43d, 'civ', CARS[q.c] ? CARS[q.c].model : 'car_taxi');
+    const tag = nameTag(String(q.n || 'Игрок').slice(0, 20), '#ffe9a8'); tag.position.set(0, 3.4, 0); m.g.add(tag);
+    o = Object.assign(m, { id: q.i, pos: new V3(q.x, 0, q.z), h: q.h || 0, vx: 0, vz: 0, t: performance.now(), name: q.n, tag, bubble: null, bubbleT: 0 });
+    m.g.position.copy(o.pos); ONL.others.set(q.i, o);
+  }
+  o.vx = (q.vx || 0); o.vz = (q.vz || 0); o.tx = q.x; o.tz = q.z; o.th = q.h; o.t = performance.now();
+  o.g.visible = !ONL.muted.has(q.i);
+}
+function dropOther(id) { const o = ONL.others.get(id); if (o) { scene.remove(o.g); ONL.others.delete(id); } }
+function onlineHonk(q) {
+  const o = q && ONL.others.get(q.i); if (!o || ONL.muted.has(q.i)) return;
+  const d = pc ? o.g.position.distanceTo(pc.pos) : 999; if (d < 90) sfx.horn(Math.max(0.15, 1 - d / 90));
+  chatBubble(o, '📯');
+}
+function onlineHonkMine() { if (!ONL.on || !ONL.ch) return; sfx.horn(1); ONL.ch.send({ type: 'broadcast', event: 'hk', payload: { i: ONL.id } }); }
+function chatBubble(o, text) {
+  if (o.bubble) o.g.remove(o.bubble);
+  o.bubble = nameTag(String(text).slice(0, 40), '#7ad6ff'); o.bubble.scale.set(7, 1.75, 1); o.bubble.position.set(0, 5, 0); o.g.add(o.bubble); o.bubbleT = 5;
+}
+function updateOnline(dt) {
+  if (!ONL.on || !pc) return;
+  arrow.visible = false;
+  // send my car a few times a second (less when standing still): realtime messages are counted by the server
+  ONL.sendT -= dt; const moving = Math.hypot(pc.vel.x, pc.vel.z) > 0.5;
+  if (ONL.ch && ONL.sendT <= 0) {
+    ONL.sendT = moving ? 0.25 : 2;
+    ONL.ch.send({ type: 'broadcast', event: 'p', payload: { i: ONL.id, n: onlineName(), x: +pc.pos.x.toFixed(2), z: +pc.pos.z.toFixed(2), h: +pc.h.toFixed(3), vx: +pc.vel.x.toFixed(2), vz: +pc.vel.z.toFixed(2), c: PROF.car, p: PROF.paint[PROF.car] } });
+  }
+  const now = performance.now();
+  for (const o of ONL.others.values()) {
+    if (now - o.t > 8000) { dropOther(o.id); continue; }
+    const ahead = Math.min(0.6, (now - o.t) / 1000);   // a short look-ahead hides the 4 Hz updates
+    const tx = o.tx + o.vx * ahead, tz = o.tz + o.vz * ahead, k = Math.min(1, dt * 8);
+    o.pos.x += (tx - o.pos.x) * k; o.pos.z += (tz - o.pos.z) * k; o.h += wrapA(o.th - o.h) * k;
+    o.g.position.set(o.pos.x, 0, o.pos.z); o.g.rotation.y = o.h;
+    const sp = Math.hypot(o.vx, o.vz); for (const w of o.wheels) w.rotation.x += sp * dt / 0.43;
+    if (o.bubble) { o.bubbleT -= dt; if (o.bubbleT <= 0) { o.g.remove(o.bubble); o.bubble = null; } }
+  }
+}
+// chat panel
+function renderChat() {
+  const box = $('chatList'); if (!box) return;
+  box.innerHTML = ONL.msgs.filter((m) => !ONL.muted.has(m.user_id)).map((m) => `<div class="cmsg"><b>${esc(m.name)}</b> ${esc(m.body)}${m.user_id !== ONL.id ? ` <button class="clink" data-rep="${m.id}" type="button" title="Пожаловаться">⚑</button><button class="clink" data-mute="${esc(m.user_id)}" type="button" title="Скрыть игрока">⨯</button>` : ''}</div>`).join('') || '<div class="cmsg note">Сообщений пока нет. Поздоровайся!</div>';
+  box.scrollTop = box.scrollHeight;
+  box.querySelectorAll('[data-rep]').forEach((b) => { b.onclick = () => reportMsg(+b.dataset.rep); });
+  box.querySelectorAll('[data-mute]').forEach((b) => { b.onclick = () => { ONL.muted.add(b.dataset.mute); try { localStorage.setItem('nf-muted', JSON.stringify([...ONL.muted])); } catch (e) { /* storage */ } dropOther(b.dataset.mute); renderChat(); toast('Игрок скрыт', 1.4); }; });
+  $('chatHint').textContent = PROF.cloud ? '' : 'Писать в чат могут только игроки с профилем: Профиль → Вход.';
+}
+async function sendChat() {
+  const inp = $('chatInput'), body = inp.value.trim(); if (!body) return;
+  if (!PROF.cloud) { toast('Войди в профиль, чтобы писать в чат', 2); return; }
+  inp.value = '';
+  const { error } = await CLOUD.sb.from('chat_messages').insert({ room: 'city-' + ONL.room, body: body.slice(0, 140) });
+  if (error) { const m = String(error.message || ''); toast(/too_fast/.test(m) ? 'Не так быстро' : /chat_banned/.test(m) ? 'Чат для тебя закрыт' : /empty/.test(m) ? 'Сообщение пустое после фильтра' : 'Не отправилось', 1.8); }
+}
+async function reportMsg(id) {
+  if (!PROF.cloud) { toast('Жаловаться могут игроки с профилем', 1.8); return; }
+  const { error } = await CLOUD.sb.from('chat_reports').insert({ message_id: id });
+  toast(error ? 'Жалоба уже отправлена' : 'Жалоба отправлена. Три жалобы скрывают сообщение', 2);
+}
+function toggleChat(v) {
+  ONL.chatOpen = v === undefined ? !ONL.chatOpen : v; $('chat').hidden = !ONL.chatOpen; $('btnChat').classList.remove('new');
+  if (ONL.chatOpen) { renderChat(); if (!isTouch) $('chatInput').focus(); } else $('chatInput').blur();
+}
+
 // pause menu
 let pausedFrom = null;
 function pauseGame() {
   if (state.mode !== 'drive' && state.mode !== 'foot') return;
   pausedFrom = state.mode; state.mode = 'paused'; setEngine(0, false);
   if (document.pointerLockElement) document.exitPointerLock();
-  const ttl = state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
+  const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
   showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
     <p class="lead">Прогресс сохраняется по главам: выйдешь в меню — продолжишь с начала этой главы.</p>
     <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
@@ -6186,6 +6339,7 @@ function updateSelect(dt) {
   poseHuman(showFig, { idle: true, t: state.t });
 }
 function showSelect() {
+  if (ONL.on) leaveRoom();
   initAudio();
   state.mode = 'select'; hideModal();
   $('preview').hidden = true; $('select').hidden = false; $('hud').hidden = true; $('touch').hidden = true;
@@ -6332,6 +6486,12 @@ function showEnd() {
 $('btnPlay').addEventListener('click', showSelect);
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
+$('btnOnline').addEventListener('click', startOnline);
+$('btnChat').addEventListener('click', () => toggleChat());
+$('chatSend').addEventListener('click', sendChat);
+$('chatClose').addEventListener('click', () => toggleChat(false));
+$('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChat(); } });
+$('btnHorn').addEventListener('pointerdown', (e) => { e.preventDefault(); onlineHonkMine(); });
 $('btnProfile').addEventListener('click', () => openProfile('me'));
 $('btnView').addEventListener('click', cycleView); $('btnPause').addEventListener('click', pauseGame); camLabel();
 // «Прицел»: hold on a phone (slide the thumb on it to aim as well), hold the right mouse button on a computer
@@ -6383,7 +6543,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); updateAirport(dt); updateStation(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateRain(dt, focus);
@@ -6413,7 +6573,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
