@@ -5,7 +5,16 @@
 
 ## Как запустить
 
-Откройте `index.html` в браузере. Нужен интернет: Three.js r147 (с эффектом свечения) и шрифты грузятся с CDN.
+- **В браузере с сервера** (так игра работает на itch.io, Яндекс Играх, GitHub Pages): нужны `index.html` и папка `assets/`.
+  Локально: `python3 -m http.server` в папке репозитория и открыть http://localhost:8000.
+- **Двойным кликом без сервера**: `night-fare-offline.html` — тот же код, модели встроены в файл (~6 МБ).
+
+Нужен интернет: Three.js r147 и шрифты грузятся с CDN.
+
+## Графика
+
+Город — набор KayKit City Builder Bits, персонажи и анимации — Quaternius Ultimate Animated Character Pack.
+Оба под лицензией CC0, подробности в [CREDITS.md](CREDITS.md). Модели весят 4,2 МБ.
 
 ## Управление
 

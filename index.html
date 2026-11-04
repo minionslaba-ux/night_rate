@@ -275,6 +275,8 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/SkeletonUtils.js"></script>
 <script>
 (function () {
 'use strict';
@@ -549,6 +551,50 @@ function meshB(b, mat, shadow) {
 }
 const col = (hex, k) => new THREE.Color(hex).multiplyScalar(k || 1);
 
+// ---------------- 3D assets ----------------
+// CC0 models: KayKit City Builder Bits (Kay Lousberg), Quaternius Ultimate Animated Character Pack.
+const ASSET_DIR = 'assets/';
+const ASSETS = { kit: {}, chars: {}, clips: [] };
+const CHAR_FILES = ['gleb', 'timur', 'artem', 'savva', 'rustam', 'kira', 'maya', 'zoya', 'olga', 'nika', 'thug1', 'thug2', 'thug3', 'boss'];
+function assetUrl(name) { const emb = window.NF_ASSETS && window.NF_ASSETS[name]; return emb ? 'data:model/gltf-binary;base64,' + emb : ASSET_DIR + name; }
+async function loadAssets(progress) {
+  const loader = new THREE.GLTFLoader();
+  const files = ['city.glb', 'anims.glb'].concat(CHAR_FILES.map((c) => 'chars/' + c + '.glb'));
+  let done = 0;
+  const res = await Promise.all(files.map((f) => loader.loadAsync(assetUrl(f)).then((g) => { done++; progress(done / files.length); return g; })));
+  res[0].scenes.forEach((sc) => { ASSETS.kit[sc.name] = sc; });
+  ASSETS.clips = res[1].animations;
+  CHAR_FILES.forEach((c, i) => { ASSETS.chars[c] = res[i + 2]; });
+  prepareKitMaterials();
+}
+const KIT = {};
+function prepareKitMaterials() {
+  let base = null;
+  Object.values(ASSETS.kit).forEach((sc) => sc.traverse((o) => { if (o.isMesh && !base) base = o.material; }));
+  base.roughness = 0.78; base.metalness = 0; base.envMapIntensity = 0.45;
+  // the atlas keeps window glass in one cell (u 0..0.25, v 0.75..1): light it at night
+  const winEm = canvasTex(256, 256, (g) => { g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256); const gr = g.createLinearGradient(0, 192, 0, 256); gr.addColorStop(0, '#fff0c8'); gr.addColorStop(1, '#ffa050'); g.fillStyle = gr; g.fillRect(0, 192, 64, 64); });
+  winEm.flipY = false;
+  KIT.bld = [[0xffffff, 0.15], [0xffd9a0, 1.3], [0xffc078, 2.1], [0xd6e8ff, 1.2]].map(([c, k]) => { const m = base.clone(); m.emissiveMap = winEm; m.emissive = new THREE.Color(c); m.emissiveIntensity = k; return m; });
+  KIT.prop = base;
+  KIT.car = base.clone(); KIT.car.roughness = 0.32; KIT.car.metalness = 0.25; KIT.car.envMapIntensity = 1.3;
+  KIT.taxi = KIT.car.clone(); KIT.taxi.color = new THREE.Color(1.6, 1.25, 0.45);
+  KIT.carDark = KIT.car.clone(); KIT.carDark.color = new THREE.Color(0x4a4250);
+  KIT.carWreck = base.clone(); KIT.carWreck.color = new THREE.Color(0x221c1a); KIT.carWreck.roughness = 1;
+}
+// one InstancedMesh per sub-mesh of a kit model; list: [{ x, y, z, ry, sx, sy, sz }]
+const _mw = new THREE.Matrix4();
+function kitInstances(name, list, mat, shadow) {
+  const src = ASSETS.kit[name]; if (!src || !list.length) return;
+  src.updateMatrixWorld(true);
+  src.traverse((o) => {
+    if (!o.isMesh) return;
+    const im = new THREE.InstancedMesh(o.geometry, mat || o.material, list.length);
+    list.forEach((t, i) => { _m4.compose(_p.set(t.x, t.y || 0, t.z), _q.setFromEuler(_e.set(0, t.ry || 0, 0)), _s.set(t.sx, t.sy || t.sx, t.sz || t.sx)); _mw.multiplyMatrices(_m4, o.matrixWorld); im.setMatrixAt(i, _mw); });
+    im.castShadow = !!shadow; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);
+  });
+}
+
 // ---------------- world ----------------
 const ROADS = [-160, -80, 0, 80, 160];
 const RW = 16, LIM = 170;
@@ -687,25 +733,37 @@ function buildWorld() {
     boxB(B.mark, rx + s * 10.2 - 1.6, 0, rz + k - 0.35, rx + s * 10.2 + 1.6, 0.02, rz + k + 0.35, { sides: false, col: markW });
   }
 
-  // buildings
+  // buildings: KayKit houses around each block, facing the streets (1 kit tile = 2 units -> 14 m)
+  const BT = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], WIDE = { E: 1, F: 1, G: 1, H: 1 };
+  const bld = {}; BT.forEach((t) => { bld[t] = [[], [], [], []]; });
+  const putBld = (t, x, z, ry, sy, S, collide) => {
+    bld[t][Math.floor(srand() * 4)].push({ x, y: -0.4, z, ry, sx: S, sy: S * sy, sz: S });
+    if (!collide) return;
+    const hw = (WIDE[t] ? 1.0 : 0.62) * S, z0 = -0.66 * S, z1 = 0.82 * S, c = Math.round(Math.cos(ry)), sn = Math.round(Math.sin(ry));
+    const pts = [[-hw, z0], [hw, z0], [-hw, z1], [hw, z1]].map(([lx, lz]) => [x + lx * c + lz * sn, z - lx * sn + lz * c]);
+    const xs = pts.map((q) => q[0]), zs = pts.map((q) => q[1]);
+    colliders.push({ minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs), h: 3.1 * S * sy });
+  };
   for (const bx of centers) for (const bz of centers) {
     if ((bx === YARD.x && bz === YARD.z) || (bx === -120 && bz === 120) || (bx === -40 && bz === 40)) continue;
-    for (const lx of [-14.5, 14.5]) for (const lz of [-14.5, 14.5]) {
-      const w = sr(18, 26), d = sr(18, 26);
-      const r = srand(), h = r < 0.2 ? sr(48, 82) : r < 0.55 ? sr(26, 44) : sr(12, 24);
-      building(bx + lx + (srand() - 0.5) * (27 - w), bz + lz + (srand() - 0.5) * (27 - d), w, d, h, { collide: true });
+    for (const i of [-21, -7, 7, 21]) for (const j of [-21, -7, 7, 21]) {
+      if (Math.abs(i) !== 21 && Math.abs(j) !== 21) continue;
+      const ry = Math.abs(j) === 21 && (Math.abs(i) !== 21 || srand() < 0.5) ? (j > 0 ? 0 : PI) : (i > 0 ? PI / 2 : -PI / 2);
+      putBld(pick(BT), bx + i, bz + j, ry, sr(1, 1.3), 7, true);
     }
+    putBld(pick(['C', 'D', 'G', 'H']), bx, bz, pick([0, PI / 2, PI, -PI / 2]), sr(1.5, 2.1), 7, true);
   }
-  for (let t = -200; t <= 200; t += 22) {
-    building(t, -194 - sr(0, 6), sr(16, 22), sr(16, 22), sr(24, 80), { ring: true });
-    if (t < 168) { building(194 + sr(0, 6), t, sr(16, 22), sr(16, 22), sr(24, 80), { ring: true }); building(-194 - sr(0, 6), t, sr(16, 22), sr(16, 22), sr(24, 80), { ring: true }); }
+  for (let t = -198; t <= 198; t += 22) {
+    putBld(pick(BT), t, -192, 0, sr(1.2, 2.4), 11, false);
+    if (t < 160) { putBld(pick(BT), 192, t, -PI / 2, sr(1.2, 2.4), 11, false); putBld(pick(BT), -192, t, PI / 2, sr(1.2, 2.4), 11, false); }
   }
+  BT.forEach((t) => bld[t].forEach((list, v) => kitInstances('building_' + t, list, KIT.bld[v], true)));
 
   // street lamps, trees, traffic lights, parked cars
   const poolMat = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.0, 0.6, 0.3), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
   const poolGeo = new THREE.PlaneGeometry(14, 14); poolGeo.rotateX(-PI / 2);
   const lampHead = HDR(0xffd9a0, 6), metalC = col(0x34363e);
-  const parked = [];
+  const parked = [], lamps = [], tlights = [];
   const nearGate = (x, z) => Math.abs(x - 120) < 16 && z < -70 && z > -96;
   const noPark = (x, z) => (Math.abs(z) < 12) || (x < -150 && z > 90) || (z < -70 && z > -92 && x > 90 && x < 150) || (Math.abs(x + 160) < 12 && z > 80);
   for (const r of ROADS) for (let t = -158; t <= 160; t += 17) {
@@ -714,9 +772,8 @@ function buildWorld() {
     for (const [lx, lz, ax, az] of [[r + s * 9.3, t, -s, 0], [t, r + s * 9.3, 0, -s]]) {
       if (nearGate(lx, lz)) continue;
       // lamp: pole, arm over the road, glowing head and a light pool
-      putB(B.metal, G.cyl6, lx, 3.9, lz, 0.22, 7.8, 0.22, 0, metalC);
-      putB(B.metal, G.box, lx + ax * 1.1, 7.75, lz + az * 1.1, ax ? 2.3 : 0.14, 0.14, az ? 2.3 : 0.14, 0, metalC);
-      putB(B.neon, G.box, lx + ax * 2.1, 7.6, lz + az * 2.1, ax ? 0.9 : 0.36, 0.12, az ? 0.9 : 0.36, 0, lampHead);
+      lamps.push({ x: lx, y: 0.15, z: lz, ry: Math.atan2(az, -ax), sx: 8 });
+      putB(B.neon, G.box, lx + ax * 1.72, 7.22, lz + az * 1.72, ax ? 0.62 : 0.3, 0.08, az ? 0.62 : 0.3, 0, lampHead);
       const pool = new THREE.Mesh(poolGeo, poolMat); pool.position.set(lx + ax * 2.6, 0.05, lz + az * 2.6); scene.add(pool);
     }
     const tt = t + 8.5;
@@ -738,31 +795,22 @@ function buildWorld() {
   // traffic lights at every corner
   for (const rx of ROADS) for (const rz of ROADS) for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     const x = rx + sx * 9.4, z = rz + sz * 9.4;
-    putB(B.metal, G.cyl6, x, 2.4, z, 0.16, 4.8, 0.16, 0, metalC);
-    putB(B.metal, G.box, x, 5.1, z, 0.42, 1.2, 0.42, 0, col(0x1a1a20));
-    const go = (sx * sz > 0);
-    putB(B.neon, G.sph, x - sx * 0.22, 5.45, z, 0.1, 0.1, 0.1, 0, go ? col(0x401010) : HDR(0xff2020, 5));
-    putB(B.neon, G.sph, x - sx * 0.22, 5.1, z, 0.1, 0.1, 0.1, 0, col(0x403010));
-    putB(B.neon, G.sph, x - sx * 0.22, 4.75, z, 0.1, 0.1, 0.1, 0, go ? HDR(0x30ff70, 5) : col(0x103018));
+    if (Math.abs(x - 120) < 16 && z < -70 && z > -96) continue;
+    tlights.push({ x, y: 0.15, z, ry: Math.atan2(-sx, -sz), sx: 7 });
   }
-  const pk = batch(), pkGlass = batch(), pkDark = batch();
-  const paints = [0x8a1c22, 0x1c3a6a, 0xd8d8d8, 0x2a2a30, 0x5a6a72, 0x7a5a2a, 0x2a5a3a, 0xb0b0b8];
-  for (const [x, z, ry] of parked) { addCarToBatches(pk, pkGlass, pkDark, x, z, ry, col(pick(paints))); addBox(x, z, ry === 0 || ry === PI ? 2 : 4.4, ry === 0 || ry === PI ? 4.4 : 2, 1.5); }
-  meshB(pk, new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.15, envMapIntensity: 1.1 }), true);
-  meshB(pkGlass, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.3, envMapIntensity: 1.5 }), false);
-  meshB(pkDark, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), true);
+  const carTypes = { car_sedan: [], car_hatchback: [], car_stationwagon: [], car_police: [] };
+  for (const [x, z, ry] of parked) { carTypes[srand() < 0.08 ? 'car_police' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon'])].push({ x, y: 0.02, z, ry, sx: CAR_S }); addBox(x, z, ry === 0 || ry === PI ? 2 : 4.4, ry === 0 || ry === PI ? 4.4 : 2, 1.5); }
+  Object.entries(carTypes).forEach(([n, list]) => kitInstances(n, list, KIT.car, true));
+  kitInstances('streetlight', lamps, KIT.prop, true);
+  kitInstances('trafficlight_A', tlights, KIT.prop, true);
 
   buildPark(); buildDocks(); buildYard();
 
   // one material per batch: a few draw calls for the whole city
-  meshB(B.brick, facadeSet(0), true); meshB(B.office, facadeSet(1), true); meshB(B.glass, facadeSet(2), true);
-  meshB(B.shop, shopSet(), true);
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
   meshB(B.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, envMapIntensity: 0.2 }), false);
   meshB(B.metal, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.7, envMapIntensity: 0.8 }), true);
   meshB(B.neon, new THREE.MeshBasicMaterial({ vertexColors: true }), false);
-  meshB(B.sign, new THREE.MeshBasicMaterial({ map: signAtlas, color: new THREE.Color(2.6, 2.6, 2.6), side: THREE.DoubleSide }), false);
-  meshB(B.awning, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }), true);
   meshB(B.walk, new THREE.MeshStandardMaterial({ map: pavingTex, vertexColors: true, color: 0x9a948c, roughness: 0.6, envMapIntensity: 0.9 }), false);
   meshB(B.grass, new THREE.MeshStandardMaterial({ map: grassTex, vertexColors: true, roughness: 1 }), false);
   meshB(B.leaf, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -875,193 +923,85 @@ function makeEnvironment() {
 }
 
 // ---------------- models ----------------
-// car profile (side view): x = length (front +), y = height
-function carShapes() {
-  const body = new THREE.Shape();
-  body.moveTo(-2.24, 0.5); body.lineTo(-2.16, 0.32); body.lineTo(-1.84, 0.32);
-  body.absarc(-1.35, 0.36, 0.49, PI, 0, true); body.lineTo(0.86, 0.32);
-  body.absarc(1.35, 0.36, 0.49, PI, 0, true); body.lineTo(2.18, 0.34); body.lineTo(2.26, 0.6); body.lineTo(2.18, 0.84);
-  body.lineTo(1.9, 0.97); body.lineTo(0.95, 1.07); body.lineTo(-1.55, 1.1); body.lineTo(-2.08, 1.02); body.lineTo(-2.25, 0.8); body.lineTo(-2.24, 0.5);
-  const cab = new THREE.Shape(); cab.moveTo(-1.62, 1.04); cab.lineTo(1.0, 1.02); cab.lineTo(0.3, 1.5); cab.lineTo(-1.0, 1.52); cab.lineTo(-1.62, 1.04);
-  const roof = new THREE.Shape(); roof.moveTo(-1.04, 1.49); roof.lineTo(0.34, 1.47); roof.lineTo(0.3, 1.56); roof.lineTo(-1.0, 1.58); roof.lineTo(-1.04, 1.49);
-  return { body, cab, roof };
-}
-const CAR = (() => {
-  const s = carShapes();
-  const ex = (shape, depth, bevel) => { const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, steps: 1, curveSegments: 10 }); g.translate(0, 0, -depth / 2); g.rotateY(-PI / 2); return NI(g); };
-  const tire = NI(new THREE.CylinderGeometry(0.36, 0.36, 0.27, 22)); tire.rotateZ(PI / 2);
-  const rim = NI(new THREE.CylinderGeometry(0.23, 0.23, 0.29, 12)); rim.rotateZ(PI / 2);
-  return { body: ex(s.body, 1.78, 0.07), cab: ex(s.cab, 1.5, 0.04), roof: ex(s.roof, 1.5, 0.03), tire, rim };
-})();
-function addCarToBatches(paint, glass, dark, x, z, ry, paintCol) {
-  const put = (b, geo, px, py, pz, sx, sy, sz, c) => {
-    const cs = Math.cos(ry), sn = Math.sin(ry);
-    putB(b, geo, x + px * cs + pz * sn, py, z - px * sn + pz * cs, sx, sy, sz, ry, c);
-  };
-  put(paint, CAR.body, 0, 0, 0, 1, 1, 1, paintCol); put(paint, CAR.roof, 0, 0, 0, 1, 1, 1, paintCol);
-  put(glass, CAR.cab, 0, 0, 0, 1, 1, 1, col(0x0c1420));
-  for (const [wx, wz] of [[-0.86, 1.35], [0.86, 1.35], [-0.86, -1.35], [0.86, -1.35]]) { put(dark, CAR.tire, wx, 0.36, wz, 1, 1, 1, col(0x111114)); put(dark, CAR.rim, wx, 0.36, wz, 1, 1, 1, col(0x8a8c94)); }
-  put(dark, G.box, 0, 0.45, 2.22, 1.9, 0.22, 0.2, col(0x1a1a1e)); put(dark, G.box, 0, 0.45, -2.22, 1.9, 0.22, 0.2, col(0x1a1a1e));
-}
-const plateTex = canvasTex(128, 32, (g) => { g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, 128, 32); g.strokeStyle = '#222'; g.lineWidth = 2; g.strokeRect(1, 1, 126, 30); g.fillStyle = '#111'; g.font = '700 20px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Н 707 ТР', 64, 17); });
-const taxiSignTex = canvasTex(128, 48, (g) => { g.fillStyle = '#ffd23a'; g.fillRect(0, 0, 128, 48); g.fillStyle = '#1a1405'; g.font = '700 26px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('ТАКСИ', 64, 25); });
-const checkerTex = rep(canvasTex(64, 16, (g) => { for (let i = 0; i < 8; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#111' : '#ffd23a'; g.fillRect(i * 8, j * 8, 8, 8); } }), 3, 1);
+const CAR_S = 4.7;
 function makeCar(color, kind) {
   const g = new THREE.Group();
   const wreck = kind === 'wreck', player = kind === true || kind === 'player';
-  const paint = wreck ? new THREE.MeshStandardMaterial({ color: 0x15120f, roughness: 0.95 }) : new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, metalness: 0.45, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 1.2 });
-  const glass = new THREE.MeshPhysicalMaterial({ color: wreck ? 0x050505 : 0x0b1320, roughness: 0.04, metalness: 0.2, clearcoat: 1, envMapIntensity: 1.6 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x141418, roughness: 0.75 });
-  const chrome = new THREE.MeshStandardMaterial({ color: 0x9a9ca4, roughness: 0.25, metalness: 0.9, envMapIntensity: 1.2 });
-  const mesh = (geo, mat, shadow) => { const m = new THREE.Mesh(geo, mat); if (shadow) m.castShadow = true; g.add(m); return m; };
-  const boxM = (mat, x, y, z, sx, sy, sz, shadow) => { const m = mesh(box1, mat, shadow); m.position.set(x, y, z); m.scale.set(sx, sy, sz); return m; };
-  mesh(CAR.body, paint, true); mesh(CAR.roof, paint, true); mesh(CAR.cab, glass, true);
-  boxM(paint, 0, 1.28, -0.38, 1.62, 0.5, 0.12, false); // B-pillar
-  boxM(dark, 0, 0.44, 2.3, 1.92, 0.24, 0.22, true); boxM(dark, 0, 0.44, -2.3, 1.92, 0.24, 0.22, true);
-  boxM(dark, 0, 0.62, 2.33, 0.9, 0.16, 0.05);
-  boxM(paint, -0.98, 1.06, 0.82, 0.14, 0.1, 0.2); boxM(paint, 0.98, 1.06, 0.82, 0.14, 0.1, 0.2);
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.13), new THREE.MeshStandardMaterial({ map: plateTex, roughness: 0.4 }));
-  plate.position.set(0, 0.47, 2.42); g.add(plate);
-  const plateR = plate.clone(); plateR.position.set(0, 0.47, -2.42); plateR.rotation.y = PI; g.add(plateR);
-  if (!wreck) {
-    const head = basic(new THREE.Color(5, 4.6, 3.8)), tail = basic(new THREE.Color(5, 0.25, 0.3)), amber = basic(new THREE.Color(4, 1.8, 0.3));
-    boxM(head, -0.62, 0.74, 2.29, 0.42, 0.12, 0.06); boxM(head, 0.62, 0.74, 2.29, 0.42, 0.12, 0.06);
-    boxM(amber, -0.88, 0.6, 2.32, 0.14, 0.07, 0.05); boxM(amber, 0.88, 0.6, 2.32, 0.14, 0.07, 0.05);
-    boxM(tail, 0, 0.86, -2.31, 1.6, 0.07, 0.06); boxM(tail, -0.72, 0.78, -2.32, 0.36, 0.14, 0.06); boxM(tail, 0.72, 0.78, -2.32, 0.36, 0.14, 0.06);
-  }
+  const name = player ? 'car_taxi' : wreck ? 'car_sedan' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon']);
+  const m = ASSETS.kit[name].clone(true);
+  const mat = wreck ? KIT.carWreck : player ? KIT.taxi : KIT.carDark;
   const wheels = [];
-  for (const [x, z] of [[-0.86, 1.35], [0.86, 1.35], [-0.86, -1.35], [0.86, -1.35]]) {
-    const w = new THREE.Group(); w.position.set(x, 0.36, z);
-    const t = new THREE.Mesh(CAR.tire, dark); t.castShadow = true; w.add(t);
-    const r = new THREE.Mesh(CAR.rim, chrome); w.add(r);
-    for (let k = 0; k < 5; k++) { const sp = new THREE.Mesh(box1, chrome); sp.scale.set(0.3, 0.05, 0.4); sp.rotation.x = k * PI / 5; w.add(sp); }
-    g.add(w); wheels.push(w);
+  m.traverse((o) => { if (o.isMesh) { o.material = mat; o.castShadow = true; } if (/wheel/.test(o.name)) wheels.push(o); });
+  m.scale.setScalar(CAR_S); g.add(m);
+  const box = (mt, x, y, z, sx, sy, sz) => { const b = new THREE.Mesh(box1, mt); b.position.set(x, y, z); b.scale.set(sx, sy, sz); g.add(b); return b; };
+  if (!wreck) {
+    const head = basic(new THREE.Color(5, 4.6, 3.8)), tail = basic(new THREE.Color(5, 0.25, 0.3));
+    box(head, -0.6, 0.62, 2.23, 0.36, 0.14, 0.04); box(head, 0.6, 0.62, 2.23, 0.36, 0.14, 0.04);
+    box(tail, -0.7, 0.7, -2.23, 0.32, 0.12, 0.04); box(tail, 0.7, 0.7, -2.23, 0.32, 0.12, 0.04);
   }
   if (player) {
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.22, 0.28), [basic(new THREE.Color(3, 2.5, 0.8)), basic(new THREE.Color(3, 2.5, 0.8)), dark, dark, new THREE.MeshBasicMaterial({ map: taxiSignTex, color: new THREE.Color(2.4, 2.4, 2.4) }), new THREE.MeshBasicMaterial({ map: taxiSignTex, color: new THREE.Color(2.4, 2.4, 2.4) })]);
-    sign.rotation.y = PI / 2; sign.position.set(0, 1.7, -0.35); g.add(sign);
-    const chk = new THREE.MeshStandardMaterial({ map: checkerTex, roughness: 0.4 });
-    for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.16), chk); p.rotation.y = sx * PI / 2; p.position.set(sx * 0.995, 0.86, -0.1); g.add(p); }
+    box(basic(new THREE.Color(3, 2.4, 0.7)), 0, 1.98, -0.15, 0.5, 0.12, 0.3);
     const spot = new THREE.SpotLight(0xfff0d0, 3.2, 60, 0.5, 0.55, 1.2);
     spot.position.set(0, 0.9, 2.1); spot.target.position.set(0, 0, 18); g.add(spot, spot.target);
   } else if (!wreck) {
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 6.2), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(3, 0.15, 0.8), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     glow.rotation.x = -PI / 2; glow.position.y = 0.06; g.add(glow);
-    boxM(basic(new THREE.Color(4, 0.2, 0.9)), 0, 1.0, 0, 2.0, 0.035, 3.6);
+    box(basic(new THREE.Color(4, 0.2, 0.9)), -0.99, 0.5, 0, 0.03, 0.06, 3.4); box(basic(new THREE.Color(4, 0.2, 0.9)), 0.99, 0.5, 0, 0.03, 0.06, 3.4);
   }
   scene.add(g);
   return { g, wheels };
 }
 
-// people: capsule limbs, jointed knees and elbows, sculpted head and hair
-const CAPS = {};
-const capG = (r, l) => CAPS[r + '_' + l] || (CAPS[r + '_' + l] = new THREE.CapsuleGeometry(r, l, 6, 14));
-const SPH = new THREE.SphereGeometry(1, 28, 20);
-const HAIRG = {
-  cap: new THREE.SphereGeometry(1, 28, 14, 0, PI * 2, 0, PI * 0.56),
-  capWide: new THREE.SphereGeometry(1, 28, 14, 0, PI * 2, 0, PI * 0.62),
-  bob: new THREE.SphereGeometry(1, 28, 10, PI / 2 + 0.95, PI * 2 - 1.9, PI * 0.3, PI * 0.42),
-  beard: new THREE.SphereGeometry(1, 22, 10, 0, PI, PI * 0.56, PI * 0.36),
-};
-const CONE = new THREE.ConeGeometry(0.016, 0.046, 10);
-const TORUS = new THREE.TorusGeometry(0.023, 0.0035, 6, 18);
-const COLLAR = new THREE.TorusGeometry(0.075, 0.024, 8, 18);
-const CYL = new THREE.CylinderGeometry(1, 1, 1, 16);
+// people: Quaternius animated characters (one shared skeleton and clip set), recoloured per driver
+const HUMANS = new Set();
+const HUMAN_S = 0.54;
+const gunMat = new THREE.MeshStandardMaterial({ color: 0x1d1f24, metalness: 0.7, roughness: 0.35 });
+const gunGeoA = new THREE.BoxGeometry(0.16, 0.22, 0.62), gunGeoB = new THREE.BoxGeometry(0.14, 0.34, 0.16);
 function makeHuman(look, scale) {
-  const F = !!look.slim;
-  const mk = (c, r, extra) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: r, envMapIntensity: 0.45 }, extra || {}));
-  const skinC = new THREE.Color(look.skin);
-  const mSkin = mk(skinC, 0.55), mJ = mk(look.jacket, 0.62), mJd = mk(new THREE.Color(look.jacket).multiplyScalar(0.55), 0.62), mP = mk(look.pants, 0.82);
-  const mH = mk(look.hair || 0x15151a, 0.45, { envMapIntensity: 0.8 }), mShoe = mk(0x15151a, 0.35), mShirt = mk(look.shirt || 0x2c2c34, 0.8);
-  const mEye = mk(0xf6f3ee, 0.25), mIris = mk(look.eyes || 0x2e2018, 0.15, { envMapIntensity: 1.2 });
-  const mLip = mk(skinC.clone().multiplyScalar(0.78).lerp(new THREE.Color(0xa8485a), F ? 0.4 : 0.15), 0.4);
-  const mGun = mk(0x1d1f24, 0.3, { metalness: 0.8 }), mCap = mk(look.capColor || 0xd94a3a, 0.6);
-  const g = new THREE.Group();
-  const add = (parent, geo, mat, x, y, z, sx, sy, sz, rx, ry, rz, shadow) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (sx !== undefined) m.scale.set(sx, sy, sz); m.rotation.set(rx || 0, ry || 0, rz || 0); if (shadow) m.castShadow = true; parent.add(m); return m; };
-  const hips = new THREE.Group(); hips.position.y = 0.95; g.add(hips);
-  add(hips, SPH, mP, 0, 0.02, 0, F ? 0.17 : 0.16, 0.12, 0.11, 0, 0, 0, true);
-  add(hips, CYL, mJd, 0, 0.075, 0, F ? 0.15 : 0.155, 0.04, 0.11);
-  const torso = new THREE.Group(); torso.position.y = 0.06; hips.add(torso);
-  const prof = F ? [[0.142, 0], [0.13, 0.1], [0.14, 0.2], [0.162, 0.3], [0.168, 0.38], [0.165, 0.45], [0.13, 0.53], [0.06, 0.575]] : [[0.152, 0], [0.152, 0.1], [0.165, 0.2], [0.186, 0.32], [0.2, 0.42], [0.196, 0.48], [0.15, 0.545], [0.06, 0.585]];
-  const lathe = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 22);
-  add(torso, lathe, mJ, 0, 0, 0, 1, 1, 0.7, 0, 0, 0, true);
-  add(torso, SPH, mShirt, 0, 0.5, F ? 0.07 : 0.08, 0.04, 0.05, 0.025);
-  add(torso, COLLAR, mJd, 0, 0.545, 0, 1, 1, 0.82, PI / 2);
-  add(torso, CYL, mJd, 0, 0.01, 0, F ? 0.146 : 0.156, 0.05, (F ? 0.146 : 0.156) * 0.72);
-  add(torso, box1, mJd, 0, 0.25, F ? 0.115 : 0.128, 0.008, 0.42, 0.006);
-  add(torso, CYL, mSkin, 0, 0.62, 0, 0.05, 0.12, 0.054);
-  const head = new THREE.Group(); head.position.y = 0.66; torso.add(head);
-  add(head, SPH, mSkin, 0, 0.1, 0, 0.1, 0.118, 0.108, 0, 0, 0, true);
-  add(head, SPH, mSkin, 0, 0.048, 0.02, F ? 0.076 : 0.085, 0.07, 0.085);
-  for (const s of [-1, 1]) {
-    add(head, SPH, mSkin, s * 0.098, 0.095, -0.005, 0.018, 0.03, 0.022);
-    add(head, SPH, mEye, s * 0.037, 0.108, 0.086, 0.02, 0.015, 0.012);
-    add(head, SPH, mIris, s * 0.037, 0.108, 0.096, 0.0105, 0.0105, 0.005);
-    add(head, box1, mH, s * 0.04, 0.136, 0.098, 0.042, F ? 0.006 : 0.009, 0.012, 0, 0, -s * 0.12);
-  }
-  add(head, CONE, mSkin, 0, 0.083, 0.11, 1, 1, 1, PI / 2.3);
-  add(head, SPH, mLip, 0, 0.046, 0.098, 0.029, F ? 0.011 : 0.008, 0.012);
-  const hcap = (geo, rx, sx) => add(head, geo, mH, 0, 0.104, -0.006, 0.108 * (sx || 1), 0.127, 0.117, rx);
-  switch (look.style) {
-    case 'bald': break;
-    case 'cap': add(head, HAIRG.cap, mCap, 0, 0.12, -0.004, 0.112, 0.112, 0.12, -0.15); add(head, CYL, mCap, 0, 0.142, 0.085, 0.1, 0.012, 0.07, 0.12); break;
-    case 'mohawk': add(head, HAIRG.cap, mH, 0, 0.11, -0.01, 0.032, 0.15, 0.125, -0.3); break;
-    case 'long': hcap(HAIRG.capWide, -0.3); add(head, SPH, mH, 0, 0.0, -0.065, 0.112, 0.2, 0.06); add(head, SPH, mH, -0.094, 0.03, 0.02, 0.026, 0.12, 0.05); add(head, SPH, mH, 0.094, 0.03, 0.02, 0.026, 0.12, 0.05); break;
-    case 'ponytail': hcap(HAIRG.cap, -0.4); add(head, capG(0.035, 0.18), mH, 0, 0.04, -0.15, 1, 1, 1, 0.35); add(head, SPH, mH, 0, 0.12, -0.11, 0.03, 0.03, 0.03); break;
-    case 'bun': hcap(HAIRG.cap, -0.35); add(head, SPH, mH, 0, 0.205, -0.07, 0.052, 0.048, 0.052); break;
-    case 'bob': hcap(HAIRG.capWide, -0.3, 1.04); add(head, HAIRG.bob, mH, 0, 0.1, -0.006, 0.118, 0.135, 0.124); break;
-    default: hcap(HAIRG.cap, -0.42);
-  }
-  if (look.beard) { add(head, HAIRG.beard, mH, 0, 0.098, 0.004, 0.104, 0.122, 0.112); add(head, SPH, mH, 0, 0.062, 0.1, 0.034, 0.01, 0.012); }
-  if (look.glasses) { add(head, TORUS, mGun, -0.037, 0.108, 0.112); add(head, TORUS, mGun, 0.037, 0.108, 0.112); add(head, box1, mGun, 0, 0.11, 0.113, 0.022, 0.004, 0.004); }
-  const arm = (s) => {
-    const sh = new THREE.Group(); sh.position.set(s * (F ? 0.172 : 0.2), 0.49, 0); torso.add(sh);
-    add(sh, SPH, mJ, 0, -0.01, 0, F ? 0.055 : 0.068, F ? 0.055 : 0.065, F ? 0.055 : 0.065, 0, 0, 0, true);
-    add(sh, capG(F ? 0.042 : 0.05, 0.19), mJ, 0, -0.14, 0, 1, 1, 1, 0, 0, 0, true);
-    const el = new THREE.Group(); el.position.y = -0.28; sh.add(el);
-    add(el, capG(F ? 0.036 : 0.042, 0.18), mJ, 0, -0.12, 0, 1, 1, 1, 0, 0, 0, true);
-    add(el, CYL, mJd, 0, -0.22, 0, F ? 0.038 : 0.044, 0.03, F ? 0.038 : 0.044);
-    const hand = new THREE.Group(); hand.position.y = -0.26; el.add(hand);
-    add(hand, SPH, mSkin, 0, -0.03, 0.005, F ? 0.03 : 0.034, 0.05, 0.024);
-    if (s > 0) { add(hand, box1, mGun, 0, -0.03, 0.03, 0.026, 0.07, 0.05); add(hand, box1, mGun, 0, -0.11, 0.04, 0.032, 0.17, 0.042); }
-    return { sh, el };
-  };
-  const L = arm(-1), R = arm(1);
-  const leg = (s) => {
-    const hp = new THREE.Group(); hp.position.set(s * (F ? 0.088 : 0.09), -0.03, 0); hips.add(hp);
-    add(hp, capG(F ? 0.066 : 0.07, 0.29), mP, 0, -0.2, 0, 1, 1, 1, 0, 0, 0, true);
-    const kn = new THREE.Group(); kn.position.y = -0.43; hp.add(kn);
-    add(kn, capG(0.055, 0.29), mP, 0, -0.2, 0, 1, 1, 1, 0, 0, 0, true);
-    const ft = new THREE.Group(); ft.position.y = -0.42; kn.add(ft);
-    add(ft, SPH, mShoe, 0, -0.03, 0.045, 0.055, 0.045, 0.12, 0, 0, 0, true);
-    add(ft, box1, mk(0xd8d8d8, 0.6), 0, -0.07, 0.045, 0.1, 0.012, 0.23);
-    return { hp, kn };
-  };
-  const LL = leg(-1), LR = leg(1);
-  g.scale.setScalar(scale || 1);
-  scene.add(g);
-  return { g, hips, torso, head, armL: L.sh, elL: L.el, armR: R.sh, elR: R.el, legL: LL.hp, kneeL: LL.kn, legR: LR.hp, kneeR: LR.kn };
+  const src = ASSETS.chars[look.model] || ASSETS.chars.kira;
+  const model = THREE.SkeletonUtils.clone(src.scene);
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.frustumCulled = false;
+    o.material = o.material.clone(); o.material.envMapIntensity = 0.5; o.material.roughness = Math.min(0.85, o.material.roughness);
+    const n = o.material.name;
+    if (n === 'Skin') o.material.color.set(look.skin || '#e0b89a');
+    else if (n === 'Face') o.material.color.set('#1c1a22');
+    else if (look.colors && look.colors[n]) o.material.color.set(look.colors[n]);
+  });
+  const fist = model.getObjectByName('FistR');
+  if (fist) { const gun = new THREE.Group(); const a = new THREE.Mesh(gunGeoA, gunMat); a.position.set(0, 0.06, 0.22); gun.add(a); const b = new THREE.Mesh(gunGeoB, gunMat); b.position.set(0, -0.1, 0.02); b.rotation.x = 0.25; gun.add(b); gun.scale.setScalar(0.9); gun.position.set(0, 0.12, 0.08); gun.rotation.set(-1.57, 0, 0); fist.add(gun); }
+  model.scale.setScalar(HUMAN_S);
+  const g = new THREE.Group(); g.add(model); g.scale.setScalar(scale || 1); scene.add(g);
+  const mixer = new THREE.AnimationMixer(model), acts = {};
+  ASSETS.clips.forEach((c) => { acts[c.name] = mixer.clipAction(c); });
+  if (acts.Run) acts.Run.timeScale = 1.15;
+  const h = { g, model, mixer, acts, cur: null, lockT: 0, head: model.getObjectByName('Head') || g };
+  playAct(h, 'Idle', 0);
+  HUMANS.add(h);
+  return h;
 }
-// o: { walk, move (0..1), aim, idle, t }
+function playAct(h, name, fade, once) {
+  const a = h.acts[name]; if (!a) return;
+  const prev = h.cur ? h.acts[h.cur] : null;
+  a.reset(); a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = !!once; a.setEffectiveWeight(1); a.play();
+  if (prev && prev !== a) prev.crossFadeTo(a, fade === undefined ? 0.2 : fade, false);
+  h.cur = name;
+}
+// o: { move (0..1), aim, idle } -> picks the clip; the mixer itself runs in updateHumans
 function poseHuman(h, o) {
-  const t = o.t || 0, mv = o.move || 0, ph = o.walk || 0, s = Math.sin(ph) * mv;
-  h.legL.rotation.x = s * 0.8; h.legR.rotation.x = -s * 0.8;
-  h.kneeL.rotation.x = 0.06 + Math.max(0, Math.sin(ph - 1.2)) * mv * 1.2;
-  h.kneeR.rotation.x = 0.06 + Math.max(0, Math.sin(ph + PI - 1.2)) * mv * 1.2;
-  h.hips.position.y = 0.95 - 0.025 * mv + Math.abs(Math.cos(ph)) * 0.035 * mv;
-  h.torso.rotation.y = -s * 0.15; h.torso.rotation.x = mv * 0.06;
-  h.torso.scale.y = 1 + Math.sin(t * 2.1) * 0.006;
-  if (o.aim) {
-    h.armR.rotation.set(-1.48, 0, 0.05); h.elR.rotation.x = -0.05;
-    h.armL.rotation.set(-1.32, 0, 0.6); h.elL.rotation.x = -0.35;
-    h.head.rotation.set(0, 0, 0); h.hips.rotation.z = 0; h.torso.rotation.z = 0;
-  } else if (o.idle) {
-    const br = Math.sin(t * 2.1) * 0.02;
-    h.armL.rotation.set(0.04, 0, -0.1 - br); h.elL.rotation.x = -0.22;
-    h.armR.rotation.set(-0.08, 0, 0.12 + br); h.elR.rotation.x = -0.35;
-    h.hips.rotation.z = 0.035; h.torso.rotation.z = -0.03; h.head.rotation.set(0.04, Math.sin(t * 0.45) * 0.18, 0.03);
-  } else {
-    h.armL.rotation.set(-s * 0.6, 0, -0.08); h.armR.rotation.set(s * 0.6, 0, 0.08); h.elL.rotation.x = -0.3; h.elR.rotation.x = -0.3;
+  if (h.lockT > 0) return;
+  const want = o.idle ? 'Idle' : o.move > 0.5 ? 'Run' : o.move > 0.08 ? 'Walk' : (o.aim ? 'Shoot_OneHanded' : 'Idle');
+  if (want !== h.cur) playAct(h, want, 0.18);
+}
+function hitHuman(h) { if (h.lockT > 0) return; h.lockT = 0.32; playAct(h, 'RecieveHit', 0.06, true); }
+function killHuman(h) { h.lockT = 1e9; playAct(h, 'Death', 0.1, true); }
+function reviveHuman(h) { h.lockT = 0; playAct(h, 'Idle', 0.2); }
+function updateHumans(dt) {
+  for (const h of HUMANS) {
+    if (!h.g.parent) { HUMANS.delete(h); continue; }
+    if (h.lockT > 0 && h.lockT < 1e8) { h.lockT -= dt; }
+    h.mixer.update(dt);
   }
 }
 
@@ -1311,16 +1251,16 @@ function damagePlayer(d) {
 }
 function checkPlayerDeath() {
   if (state.act === 1 && pc.hp <= 0 && !pc.dead) { pc.hp = 0; pc.dead = true; explode(pc.pos, 1.6); pc.g.visible = false; addWreck(pc.pos, pc.h); state.mode = 'dying'; state.dyingT = 1.5; }
-  if (state.act === 2 && hero.hp <= 0 && !hero.dead) { hero.hp = 0; hero.dead = true; state.mode = 'dying'; state.dyingT = 1.4; }
+  if (state.act === 2 && hero.hp <= 0 && !hero.dead) { hero.hp = 0; hero.dead = true; killHuman(hero); state.mode = 'dying'; state.dyingT = 1.6; }
 }
 function damageEnemyCar(e, d) {
   e.hp -= d;
   if (e.hp <= 0 && !e.dead) { e.dead = true; explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; addCoins(25); }
 }
 function damageEnemy(e, d) {
-  e.hp -= d; e.hitT = 0.12;
+  e.hp -= d; e.hitT = 0.12; if (e.hp > 0) hitHuman(e);
   if (e.hp <= 0 && !e.dead) {
-    e.dead = true; e.deadT = 0; state.footKills++; addCoins(e.boss ? 60 : 12);
+    e.dead = true; e.deadT = 0; killHuman(e); state.footKills++; addCoins(e.boss ? 60 : 12);
     for (let i = 0; i < 6; i++) spawnP(e.pos.clone().add(new V3(0, 1.2, 0)), { color: 0xffd060, size: 0.15, vel: rv().multiplyScalar(5), life: 0.4, add: true });
   }
 }
@@ -1499,7 +1439,7 @@ function setupAct2() {
   clearBullets();
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
   if (!hero) { const m = makeHuman(CH.look, 1); hero = Object.assign(m, { pos: new V3(), face: PI }); }
-  hero.pos.set(120, 0, -92); hero.face = PI; hero.hp = P.footMax; hero.dead = false; hero.fireCd = 0; hero.walk = 0; hero.g.visible = true; hero.g.rotation.set(0, PI, 0);
+  hero.pos.set(120, 0, -92); hero.face = PI; hero.hp = P.footMax; hero.dead = false; hero.fireCd = 0; hero.walk = 0; hero.g.visible = true; hero.g.rotation.set(0, PI, 0); reviveHuman(hero);
   pc.pos.set(GATE.x, 0, GATE.z + 2); pc.h = PI / 2; pc.vel.set(0, 0, 0); pc.g.position.copy(pc.pos); pc.g.rotation.set(0, pc.h, 0); pc.g.visible = true; pc.dead = false;
   yardGate.position.y = 0; if (!gateCollider) gateCollider = addBox(120, -88, 16, 1, 2.6);
   warehouseDoor.position.y = 0;
@@ -1511,12 +1451,13 @@ function setupAct2() {
   state.mode = 'foot'; state.invuln = 1; snapCam = true;
 }
 function spawnEnemy(x, z, boss) {
-  const m = makeHuman({ jacket: boss ? 0x3b0d16 : pick([0x8c1c2b, 0x6d1424, 0x9a2a35]), pants: 0x1b1b22, skin: pick([0xd9a98a, 0xc08a6a, 0xe8c0a0]), hair: 0x15151a, style: boss ? 'bald' : pick(['short', 'cap', 'mohawk', 'bald']), capColor: 0x111116, beard: boss || Math.random() < 0.3, glasses: boss, shirt: 0x2a2a30 }, boss ? 1.22 : 1);
+  const skin = pick(['#d9a98a', '#c08a6a', '#e8c0a0', '#a87452']);
+  const m = makeHuman(boss ? { model: 'boss', skin: '#c89a7a', colors: { Details: '#7a1426', Belt: '#7a1426' } } : pick([{ model: 'thug1', skin, colors: { Details: '#b01e34' } }, { model: 'thug2', skin, colors: { Shirt: '#8c1c2b', Pants: '#1b1b22', Hair: '#15151a' } }, { model: 'thug3', skin, colors: { Shirt: '#2a2a30', Pants: '#3a1418', Hair: '#15151a' } }]), boss ? 1.18 : 1);
   const e = Object.assign(m, { pos: new V3(x, 0, z), face: 0, hp: boss ? 280 : 60, max: boss ? 280 : 60, fireCd: rand(0.9, 1.6), strafe: Math.random() < 0.5 ? 1 : -1, strafeT: rand(1, 2.5), boss, prefer: boss ? 9 : rand(8, 13), react: rand(0.5, 1.0), walk: 0, dead: false, hitT: 0 });
   e.g.position.copy(e.pos); enemies.push(e);
   return e;
 }
-const aimPlane = new THREE.Plane(new V3(0, 1, 0), -1.35), ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), aimPt = new V3();
+const aimPlane = new THREE.Plane(new V3(0, 1, 0), -1.0), ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), aimPt = new V3();
 function updateFoot(dt) {
   const mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.x;
   const mz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + joy.y;
@@ -1541,12 +1482,12 @@ function updateFoot(dt) {
     hero.fireCd = 0.15 * P.fireMult;
     const dir = new V3(Math.sin(hero.face), 0, Math.cos(hero.face));
     dir.x += rand(-0.025, 0.025); dir.z += rand(-0.025, 0.025); dir.normalize();
-    fire(hero.pos.clone().add(new V3(0, 1.38, 0)).addScaledVector(dir, 0.9).add(new V3(Math.cos(hero.face) * 0.1, 0, -Math.sin(hero.face) * 0.1)), dir, 95, 20 * P.dmg, 'p');
+    fire(hero.pos.clone().add(new V3(0, 1.02, 0)).addScaledVector(dir, 0.9).add(new V3(Math.cos(hero.face) * 0.1, 0, -Math.sin(hero.face) * 0.1)), dir, 95, 20 * P.dmg, 'p');
   }
   // enemies
   for (const e of enemies) {
     if (e.dead) {
-      e.deadT += dt; e.g.rotation.x = -Math.min(1, e.deadT * 3) * PI / 2; e.g.position.y = Math.min(1, e.deadT * 3) * 0.3;
+      e.deadT += dt;
       if (e.deadT > 4) { e.g.visible = false; }
       continue;
     }
@@ -1563,7 +1504,7 @@ function updateFoot(dt) {
     e.pos.addScaledVector(ev, dt); collideCircle(e.pos, ev, e.boss ? 0.8 : 0.6);
     e.strafeT -= dt; if (e.strafeT <= 0) { e.strafe *= -1; e.strafeT = rand(1, 2.5); }
     e.face = Math.atan2(hero.pos.x - e.pos.x, hero.pos.z - e.pos.z);
-    e.g.position.set(e.pos.x, e.hitT > 0 ? 0.12 : 0, e.pos.z); e.g.rotation.y = e.face;
+    e.g.position.set(e.pos.x, 0, e.pos.z); e.g.rotation.y = e.face;
     e.walk += ev.length() * dt * 1.8;
     poseHuman(e, { walk: e.walk, move: Math.min(1, ev.length() / 4), aim: e.react <= 0, t: state.t + e.max });
     if (e.react <= 0 && dist < 32 && !hero.dead && los(e.pos, hero.pos)) {
@@ -1573,7 +1514,7 @@ function updateFoot(dt) {
         for (let k = 0; k < shots; k++) {
           const dir = to.clone(); const sp = e.boss ? (k - 1) * 0.12 : rand(-0.09, 0.09);
           dir.applyAxisAngle(new V3(0, 1, 0), sp + rand(-0.04, 0.04));
-          fire(e.pos.clone().add(new V3(0, 1.38 * (e.boss ? 1.22 : 1), 0)).addScaledVector(dir, 0.9), dir, 48, e.boss ? 9 : 7, 'e');
+          fire(e.pos.clone().add(new V3(0, 1.02 * (e.boss ? 1.18 : 1), 0)).addScaledVector(dir, 0.9), dir, 48, e.boss ? 9 : 7, 'e');
         }
         e.fireCd = e.boss ? rand(1.0, 1.4) : rand(1.0, 1.7);
       }
@@ -1703,16 +1644,16 @@ function updateHud(dt) {
 // ---------------- drivers ----------------
 // stats: [health, shooting, driving], 1–5 each, 10 points per driver
 const CHARS = [
-  { id: 'gleb', sex: 'm', name: 'Глеб', nick: 'Бугай', age: 41, bio: 'Двадцать лет таскал контейнеры в порту. Дверь машины открывает плечом.', stats: [5, 2, 3], perk: ['Крепкий', '+30 к здоровью пешком'], accent: '#9fd36b', fx: { footHp: 30 }, look: { jacket: 0x5b6b3a, pants: 0x2b2b33, skin: 0xd9a98a, hair: 0x3a2a20, style: 'short', beard: true } },
-  { id: 'timur', sex: 'm', name: 'Тимур', nick: 'Фара', age: 28, bio: 'Ночной стритрейсер. Проходит повороты, не сбрасывая газ.', stats: [2, 3, 5], perk: ['Гонщик', 'Максимальная скорость выше на 2 деления'], accent: '#5aa8ff', fx: { speed: 2 }, look: { jacket: 0x1f6fd1, pants: 0x22222a, skin: 0xc58c66, hair: 0x15151a, style: 'mohawk' } },
-  { id: 'artem', sex: 'm', name: 'Артём', nick: 'Прицел', age: 33, bio: 'Бывший биатлонист. Попадает в цель на ходу и под дождём.', stats: [3, 5, 2], perk: ['Меткий', 'Пули наносят на 25% больше урона'], accent: '#ff7a5a', fx: { dmg: 1.25 }, look: { jacket: 0x2e2e3a, pants: 0x3a3a48, skin: 0xe8c0a0, hair: 0xc9a35a, style: 'cap', capColor: 0xd94a3a } },
-  { id: 'savva', sex: 'm', name: 'Савва', nick: 'Дед', age: 63, bio: 'Таксует сорок лет. Знает каждый двор и каждый ухаб Порт-Северного.', stats: [3, 3, 4], perk: ['Старая школа', 'Машина получает на 25% меньше урона'], accent: '#d9b26b', fx: { carArmor: 0.75 }, look: { jacket: 0x7a5a3a, pants: 0x3a3226, skin: 0xe0b090, hair: 0xd8d8d8, style: 'bald', beard: true, glasses: true } },
-  { id: 'rustam', sex: 'm', name: 'Рустам', nick: 'Механик', age: 37, bio: 'Починит что угодно гаечным ключом и честным словом. Даже на ходу.', stats: [4, 3, 3], perk: ['Механик', 'Машина понемногу чинится в пути'], accent: '#6bd3c8', fx: { regen: true }, look: { jacket: 0x3a4a5a, pants: 0x1f2a38, skin: 0xb07a55, hair: 0x1a1410, style: 'short', beard: true } },
-  { id: 'kira', sex: 'f', name: 'Кира', nick: 'Ночь', age: 29, bio: 'Возит самых трудных пассажиров города и никогда не задаёт лишних вопросов.', stats: [3, 3, 4], perk: ['Хладнокровие', 'Стреляет на 20% быстрее'], accent: '#ffc43d', fx: { fire: 0.8 }, look: { jacket: 0xf2b134, pants: 0x2a2a35, skin: 0xe0b89a, hair: 0x1a1420, style: 'ponytail', slim: true } },
-  { id: 'maya', sex: 'f', name: 'Майя', nick: 'Искра', age: 24, bio: 'Бывший курьер на мотоцикле. В заносе чувствует себя как дома.', stats: [2, 3, 5], perk: ['Дрифт', 'Занос без потери скорости'], accent: '#ff5fa2', fx: { drift: true }, look: { jacket: 0xff3d8b, pants: 0x22222c, skin: 0xf0c8a8, hair: 0xff8a3a, style: 'bob', slim: true } },
-  { id: 'zoya', sex: 'f', name: 'Зоя', nick: 'Снайпер', age: 35, bio: 'Инструктор стрелкового тира. Видит цель раньше, чем цель видит её.', stats: [2, 5, 3], perk: ['Снайпер', 'Автоприцел бьёт на треть дальше'], accent: '#8fd96b', fx: { aim: 1.35 }, look: { jacket: 0x3d5a3a, pants: 0x2a3328, skin: 0xd8a888, hair: 0x2a1a12, style: 'bun', slim: true } },
-  { id: 'olga', sex: 'f', name: 'Ольга', nick: 'Сталь', age: 45, bio: 'Пятнадцать лет водила патрульную машину. Под огнём не теряет голову.', stats: [4, 4, 2], perk: ['Бронежилет', 'Пешком получает на 25% меньше урона'], accent: '#7a9cff', fx: { footArmor: 0.75 }, look: { jacket: 0x2a3550, pants: 0x1e2433, skin: 0xe8c4a8, hair: 0xb03a2e, style: 'short', slim: true } },
-  { id: 'nika', sex: 'f', name: 'Ника', nick: 'Хакер', age: 22, bio: 'Айтишница, которая таксует ради историй. Всегда знает, где лишняя монета.', stats: [3, 3, 4], perk: ['Расчёт', '+25% монет за всё'], accent: '#b48bff', fx: { coins: 1.25 }, look: { jacket: 0x6b3fb3, pants: 0x23202e, skin: 0xc89070, hair: 0x15121a, style: 'long', slim: true, glasses: true } },
+  { id: 'gleb', sex: 'm', name: 'Глеб', nick: 'Бугай', age: 41, bio: 'Двадцать лет таскал контейнеры в порту. Дверь машины открывает плечом.', stats: [5, 2, 3], perk: ['Крепкий', '+30 к здоровью пешком'], accent: '#9fd36b', fx: { footHp: 30 }, look: { model: 'gleb', skin: '#d9a98a', colors: { Shirt: '#56683a', Pants: '#2b2b33' } } },
+  { id: 'timur', sex: 'm', name: 'Тимур', nick: 'Фара', age: 28, bio: 'Ночной стритрейсер. Проходит повороты, не сбрасывая газ.', stats: [2, 3, 5], perk: ['Гонщик', 'Максимальная скорость выше на 2 деления'], accent: '#5aa8ff', fx: { speed: 2 }, look: { model: 'timur', skin: '#c58c66', colors: { Shirt: '#1f6fd1', Pants: '#22222a', Hair: '#e2b64e' } } },
+  { id: 'artem', sex: 'm', name: 'Артём', nick: 'Прицел', age: 33, bio: 'Бывший армейский стрелок и биатлонист. Попадает в цель на ходу и под дождём.', stats: [3, 5, 2], perk: ['Меткий', 'Пули наносят на 25% больше урона'], accent: '#ff7a5a', fx: { dmg: 1.25 }, look: { model: 'artem', skin: '#e8c0a0', colors: { Main: '#3c3f4a', DarkGreen: '#2a2c34', Helmet: '#7a2a24' } } },
+  { id: 'savva', sex: 'm', name: 'Савва', nick: 'Дед', age: 63, bio: 'Таксует сорок лет. Знает каждый двор и каждый ухаб Порт-Северного.', stats: [3, 3, 4], perk: ['Старая школа', 'Машина получает на 25% меньше урона'], accent: '#d9b26b', fx: { carArmor: 0.75 }, look: { model: 'savva', skin: '#e0b090' } },
+  { id: 'rustam', sex: 'm', name: 'Рустам', nick: 'Механик', age: 37, bio: 'Починит что угодно гаечным ключом и честным словом. Даже на ходу.', stats: [4, 3, 3], perk: ['Механик', 'Машина понемногу чинится в пути'], accent: '#6bd3c8', fx: { regen: true }, look: { model: 'rustam', skin: '#b07a55', colors: { Shirt: '#8a96a6', Pants: '#1f2a38', Hair: '#1a1410' } } },
+  { id: 'kira', sex: 'f', name: 'Кира', nick: 'Ночь', age: 29, bio: 'Возит самых трудных пассажиров города и никогда не задаёт лишних вопросов.', stats: [3, 3, 4], perk: ['Хладнокровие', 'Стреляет на 20% быстрее'], accent: '#ffc43d', fx: { fire: 0.8 }, look: { model: 'kira', skin: '#e0b89a', colors: { Shirt: '#f2b134', Pants: '#2a2a35', Hair: '#1e1620' } } },
+  { id: 'maya', sex: 'f', name: 'Майя', nick: 'Искра', age: 24, bio: 'Бывший курьер на мотоцикле. В заносе чувствует себя как дома.', stats: [2, 3, 5], perk: ['Дрифт', 'Занос без потери скорости'], accent: '#ff5fa2', fx: { drift: true }, look: { model: 'maya', skin: '#f0c8a8', colors: { Shirt: '#ff3d8b', Pants: '#22222c', Hair: '#ff7a2a' } } },
+  { id: 'zoya', sex: 'f', name: 'Зоя', nick: 'Снайпер', age: 35, bio: 'Инструктор стрелкового тира. Видит цель раньше, чем цель видит её.', stats: [2, 5, 3], perk: ['Снайпер', 'Автоприцел бьёт на треть дальше'], accent: '#8fd96b', fx: { aim: 1.35 }, look: { model: 'zoya', skin: '#d8a888' } },
+  { id: 'olga', sex: 'f', name: 'Ольга', nick: 'Сталь', age: 45, bio: 'Пятнадцать лет водила патрульную машину. Под огнём не теряет голову.', stats: [4, 4, 2], perk: ['Бронежилет', 'Пешком получает на 25% меньше урона'], accent: '#7a9cff', fx: { footArmor: 0.75 }, look: { model: 'olga', skin: '#e8c4a8', colors: { Hair: '#b03a2e' } } },
+  { id: 'nika', sex: 'f', name: 'Ника', nick: 'Хакер', age: 22, bio: 'Айтишница, которая таксует ради историй. Всегда знает, где лишняя монета.', stats: [3, 3, 4], perk: ['Расчёт', '+25% монет за всё'], accent: '#b48bff', fx: { coins: 1.25 }, look: { model: 'nika', skin: '#c89070', colors: { Details: '#7a3fd0' } } },
 ];
 let curIdx = 5;
 try { const s = parseInt(localStorage.getItem('nf-driver'), 10); if (s >= 0 && s < CHARS.length) curIdx = s; } catch (e) { /* storage unavailable */ }
@@ -1741,10 +1682,10 @@ function renderPortraits() {
   ps.add(new THREE.HemisphereLight(0xc8d0ff, 0x302028, 1.0));
   const key = new THREE.DirectionalLight(0xffe2c8, 1.9); key.position.set(1.3, 2.2, 2.6); ps.add(key);
   const rim = new THREE.DirectionalLight(0xffffff, 2.2); rim.position.set(-2, 1.6, -2.2); ps.add(rim);
-  const pcam = new THREE.PerspectiveCamera(24, 200 / 240, 0.1, 10); pcam.position.set(0.18, 1.7, 1.32); pcam.lookAt(0, 1.66, 0);
+  const pcam = new THREE.PerspectiveCamera(30, 200 / 240, 0.1, 10); pcam.position.set(0.32, 1.42, 1.85); pcam.lookAt(0, 1.3, 0);
   CHARS.forEach((ch) => {
     const h = makeHuman(ch.look, 1); scene.remove(h.g); ps.add(h.g);
-    poseHuman(h, { idle: true, t: 0 }); h.g.rotation.y = -0.22; h.head.rotation.set(0.02, 0.12, 0);
+    HUMANS.delete(h); h.mixer.update(0.6); h.g.rotation.y = -0.18;
     rim.color.set(ch.accent);
     pr.render(ps, pcam);
     const card = document.getElementById('pc-' + ch.id), cv = card && card.querySelector('canvas');
@@ -1788,14 +1729,15 @@ function selectChar(i) {
   if (showFig) scene.remove(showFig.g);
   showFig = makeHuman(CH.look, 1);
   showFig.g.position.copy(SHOW); poseHuman(showFig, { idle: true, t: state.t });
-  showFig.spin = 2.2;
+  showFig.spin = 1.4;
   rimLight.color.set(CH.accent); showDisc.material.color.set(CH.accent);
   noise(0.06, 2400, 0.08);
 }
 function updateSelect(dt) {
   if (!showFig) return;
   showFig.spin *= Math.exp(-dt * 3.5);
-  showFig.g.rotation.y = showFig.spin + Math.sin(state.t * 0.7) * 0.35;
+  const face = Math.atan2(camera.position.x - SHOW.x, camera.position.z - SHOW.z);
+  showFig.g.rotation.y = face + showFig.spin + Math.sin(state.t * 0.7) * 0.15;
   poseHuman(showFig, { idle: true, t: state.t });
 }
 function showSelect() {
@@ -1816,19 +1758,19 @@ function showSelect() {
 
 // preview: a cinematic loop of the chase
 let pvEnemy;
-const pv = { x: -165, shot: 0, shotT: 0, eT: 0, pT: 0 };
+const pv = { x: -140, shot: 0, shotT: 0, eT: 0, pT: 0 };
 function showPreview() {
   state.mode = 'preview';
   $('preview').hidden = false; $('select').hidden = true; $('hud').hidden = true; $('touch').hidden = true;
   pvEnemy.g.visible = true; pc.g.visible = true; showDisc.visible = false; arrow.visible = false; setBeam(null);
   if (showFig) showFig.g.visible = false;
-  pv.x = -165; pv.shot = 0; pv.shotT = 0; snapCam = true;
+  pv.x = -140; pv.shot = 0; pv.shotT = 0; snapCam = true;
 }
 function nextShot() { pv.shot = (pv.shot + 1) % 4; pv.shotT = 0; snapCam = true; }
 function updatePreview(dt) {
   const t = state.t, sp = 31;
   pv.x += sp * dt; pv.shotT += dt;
-  if (pv.x > 150) { pv.x = -165; nextShot(); } else if (pv.shotT > 4.2) nextShot();
+  if (pv.x > 140) { pv.x = -140; nextShot(); } else if (pv.shotT > 4.2) nextShot();
   pc.pos.set(pv.x, 0, 4 + Math.sin(t * 0.9) * 1.2); pc.h = PI / 2 + Math.cos(t * 0.9) * 0.06; pc.vf = sp;
   pc.g.position.copy(pc.pos); pc.g.rotation.set(0, pc.h, 0); pc.wheels.forEach((w) => { w.rotation.x += sp * dt / 0.43; });
   pvEnemy.pos.set(pv.x - 13 - Math.sin(t * 0.5) * 3, 0, 2 + Math.sin(t * 1.3) * 2.5); pvEnemy.h = PI / 2 + Math.cos(t * 1.3) * 0.15;
@@ -1897,7 +1839,7 @@ function revive() {
     for (const e of enemyCars) if (e.pos.distanceTo(pc.pos) < 45) { explode(e.pos, 0.6); scene.remove(e.g); e.dead = true; }
     pc.hp = 60; pc.dead = false; pc.g.visible = true; pc.vel.set(0, 0, 0); state.spawnT = 5; state.mode = 'drive';
   } else {
-    hero.hp = Math.round(P.footMax * 0.6); hero.dead = false; hero.g.rotation.x = 0; hero.g.position.y = 0;
+    hero.hp = Math.round(P.footMax * 0.6); hero.dead = false; reviveHuman(hero);
     for (const e of enemies) if (!e.dead) { const d = e.pos.clone().sub(hero.pos).setY(0); if (d.length() < 8) { e.pos.addScaledVector(d.normalize(), 6); collideCircle(e.pos, new V3(), 0.6); } e.react = 1.2; }
     state.mode = 'foot';
   }
@@ -1962,34 +1904,36 @@ function loop(now) {
   else if (state.mode === 'dialog') updateDialog(dt);
   else if (state.mode === 'dying') {
     state.dyingT -= dt;
-    if (state.act === 2) { const k = Math.min(1, (1.4 - state.dyingT) * 3); hero.g.rotation.x = -k * PI / 2; hero.g.position.y = k * 0.3; }
     if (state.dyingT <= 0) showDead();
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateParticles(dt); updateWrecks(dt);
+  updateHumans(dt); updateParticles(dt); updateWrecks(dt);
   updateCamera(dt);
   updateRain(dt, focus);
   flash.intensity *= Math.exp(-dt * 12);
   beam.material.opacity = 0.18 + Math.sin(state.t * 3) * 0.06;
   const sel = state.mode === 'select', kk = Math.min(1, dt * 4);
-  keyLight.intensity += ((sel ? 2.6 : 0) - keyLight.intensity) * kk; rimLight.intensity += ((sel ? 2.4 : 0) - rimLight.intensity) * kk;
+  keyLight.intensity += ((sel ? 1.5 : 0) - keyLight.intensity) * kk; rimLight.intensity += ((sel ? 2.4 : 0) - rimLight.intensity) * kk;
   if (!$('hud').hidden) updateHud(dt);
   render();
 }
 
-buildWorld();
-buildRoster();
-renderPortraits();
-pc = Object.assign(makeCar(0xffb703, true), { pos: new V3(-165, 0, 4), vel: new V3(), h: PI / 2, hp: 100, vf: 0 });
-pvEnemy = Object.assign(makeCar(0x2b2b33, false), { pos: new V3(), h: PI / 2 });
-applyChar();
-$('loading').hidden = true;
-showPreview();
-requestAnimationFrame(loop);
+$('loading').textContent = 'Загрузка города… 0%';
+loadAssets((k) => { $('loading').textContent = 'Загрузка города… ' + Math.round(k * 100) + '%'; }).then(() => {
+  buildWorld();
+  buildRoster();
+  renderPortraits();
+  pc = Object.assign(makeCar(0xffb703, true), { pos: new V3(-165, 0, 4), vel: new V3(), h: PI / 2, hp: 100, vf: 0 });
+  pvEnemy = Object.assign(makeCar(0x2b2b33, false), { pos: new V3(), h: PI / 2 });
+  applyChar();
+  $('loading').hidden = true;
+  showPreview();
+  requestAnimationFrame(loop);
+}).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>
