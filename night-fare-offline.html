@@ -107,7 +107,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .tbtn.aim.held { background: rgba(77,255,166,.5); }
 .touch.on-foot .tbtn.aim { display: grid; } .touch.on-foot .tbtn.drift { display: none; }
 .tbtn.horn { display: none; --c: #ffd23a; right: calc(194px + var(--sar)); bottom: calc(40px + var(--sab)); width: 62px; height: 62px; }
-body.online .tbtn.horn { display: grid; } body.online .tbtn.nitro, body.online .tbtn.shield, body.online .tbtn.fire, body.online #nav, body.online .boosts { display: none; }
+body.online .tbtn.horn { display: grid; } body.online .tbtn.nitro, body.online .tbtn.shield, body.online .tbtn.fire, body.online:not(.job) #nav, body.online .boosts { display: none; }
 .chat { position: fixed; left: calc(12px + var(--sal)); top: calc(110px + var(--sat)); width: min(380px, calc(100% - 24px - var(--sal) - var(--sar))); max-height: calc(100% - 260px - var(--sat) - var(--sab)); min-height: 160px; display: grid; grid-template-rows: 1fr auto auto; gap: 6px; background: rgba(8,10,24,.88); border: 1px solid var(--line); border-radius: 10px; padding: 10px; z-index: 30; }
 .chat-list { overflow-y: auto; display: grid; gap: 4px; align-content: start; font-size: 14px; line-height: 1.35; }
 .cmsg b { color: var(--taxi); } .clink { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 3px; }
@@ -318,7 +318,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
     <div class="stats"><b id="coins">0</b> монет · <b id="kills">0</b> сбито</div>
     <div id="boosts" class="stats boosts"></div>
     <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
-    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
+    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnJob" class="chip hud-chip" type="button" hidden>Отказаться от заказа</button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
     <button id="mute" class="mute" type="button">Звук: вкл</button>
   </div>
   <div id="bars" class="bars" hidden></div>
@@ -416,7 +416,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v25'; window.__errs = [];
+window.APP_VER = 'v26'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5328,6 +5328,7 @@ function drawMinimap() {
   const list = state.act === 1 ? enemyCars : enemies;
   for (const e of list) if (!e.dead) dot(e.pos.x, e.pos.z, 5, '#ff3d8b');
   for (const c of LIFE.cars) if (c.g.visible) dot(c.pos.x, c.pos.z, 3, 'rgba(200,200,220,.55)');
+  if (ONL.on) { for (const b of BOTS.list) dot(b.pos.x, b.pos.z, 4, '#9ab0ff'); for (const o of ONL.others.values()) dot(o.pos.x, o.pos.z, 5, o.isParty ? '#7aff9a' : '#ffe9a8'); }
   mctx.restore();
   // the target: a pulsing dot, or an arrow on the rim when it is farther than the map shows
   const tgt = beam.visible ? beam.position : null;
@@ -6140,13 +6141,15 @@ function startOnline() {
   if (hero) { scene.remove(hero.g); hero = null; }
   clearStage(); state.ep = 99; state.ch = 1; state.coins = 0; state.time = 0; state.reviveUsed = {}; state.nitroT = 0; state.shieldT = 0;
   const [x, z, h] = onlineSpawnPoint(); beginDrive(x, z, h); state.invuln = 1e9;
-  MIS = { title: 'Открытый город', online: true, noFire: true, noFireMsg: 'В открытом городе не стреляют', chase: { max: 0 }, navName: '', navGoal: () => pc.pos,
-    update() {}, hud() { return { timer: `Онлайн: ${ONL.count} в комнате ${ONL.room}` }; } };
-  setObjective('Открытый город: катайся, сигналь (H) и общайся в чате. Машины других игроков — призраки, сквозь них можно проехать.');
+  MIS = { title: 'Открытый город', online: true, noFire: true, noFireMsg: 'В открытом городе не стреляют', chase: { max: 0 }, get navName() { return JOBS.cur ? (JOBS.cur.ph === 'pick' ? 'Пассажир: ' + JOBS.cur.from[0] : JOBS.cur.to[0]) : ''; },
+    navGoal: () => (JOBS.cur ? new V3(...(JOBS.cur.ph === 'pick' ? [JOBS.cur.from[1][0], 0, JOBS.cur.from[1][1]] : [JOBS.cur.to[1][0], 0, JOBS.cur.to[1][1]])) : pc.pos),
+    update(dt) { jobsUpdate(dt); }, hud() { if (JOBS.cur && JOBS.cur.ph === 'ride') return { timer: `Заказ: ${fmt(JOBS.cur.left)} · ${JOBS.cur.reward} монет`, bad: JOBS.cur.left < 15 }; return { timer: `Онлайн: ${ONL.count} · ботов ${BOTS.list.length} · комната ${ONL.room}` }; } };
+  setObjective('Открытый город: катайся, бери заказы такси, сигналь (H) и общайся в чате. Машины других игроков — призраки.'); JOBS.cur = null; JOBS.wait = 8;
   beam.visible = false;
   state.mode = 'drive'; ONL.on = true;
   ONL.id = (CLOUD.user && CLOUD.user.id) || ONL.id || ('g' + Math.random().toString(36).slice(2, 10));
   joinRoom(1);
+  botsClear(); for (let i = 0, k = 0; i < 8 && k < 30; k++) if (botSpawn(i + k)) i++;
   $('btnChat').hidden = false; $('btnParty').hidden = false; renderChat();
 }
 function joinRoom(n) {
@@ -6178,7 +6181,7 @@ function leaveRoom(keep) {
   if (ONL.ch) { try { CLOUD.sb.removeChannel(ONL.ch); } catch (e) { /* gone */ } ONL.ch = null; }
   if (ONL.chat) { try { CLOUD.sb.removeChannel(ONL.chat); } catch (e) { /* gone */ } ONL.chat = null; }
   for (const id of [...ONL.others.keys()]) dropOther(id);
-  if (!keep) { ONL.on = false; document.body.classList.remove('online'); partyLeave(true); if ($('btnChat')) { $('btnChat').hidden = true; $('chat').hidden = true; ONL.chatOpen = false; $('btnParty').hidden = true; $('party').hidden = true; PARTY.open = false; } }
+  if (!keep) { ONL.on = false; document.body.classList.remove('online'); partyLeave(true); botsClear(); JOBS.cur = null; document.body.classList.remove('job'); if ($('btnJob')) $('btnJob').hidden = true; if ($('btnChat')) { $('btnChat').hidden = true; $('chat').hidden = true; ONL.chatOpen = false; $('btnParty').hidden = true; $('party').hidden = true; PARTY.open = false; } }
 }
 function onlinePos(q) {
   if (!q || !q.i || q.i === ONL.id || typeof q.x !== 'number') return;
@@ -6205,7 +6208,7 @@ function chatBubble(o, text) {
 }
 function updateOnline(dt) {
   if (!ONL.on || !pc) return;
-  arrow.visible = false;
+  arrow.visible = !!JOBS.cur; botsUpdate(dt);
   // send my car a few times a second (less when standing still): realtime messages are counted by the server
   ONL.sendT -= dt; const moving = Math.hypot(pc.vel.x, pc.vel.z) > 0.5;
   if (ONL.ch && ONL.sendT <= 0) {
@@ -6226,7 +6229,7 @@ function updateOnline(dt) {
 // chat panel
 function renderChat() {
   const box = $('chatList'); if (!box) return;
-  box.innerHTML = ONL.msgs.filter((m) => !ONL.muted.has(m.user_id)).map((m) => `<div class="cmsg"><b>${esc(m.name)}</b> ${esc(m.body)}${m.user_id !== ONL.id ? ` <button class="clink" data-rep="${m.id}" type="button" title="Пожаловаться">⚑</button><button class="clink" data-mute="${esc(m.user_id)}" type="button" title="Скрыть игрока">⨯</button>` : ''}</div>`).join('') || '<div class="cmsg note">Сообщений пока нет. Поздоровайся!</div>';
+  box.innerHTML = ONL.msgs.filter((m) => !ONL.muted.has(m.user_id)).map((m) => `<div class="cmsg"><b>${esc(m.name)}</b> ${esc(m.body)}${m.user_id !== ONL.id && !m.bot ? ` <button class="clink" data-rep="${m.id}" type="button" title="Пожаловаться">⚑</button><button class="clink" data-mute="${esc(m.user_id)}" type="button" title="Скрыть игрока">⨯</button>` : ''}</div>`).join('') || '<div class="cmsg note">Сообщений пока нет. Поздоровайся!</div>';
   box.scrollTop = box.scrollHeight;
   box.querySelectorAll('[data-rep]').forEach((b) => { b.onclick = () => reportMsg(+b.dataset.rep); });
   box.querySelectorAll('[data-mute]').forEach((b) => { b.onclick = () => { ONL.muted.add(b.dataset.mute); try { localStorage.setItem('nf-muted', JSON.stringify([...ONL.muted])); } catch (e) { /* storage */ } dropOther(b.dataset.mute); renderChat(); toast('Игрок скрыт', 1.4); }; });
@@ -6237,6 +6240,7 @@ async function sendChat() {
   if (!PROF.cloud) { toast('Войди в профиль, чтобы писать в чат', 2); return; }
   inp.value = '';
   const { error } = await CLOUD.sb.from('chat_messages').insert({ room: 'city-' + ONL.room, body: body.slice(0, 140) });
+  if (!error) botsHear(body);
   if (error) { const m = String(error.message || ''); toast(/too_fast/.test(m) ? 'Не так быстро' : /chat_banned/.test(m) ? 'Чат для тебя закрыт' : /empty/.test(m) ? 'Сообщение пустое после фильтра' : 'Не отправилось', 1.8); }
 }
 async function reportMsg(id) {
@@ -6395,6 +6399,131 @@ function renderParty() {
   }; });
 }
 function toggleParty(v) { PARTY.open = v === undefined ? !PARTY.open : v; $('party').hidden = !PARTY.open; if (PARTY.open) { toggleChat(false); renderParty(); } }
+
+// ---------------- bots in «Открытый город»: about ten drivers so the city never feels empty ----------------
+// They live only on this device (no server traffic), follow the street grid in their lane, honk now and then and chat a little.
+// Marked as bots on their name tags and in the chat: players are never told a bot is a person.
+const BOTS = { list: [], chatT: 20, checkT: 0, said: new Set() };
+const BOT_NAMES = ['Ночной_волк', 'Саня_таксист', 'Лена за рулём', 'Дрифт_Кинг', 'Сова', 'Пётр_М', 'Ксю', 'Неон', 'Маршрутка42', 'Гоша', 'Рыжая', 'Дед_Мазай', 'Turbo_Вася', 'Алина', 'Шумахер', 'Кот_в_такси'];
+const BOT_LINES = [
+  'Кто на гонку до моста?', 'На проспекте опять пробка, объезжайте по узкой', 'Видел полицию у мэрии, аккуратнее', 'Кто знает, где тут заправка?',
+  'Ночь тихая сегодня', 'Дождь не кончается…', 'У вокзала стоянка такси свободна', 'Эстакада в аэропорт пустая, лечу', 'Кто в депо был? Там темно',
+  'Новая «Девятка» в гараже — огонь', 'Кто нитро уже купил?', 'Неоновая подсветка — лучшее вложение', 'Опять на красный проскочил 😅', 'Ищу компанию в группу, кидайте код',
+  'Кафе «Фонарь» открыто всю ночь, рекомендую', 'Радио «Полночь» сегодня крутит хорошее', 'Кто видел жёлтое такси у банка?', 'Я тут недавно, где центр?', 'Сигнальте, если видите меня 📯',
+];
+const BOT_HI = ['Привет, {n}!', 'Здарова, {n} 👋', 'О, {n}, привет! Катаемся?', 'Привет! Добро пожаловать в Порт-Северный', 'Хай, {n}'];
+const nodeOk = (x, z) => Math.abs(x) <= 160 && Math.abs(z) <= 160;
+function botLanePos(a, b, s, out) {
+  const d = laneDir(a, b), lane = a[0] === b[0] && Math.abs(a[0] - AVENUE) < 1 ? 5 : LANE;
+  out.x = a[0] + d.fx * s - d.fz * lane; out.z = a[1] + d.fz * s + d.fx * lane; return d;
+}
+function botNext(b) {
+  const opts = [[80, 0], [-80, 0], [0, 80], [0, -80]].map(([dx, dz]) => [b.b[0] + dx, b.b[1] + dz]).filter(([x, z]) => nodeOk(x, z) && !(x === b.a[0] && z === b.a[1]));
+  b.a = b.b; b.b = opts[Math.floor(Math.random() * opts.length)]; b.s = 0;
+}
+function botSpawn(i) {
+  const name = BOT_NAMES[(i + Math.floor(Math.random() * BOT_NAMES.length)) % BOT_NAMES.length];
+  if (BOTS.list.some((q) => q.name === name)) return null;
+  const carKeys = Object.keys(CARS), car = carKeys[Math.floor(Math.random() * carKeys.length)], paints = Object.keys(PAINTS).filter((k) => !PAINTS[k].pass);
+  const paint = paints[Math.floor(Math.random() * paints.length)];
+  const m = makeCar(new THREE.Color(...PAINTS[paint].c).getHex(), 'civ', CARS[car].model);
+  const tag = nameTag(name + ' · бот', '#c8d0e0'); tag.position.set(0, 3.4, 0); m.g.add(tag);
+  // start on a random street, away from the player
+  let a, bb;
+  for (let k = 0; k < 20; k++) {
+    a = [ROADS[Math.floor(Math.random() * 5)], ROADS[Math.floor(Math.random() * 5)]];
+    const dir = [[80, 0], [-80, 0], [0, 80], [0, -80]][Math.floor(Math.random() * 4)]; bb = [a[0] + dir[0], a[1] + dir[1]];
+    if (nodeOk(bb[0], bb[1]) && (!pc || Math.hypot(a[0] - pc.pos.x, a[1] - pc.pos.z) > 40)) break;
+  }
+  const b = Object.assign(m, { name, a, b: bb, s: Math.random() * 60, sp: rand(11, 19), pos: new V3(), h: 0, honkT: rand(20, 60), bubble: null, bubbleT: 0, id: 'bot-' + name });
+  BOTS.list.push(b); return b;
+}
+function botsWanted() { return Math.max(2, 10 - Math.max(0, ONL.count - 1)); }
+function botsUpdate(dt) {
+  if (!ONL.on) return;
+  BOTS.checkT -= dt;
+  if (BOTS.checkT <= 0) {
+    BOTS.checkT = 4; const want = botsWanted();
+    if (BOTS.list.length < want) botSpawn(BOTS.list.length);
+    else if (BOTS.list.length > want) { const b = BOTS.list.pop(); scene.remove(b.g); }
+  }
+  const tmp = { x: 0, z: 0 };
+  for (const b of BOTS.list) {
+    const L = laneDir(b.a, b.b).L;
+    // slow down near the player's car ahead and at corners
+    const ahead = pc && Math.hypot(pc.pos.x - b.pos.x, pc.pos.z - b.pos.z) < 9 && Math.cos(Math.atan2(pc.pos.x - b.pos.x, pc.pos.z - b.pos.z) - b.h) > 0.7;
+    const corner = Math.min(b.s, L - b.s) < 12;
+    const v = ahead ? 0 : corner ? b.sp * 0.55 : b.sp;
+    b.s += v * dt;
+    if (b.s >= L) botNext(b);
+    const d = botLanePos(b.a, b.b, b.s, tmp);
+    const h = Math.atan2(d.fx, d.fz);
+    b.pos.x += (tmp.x - b.pos.x) * Math.min(1, dt * 6); b.pos.z += (tmp.z - b.pos.z) * Math.min(1, dt * 6);
+    if (!b.init) { b.pos.set(tmp.x, 0, tmp.z); b.h = h; b.init = true; }
+    b.h += wrapA(h - b.h) * Math.min(1, dt * 5);
+    b.g.position.set(b.pos.x, 0, b.pos.z); b.g.rotation.y = b.h;
+    for (const w of b.wheels) w.rotation.x += v * dt / 0.43;
+    b.honkT -= dt;
+    if (b.honkT <= 0) { b.honkT = rand(30, 90); const dd = pc ? b.pos.distanceTo(pc.pos) : 999; if (dd < 50) { sfx.horn(Math.max(0.2, 1 - dd / 50)); chatBubble(b, '📯'); } }
+    if (b.bubble) { b.bubbleT -= dt; if (b.bubbleT <= 0) { b.g.remove(b.bubble); b.bubble = null; } }
+  }
+  // the chat: now and then a bot says something about the city
+  BOTS.chatT -= dt;
+  if (BOTS.chatT <= 0 && BOTS.list.length) {
+    BOTS.chatT = rand(28, 70);
+    let line = BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)];
+    for (let k = 0; k < 5 && BOTS.said.has(line); k++) line = BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)];
+    BOTS.said.add(line); if (BOTS.said.size > 12) BOTS.said.clear();
+    botSay(BOTS.list[Math.floor(Math.random() * BOTS.list.length)], line);
+  }
+}
+function botSay(b, text) {
+  ONL.msgs.push({ id: 'b' + Date.now(), user_id: b.id, name: b.name + ' (бот)', body: text, bot: true }); if (ONL.msgs.length > 40) ONL.msgs.shift();
+  renderChat(); chatBubble(b, text);
+  if (!ONL.chatOpen) $('btnChat').classList.add('new');
+}
+// a bot answers a greeting from the player
+function botsHear(body) {
+  if (!BOTS.list.length || !/(привет|здравств|хай|здаров|добрый|салют)/i.test(body)) return;
+  const b = BOTS.list[Math.floor(Math.random() * BOTS.list.length)], line = BOT_HI[Math.floor(Math.random() * BOT_HI.length)].replace('{n}', onlineName());
+  setTimeout(() => { if (ONL.on && BOTS.list.includes(b)) botSay(b, line); }, rand(1500, 3500));
+}
+function botsClear() { for (const b of BOTS.list) scene.remove(b.g); BOTS.list.length = 0; }
+
+// ---------------- taxi orders in «Открытый город» ----------------
+// A call comes in: pick the passenger up, drive to the address before the time runs out; coins go to the profile wallet, a tip for speed.
+const JOBS = { cur: null, wait: 6, done: 0 };
+const JOB_PLACES = [['Мэрия', [40, 80]], ['Центральная площадь', [0, 40]], ['Банк «Гранит»', [120, 0]], ['Парк', [-40, 0]], ['Порт', [-120, 160]], ['Склад №7', [120, -80]],
+  ['Кафе на Восточной', [160, 40]], ['Набережная канала', [-80, -40]], ['Тоннель', [0, -160]], ['Заводы', [-40, -160]], ['Проспект', [0, 120]], ['Стоянка у моста', [-160, -80]],
+  ['Башни делового центра', [80, 120]], ['Метро', [80, 40]], ['Старый квартал', [-160, 80]]];
+const JOB_HELLO = ['Добрый вечер! Только побыстрее, опаздываю.', 'Здравствуйте. Музыку можно потише?', 'Наконец-то! Полчаса жду машину.', 'Ой, а вы та самая жёлтая «Девятка»? Шучу.', 'Едем. Я заплачу сверху, если успеем.', 'Ночь такая длинная… Поехали.'];
+const JOB_BYE = ['Спасибо, лучший таксист в городе!', 'Успели! Держите на чай.', 'Мягко едете. Сохраню ваш номер.', 'Отлично, до встречи!'];
+function jobNew() {
+  const near = JOB_PLACES.filter(([, p]) => Math.hypot(p[0] - pc.pos.x, p[1] - pc.pos.z) > 40).sort(() => Math.random() - 0.5);
+  const from = near[0], to = JOB_PLACES.filter((q) => q !== from && Math.hypot(q[1][0] - from[1][0], q[1][1] - from[1][1]) > 120).sort(() => Math.random() - 0.5)[0];
+  const dist = Math.hypot(to[1][0] - from[1][0], to[1][1] - from[1][1]);
+  JOBS.cur = { from, to, ph: 'pick', left: 0, reward: Math.round(40 + dist * 0.3), dist };
+  document.body.classList.add('job'); $('btnJob').hidden = false; sfx.bell && sfx.bell();
+  toast(`Новый заказ: ${from[0]} → ${to[0]}. Около ${JOBS.cur.reward} монет`, 3);
+  setObjective(`Заказ: забери пассажира — ${from[0]}. Потом отвези: ${to[0]}.`);
+}
+function jobEnd(msg) { JOBS.cur = null; JOBS.wait = rand(6, 12); document.body.classList.remove('job'); $('btnJob').hidden = true; beam.visible = false; if (msg) toast(msg, 2.6); setObjective('Открытый город: катайся, бери заказы, сигналь (H) и общайся в чате.'); }
+function jobsUpdate(dt) {
+  if (!JOBS.cur) { JOBS.wait -= dt; if (JOBS.wait <= 0 && pc) jobNew(); return; }
+  const J = JOBS.cur, tgt = J.ph === 'pick' ? J.from[1] : J.to[1], d = Math.hypot(tgt[0] - pc.pos.x, tgt[1] - pc.pos.z), slow = Math.hypot(pc.vel.x, pc.vel.z) < 7;
+  setBeam(new V3(tgt[0], 0, tgt[1]));
+  if (J.ph === 'pick') {
+    if (d < 11 && slow) { J.ph = 'ride'; J.left = J.total = Math.round(J.dist / 8.5 + 25); toast('Пассажир: «' + JOB_HELLO[Math.floor(Math.random() * JOB_HELLO.length)] + '»', 3); setObjective(`Вези пассажира: ${J.to[0]}. Успей за ${fmt(J.left)}.`); }
+  } else {
+    J.left -= dt;
+    if (J.left <= 0) return jobEnd('Пассажир не дождался и вышел. Без оплаты.');
+    if (d < 11 && slow) {
+      const tip = J.left > J.total * 0.4 ? Math.round(J.reward * 0.5) : 0;
+      addCoins(J.reward + tip); profStat('fares'); JOBS.done++;
+      return jobEnd('«' + JOB_BYE[Math.floor(Math.random() * JOB_BYE.length)] + '»' + (tip ? ` Чаевые: +${tip}` : ''));
+    }
+  }
+}
 
 // pause menu
 let pausedFrom = null;
@@ -6665,6 +6794,7 @@ $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
 $('btnOnline').addEventListener('click', startOnline);
 $('btnParty').addEventListener('click', () => toggleParty());
+$('btnJob').addEventListener('click', () => jobEnd('Заказ отменён. Следующий скоро.'));
 $('partyClose').addEventListener('click', () => toggleParty(false));
 window.addEventListener('keyup', (e) => { if (e.code === 'KeyG') talk(false); });
 $('btnTalk').addEventListener('pointerdown', (e) => { e.preventDefault(); try { $('btnTalk').setPointerCapture(e.pointerId); } catch (err) { /* synthetic */ } talk(true); });
@@ -6756,7 +6886,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
