@@ -73,6 +73,31 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .tbtn { position: absolute; pointer-events: auto; touch-action: none; border-radius: 50%; border: 2px solid var(--line); color: var(--text); font: 700 13px var(--font-body); }
 .tbtn.fire { right: calc(26px + env(safe-area-inset-right, 0px)); bottom: calc(110px + env(safe-area-inset-bottom, 0px)); width: 92px; height: 92px; background: rgba(255, 61, 139, .55); }
 .tbtn.drift { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(40px + env(safe-area-inset-bottom, 0px)); width: 72px; height: 72px; background: rgba(255,255,255,.12); }
+.tbtn.nitro { right: calc(26px + env(safe-area-inset-right, 0px)); bottom: calc(214px + env(safe-area-inset-bottom, 0px)); width: 62px; height: 62px; background: rgba(90,216,255,.4); font-size: 11px; }
+.tbtn.shield { right: calc(98px + env(safe-area-inset-right, 0px)); bottom: calc(214px + env(safe-area-inset-bottom, 0px)); width: 62px; height: 62px; background: rgba(120,140,255,.35); font-size: 11px; }
+.boosts { font-size: 12px; opacity: .9; } .stats.god { background: #b8233a; color: #fff; font-weight: 700; }
+.touch-on .boosts { display: none; }
+.prof-chip { align-self: flex-start; margin-bottom: 6px; } .prof-chip b { color: var(--taxi); }
+.prof { position: fixed; inset: 0; z-index: 40; background: rgba(5,6,16,.72); display: grid; place-items: center; padding: 16px; }
+.prof-card { width: min(920px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: #12142c; border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; }
+.prof-head { display: flex; align-items: center; gap: 12px; } .prof-who { flex: 1; display: grid; min-width: 0; } .prof-who b { font-size: 18px; } .prof-who small { opacity: .7; font-size: 12px; }
+.prof-ava { width: 46px; height: 46px; border-radius: 50%; background: var(--taxi); color: #1a1405; display: grid; place-items: center; font: 700 20px var(--font-body); flex: none; }
+.prof-coins { display: grid; text-align: right; } .prof-coins b { color: var(--taxi); font-size: 20px; } .prof-coins small { opacity: .7; font-size: 11px; }
+.prof-tabs { display: flex; flex-wrap: wrap; gap: 6px; } .prof-body { display: grid; gap: 12px; }
+.btn.sm { padding: 7px 12px; font-size: 13px; }
+.plabel { font-weight: 700; font-size: 13px; letter-spacing: .04em; opacity: .85; }
+.pgrid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.pbox { background: rgba(255,255,255,.05); border-radius: 8px; padding: 10px; display: grid; gap: 6px; } .pbox small { opacity: .75; font-size: 12px; } .pbox .btn { justify-self: start; }
+.pbar { height: 6px; background: rgba(255,255,255,.1); border-radius: 3px; overflow: hidden; } .pbar i { display: block; height: 100%; background: var(--go); }
+.pstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; } .pstats div { background: rgba(255,255,255,.05); border-radius: 8px; padding: 8px; display: grid; } .pstats small { opacity: .7; font-size: 11px; } .pstats b { font-size: 16px; }
+.pitems { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.pitem { background: rgba(255,255,255,.05); border: 1px solid transparent; border-radius: 8px; padding: 10px; display: grid; gap: 6px; align-content: start; } .pitem.on { border-color: var(--go); } .pitem span { font-size: 12px; opacity: .75; } .pitem em { font-style: normal; color: var(--taxi); } .pitem .btn { justify-self: start; } .pitem small { font-size: 11px; opacity: .7; }
+.pitem.prem { background: rgba(255,196,61,.08); } .pitem.ach.on b { color: var(--taxi); }
+.cstat { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; } .cstat small { font-size: 11px; opacity: .7; }
+.swatches { display: flex; flex-wrap: wrap; gap: 5px; } .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); cursor: pointer; padding: 0; } .swatch.on { border-color: #fff; box-shadow: 0 0 0 2px var(--go); } .swatch.locked { opacity: .45; }
+.pitem .pips { display: flex; gap: 4px; } .pitem .pips i { width: 18px; height: 6px; border-radius: 2px; background: rgba(255,255,255,.15); } .pitem .pips i.on { background: var(--go); }
+.plogin { display: flex; flex-wrap: wrap; gap: 8px; } .plogin input { flex: 1 1 140px; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 9px 10px; font: 14px var(--font-body); }
+.pmsg { min-height: 1em; font-size: 13px; color: var(--taxi); } .prow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
 .touch-on .speedo { bottom: calc(220px + env(safe-area-inset-bottom, 0px)); }
 .touch-on .hint { display: none; }
 
@@ -204,6 +229,8 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
   <div class="hud-tr">
     <canvas id="minimap" width="300" height="300"></canvas>
     <div class="stats"><b id="coins">0</b> монет · <b id="kills">0</b> сбито</div>
+    <div id="boosts" class="stats boosts"></div>
+    <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
     <button id="mute" class="mute" type="button">Звук: вкл</button>
   </div>
   <div id="bars" class="bars" hidden></div>
@@ -217,6 +244,8 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
   <div id="joy" class="joy"><div id="knob" class="knob"></div></div>
   <button id="btnFire" class="tbtn fire" type="button">Огонь</button>
   <button id="btnDrift" class="tbtn drift" type="button">Занос</button>
+  <button id="btnNitro" class="tbtn nitro" type="button">Нитро</button>
+  <button id="btnShield" class="tbtn shield" type="button">Щит</button>
 </div>
 
 <div id="preview" class="preview" hidden>
@@ -235,6 +264,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 <div id="select" class="select" hidden>
   <div class="sel-panel">
     <div class="sel-top">
+      <button id="selProfile" class="chip prof-chip" type="button"></button>
       <h2 class="sel-title">Выбери водителя</h2>
       <div id="epChips" class="episodes" aria-label="Эпизод"></div>
       <div id="chapters" class="episodes" aria-label="Глава" hidden></div>
@@ -251,11 +281,20 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
     </div>
     <div class="btns go-row">
       <button id="btnGo" class="btn primary" type="button">В путь</button>
+      <button id="btnProfile" class="btn" type="button">Профиль и магазин</button>
       <button id="btnBack" class="btn" type="button">Назад</button>
     </div>
     <div id="ctrlNote" class="note"></div>
   </div>
   <div class="sel-stage"><div class="stage-name"><b id="stageName"></b><span id="stageNick"></span></div></div>
+</div>
+
+<div id="prof" class="prof" hidden>
+  <div class="prof-card" role="dialog" aria-label="Профиль">
+    <div class="prof-head"><div id="profAva" class="prof-ava">Г</div><div class="prof-who"><b id="profName"></b><small id="profSub"></small></div><div class="prof-coins"><b id="profCoins">0</b><small>монет</small></div><button id="profClose" class="btn sm" type="button" aria-label="Закрыть">✕</button></div>
+    <div id="profTabs" class="prof-tabs"></div>
+    <div id="profBody" class="prof-body"></div>
+  </div>
 </div>
 
 <div id="dialog" class="dialog" hidden>
@@ -752,7 +791,7 @@ function buildWorld() {
   const bld = {}; BT.forEach((t) => { bld[t] = [[], [], [], []]; });
   const putBld = (t, x, z, ry, sy, S, collide) => {
     const v = Math.floor(srand() * 4);
-    if (inBankBlock(x, z)) return;
+    if (inBankBlock(x, z) || inSquare(x, z) || inCanalBand(x, z, 9)) return;
     bld[t][v].push({ x, y: -0.4, z, ry, sx: S, sy: S * sy, sz: S });
     if (!collide) return;
     const hw = (WIDE[t] ? 1.0 : 0.62) * S, z0 = -0.66 * S, z1 = 0.82 * S, c = Math.round(Math.cos(ry)), sn = Math.round(Math.sin(ry));
@@ -781,12 +820,12 @@ function buildWorld() {
   const lampHead = HDR(0xffd9a0, 6), metalC = col(0x34363e);
   const parked = [], lamps = [], tlights = [];
   const nearGate = (x, z) => Math.abs(x - 120) < 16 && z < -70 && z > -96;
-  const noPark = (x, z) => (Math.abs(z) < 12) || (x < -150 && z > 90) || (z < -70 && z > -92 && x > 90 && x < 150) || (Math.abs(x + 160) < 12 && z > 80);
+  const noPark = (x, z) => (Math.abs(z) < 12) || inCanalBand(x, z, 2) || inTunnel(x, z, 3) || (x < -150 && z > 90) || (z < -70 && z > -92 && x > 90 && x < 150) || (Math.abs(x + 160) < 12 && z > 80);
   for (const r of ROADS) for (let t = -158; t <= 160; t += 17) {
     if (ROADS.some((r2) => Math.abs(t - r2) < 15)) continue;
     const s = Math.round(t / 17) % 2 ? 1 : -1;
     for (const [lx, lz, ax, az] of [[r + s * 9.3, t, -s, 0], [t, r + s * 9.3, 0, -s]]) {
-      if (nearGate(lx, lz)) continue;
+      if (nearGate(lx, lz) || inCanalBand(lx, lz, 1) || inTunnel(lx, lz, 1.5)) continue;
       // lamp: pole, arm over the road, glowing head and a light pool
       lamps.push({ x: lx, y: 0.15, z: lz, ry: Math.atan2(az, -ax), sx: 8 });
       putB(B.neon, G.box, lx + ax * 1.72, 7.22, lz + az * 1.72, ax ? 0.62 : 0.3, 0.08, az ? 0.62 : 0.3, 0, lampHead);
@@ -795,7 +834,7 @@ function buildWorld() {
     const tt = t + 8.5;
     if (!ROADS.some((r2) => Math.abs(tt - r2) < 14)) for (const [tx, tz] of [[r - s * 10.6, tt], [tt, r - s * 10.6]]) {
       if (nearGate(tx, tz)) continue;
-      const bk = Math.abs(tx - BANK.x) < 12 && Math.abs(tz - (BANK.z + 30)) < 4; // keep the bank entrance clear
+      const bk = (Math.abs(tx - BANK.x) < 12 && Math.abs(tz - (BANK.z + 30)) < 4) || inCanalBand(tx, tz, 1.5); // keep the bank entrance and the canal clear
       putB(bk ? SINK : B.trim, G.cyl, tx, 0.35, tz, 1.6, 0.4, 1.6, 0, col(0x6a6a72));
       putB(bk ? SINK : B.wood, G.cyl6, tx, 1.8, tz, 0.3, 3.2, 0.3, 0, col(0x5a3a26));
       const lc = col(pick([0x2f5a32, 0x3a6a34, 0x2a4d34, 0x4a6a2a]));
@@ -821,7 +860,7 @@ function buildWorld() {
   kitInstances('streetlight', lamps, KIT.prop, true);
   kitInstances('trafficlight_A', tlights, KIT.prop, true);
 
-  buildPark(); buildDocks(); buildYard(); buildBank();
+  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks();
 
   // one material per batch: a few draw calls for the whole city
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -891,6 +930,355 @@ function buildDocks() {
 }
 
 let yardGate, warehouseDoor, gateCollider = null;
+// ---------------- city life: traffic, buses, pedestrians ----------------
+// cars drive in the right lane along the road grid and turn at crossroads; buses follow fixed loops with stops;
+// pedestrians walk around the blocks, dodge cars and run from gunfire. Nobody here can be hurt.
+const LIFE = { cars: [], buses: [], peds: [], on: true, shotT: 99 };
+const LANE = 3.6, TURN = 7;
+const NODE_IDX = (v) => ROADS.indexOf(v);
+function laneDir(a, b) { const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz); return { fx: dx / L, fz: dz / L, L }; }
+function lanePos(a, b, s, out) { const d = laneDir(a, b); out.x = a[0] + d.fx * s - d.fz * LANE; out.z = a[1] + d.fz * s + d.fx * LANE; return d; }
+function nodeNext(prev, cur) {
+  const opts = [];
+  for (const [dx, dz] of [[80, 0], [-80, 0], [0, 80], [0, -80]]) {
+    const n = [cur[0] + dx, cur[1] + dz];
+    if (NODE_IDX(n[0]) < 0 || NODE_IDX(n[1]) < 0) continue;
+    if (prev && n[0] === prev[0] && n[1] === prev[1]) continue;
+    opts.push(n);
+  }
+  return opts.length ? pick(opts) : prev;
+}
+const CIV_COLORS = [0xe8e8ec, 0x2a2a30, 0xa8b0bc, 0xb8332e, 0x2e5ea8, 0x3a7a4a, 0xd8c8a0, 0x6a3a8a];
+const CIV_MAT = {};
+function civMat(c) { if (!CIV_MAT[c]) { const m = KIT.car.clone(); m.color = new THREE.Color(c).multiplyScalar(1.15); CIV_MAT[c] = m; } return CIV_MAT[c]; }
+function makeBus(color, num) {
+  const g = new THREE.Group();
+  const winTex = canvasTex(256, 64, (x, w, h) => { x.fillStyle = '#20242c'; x.fillRect(0, 0, w, h); for (let k = 0; k < 8; k++) { x.fillStyle = Math.random() < 0.8 ? '#ffe2a8' : '#6a6050'; x.fillRect(6 + k * 31, 8, 26, 34); } });
+  const body = std(color, { roughness: 0.45, metalness: 0.2 });
+  const b = new THREE.Mesh(box1, body); b.scale.set(2.6, 2.4, 11); b.position.y = 1.65; b.castShadow = true; g.add(b);
+  const roof = new THREE.Mesh(box1, std(0xe8e8ec)); roof.scale.set(2.5, 0.3, 10.6); roof.position.y = 3.0; g.add(roof);
+  const wm = new THREE.MeshBasicMaterial({ map: winTex, color: new THREE.Color(1.5, 1.4, 1.2) });
+  for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 1.2), wm); w.position.set(s * 1.31, 2.15, -0.2); w.rotation.y = s * PI / 2; g.add(w); }
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.3), new THREE.MeshBasicMaterial({ color: 0x1a2028 })); front.position.set(0, 2.1, 5.51); g.add(front);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshBasicMaterial({ map: canvasTex(128, 32, (x, w, h) => { x.fillStyle = '#101010'; x.fillRect(0, 0, w, h); x.fillStyle = '#ffb030'; x.font = 'bold 24px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('№ ' + num, w / 2, h / 2 + 1); }), color: new THREE.Color(2, 2, 2) }));
+  sign.position.set(0, 2.95, 5.52); g.add(sign);
+  const head = basic(new THREE.Color(5, 4.6, 3.8)), tail = basic(new THREE.Color(5, 0.25, 0.3));
+  for (const s of [-1, 1]) { const h = new THREE.Mesh(box1, head); h.scale.set(0.4, 0.2, 0.05); h.position.set(s * 0.9, 0.9, 5.52); g.add(h); const t = new THREE.Mesh(box1, tail); t.scale.set(0.3, 0.3, 0.05); t.position.set(s * 1.0, 1.0, -5.52); g.add(t); }
+  const wheels = [];
+  for (const [x, z] of [[-1.25, 3.6], [1.25, 3.6], [-1.25, -3.4], [1.25, -3.4]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 12), std(0x1a1a1e)); w.rotation.z = PI / 2; w.position.set(x, 0.55, z); g.add(w); wheels.push(w); }
+  scene.add(g); return { g, wheels };
+}
+// bus loops (nodes on the road grid) and their stops (shelters on the right-hand curb, mid-block)
+const BUS_ROUTES = [
+  { num: 7, color: 0xe8a020, nodes: [[-80, 0], [80, 0], [80, 80], [-80, 80]] },
+  { num: 12, color: 0x2a7ad0, nodes: [[0, -160], [0, 80], [160, 80], [160, -160]] },
+];
+function buildBusStops() {
+  const glass = col(0x8ac0e0), frame = col(0x2a2c34);
+  const tex = canvasTex(128, 128, (x, w) => { x.fillStyle = '#2a7a3a'; x.fillRect(0, 0, w, w); x.fillStyle = '#fff'; x.font = 'bold 72px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('А', w / 2, w / 2 + 4); });
+  for (const r of BUS_ROUTES) r.nodes.forEach((a, i) => {
+    const b = r.nodes[(i + 1) % r.nodes.length], d = laneDir(a, b);
+    for (let s = 40; s < d.L - 20; s += 160) {
+      const rx = -d.fz, rz = d.fx, x = a[0] + d.fx * s + rx * 10.4, z = a[1] + d.fz * s + rz * 10.4;
+      if (inCanalBand(x, z, 2) || inTunnel(x, z, 3) || (inBankBlock(x, z) && Math.abs(x - BANK.x) < 14) || (inSquare(x, z) && z > 48)) continue;
+      const ry = Math.atan2(rx, rz);
+      putB(B.trim, G.box, x + rx * 0.7, 1.4, z + rz * 0.7, 4.2, 2.5, 0.1, ry, glass);
+      putB(B.roof, G.box, x, 2.75, z, 4.6, 0.15, 1.8, ry, frame);
+      putB(B.wood, G.box, x + rx * 0.4, 0.6, z + rz * 0.4, 3.2, 0.12, 0.5, ry, col(0x8a6a48));
+      putB(B.bankL, G.box, x, 2.65, z, 3.6, 0.04, 0.3, ry, HDR(0xe8f4ff, 2));
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.6, 1.6, 1.6), side: THREE.DoubleSide }));
+      m.position.set(x - rx * 0.4 + d.fx * 2.6, 2.6, z - rz * 0.4 + d.fz * 2.6); m.rotation.y = ry; scene.add(m);
+      putB(B.metal, G.cyl, x - rx * 0.4 + d.fx * 2.6, 1.15, z - rz * 0.4 + d.fz * 2.6, 0.1, 2.3, 0.1, 0, frame);
+      BUS_STOPS.push({ route: r.num, seg: i, s });
+    }
+  });
+}
+// a mover follows lane a->b, then a bezier through the crossroads onto the next lane
+function moverStart(m, a, b, s) { m.a = a; m.b = b; m.s = s; m.turn = null; m.wait = 0; lanePos(a, b, s, m.pos); m.h = Math.atan2(b[0] - a[0], b[1] - a[1]); }
+function moverStep(m, dt, nextNode) {
+  if (m.turn) {
+    const T = m.turn; T.t = Math.min(1, T.t + m.v * dt / T.len);
+    const t = T.t, u = 1 - t;
+    const x = u * u * T.p0.x + 2 * u * t * T.p1.x + t * t * T.p2.x, z = u * u * T.p0.z + 2 * u * t * T.p1.z + t * t * T.p2.z;
+    const dx = 2 * u * (T.p1.x - T.p0.x) + 2 * t * (T.p2.x - T.p1.x), dz = 2 * u * (T.p1.z - T.p0.z) + 2 * t * (T.p2.z - T.p1.z);
+    m.pos.x = x; m.pos.z = z; if (dx * dx + dz * dz > 1e-6) m.h = Math.atan2(dx, dz);
+    if (T.t >= 1) { m.a = m.b; m.b = T.c; m.s = TURN; m.turn = null; }
+    return;
+  }
+  m.s += m.v * dt;
+  const d = lanePos(m.a, m.b, m.s, m.pos); m.h = Math.atan2(d.fx, d.fz);
+  if (m.s >= d.L - TURN) {
+    const c = nextNode(m), p0 = { x: m.pos.x, z: m.pos.z }, p2 = { x: 0, z: 0 }; lanePos(m.b, c, TURN, p2);
+    const d2 = laneDir(m.b, c);
+    let p1;
+    if (Math.abs(d.fx * d2.fx + d.fz * d2.fz) > 0.9) p1 = { x: (p0.x + p2.x) / 2, z: (p0.z + p2.z) / 2 };
+    else p1 = Math.abs(d.fx) > 0.5 ? { x: p2.x, z: p0.z } : { x: p0.x, z: p2.z };
+    m.turn = { p0, p1, p2, c, t: 0, len: Math.hypot(p1.x - p0.x, p1.z - p0.z) + Math.hypot(p2.x - p1.x, p2.z - p1.z) };
+  }
+}
+function lifeArena() { return state.ep >= 2 && MIS && MIS.arena ? MIS.arena : null; }
+function inArena(x, z, pad) { const A = lifeArena(); return A && x > A.x0 - pad && x < A.x1 + pad && z > A.z0 - pad && z < A.z1 + pad; }
+function spawnTraffic(m, near) {
+  for (let k = 0; k < 30; k++) {
+    const a = [pick(ROADS), pick(ROADS)], b = nodeNext(null, a), s = rand(TURN, 80 - TURN), p = { x: 0, z: 0 };
+    lanePos(a, b, s, p);
+    const d = Math.hypot(p.x - near.x, p.z - near.z);
+    if (d < 55 || d > 150 || inArena(p.x, p.z, 25)) continue;
+    moverStart(m, a, b, s); m.v = m.vmax * 0.6; m.g.visible = true; return true;
+  }
+  m.g.visible = false; return false;
+}
+function initLife() {
+  buildBusStops();
+  const nCars = perf.level >= 1 ? 7 : 11, nPeds = perf.level >= 1 ? 8 : 14;
+  for (let i = 0; i < nCars; i++) {
+    const c = CIV_COLORS[i % CIV_COLORS.length], m = makeCar(c, 'civ');
+    const o = Object.assign(m, { pos: new V3(), h: 0, v: 0, vmax: rand(11, 15.5), a: null, b: null, s: 0, turn: null, wait: 0, honk: 0, kind: 'car' });
+    LIFE.cars.push(o);
+  }
+  BUS_ROUTES.forEach((r) => {
+    const m = makeBus(r.color, r.num);
+    const o = Object.assign(m, { pos: new V3(), h: 0, v: 0, vmax: 10.5, route: r, ri: 0, wait: 0, stops: BUS_STOPS.filter((q) => q.route === r.num), kind: 'bus' });
+    moverStart(o, r.nodes[0], r.nodes[1], 20); LIFE.buses.push(o);
+  });
+  const MODELS = ['gleb', 'timur', 'artem', 'savva', 'rustam', 'kira', 'maya', 'zoya', 'olga', 'nika'];
+  const SHIRTS = ['#c84a4a', '#3a6ab8', '#e8e0d0', '#4a8a5a', '#d8a030', '#6a4a8a', '#2a2a32', '#a8b0bc', '#d86a9a'], PANTS = ['#2a2a35', '#3a3a48', '#4a3a2a', '#1a2a4a', '#5a5a62'], HAIR = ['#1e1620', '#5a3a20', '#c89a50', '#8a8a8a', '#a03a1a'];
+  for (let i = 0; i < nPeds; i++) {
+    const model = MODELS[i % MODELS.length], fem = ['kira', 'maya', 'zoya', 'olga', 'nika'].includes(model);
+    const colors = { Shirt: pick(SHIRTS), Pants: pick(PANTS), Hair: pick(HAIR), Main: pick(SHIRTS), DarkGreen: pick(PANTS), Helmet: pick(HAIR), Hat: pick(PANTS), Detail: pick(SHIRTS), Jacket: pick(SHIRTS) };
+    const look = { model, skin: pick(['#e8c0a0', '#d9a98a', '#c08a6a', '#a87452', '#f0d0b8']), colors, noGun: true, face: { fem, brow: colors.Hair, iris: pick(['#3a2a1a', '#3a6a9a', '#4a6a3a']), mouth: pick(['neutral', 'smile']) } };
+    const h = makeHuman(look, rand(0.94, 1.04));
+    const p = Object.assign(h, { pos: new V3(), bx: 0, bz: 0, off: 28.6, u: 0, dir: 1, sp: rand(1.2, 1.6), panic: 0, dodge: 0, face: 0, act: '' });
+    p.g.visible = false; LIFE.peds.push(p);
+  }
+  LIFE.ready = true;
+}
+const BLOCKS = []; for (const bx of [-120, -40, 40, 120]) for (const bz of [-120, -40, 40, 120]) BLOCKS.push([bx, bz]);
+function pedPos(p, out) {
+  const o = p.off, side = 2 * o, L = side * 4, u = ((p.u % L) + L) % L, k = Math.floor(u / side), t = u - k * side;
+  const corners = [[-o, -o], [o, -o], [o, o], [-o, o]], A = corners[k], Bc = corners[(k + 1) % 4];
+  out.x = p.bx + A[0] + (Bc[0] - A[0]) * t / side; out.z = p.bz + A[1] + (Bc[1] - A[1]) * t / side;
+  return Math.atan2((Bc[0] - A[0]) * p.dir, (Bc[1] - A[1]) * p.dir);
+}
+function spawnPed(p, near) {
+  for (let k = 0; k < 20; k++) {
+    const [bx, bz] = pick(BLOCKS); p.bx = bx; p.bz = bz; p.off = inBankBlock(bx, bz) ? 30.8 : 28.6; p.u = rand(0, 8 * p.off); p.dir = Math.random() < 0.5 ? 1 : -1;
+    const q = { x: 0, z: 0 }; pedPos(p, q);
+    const d = Math.hypot(q.x - near.x, q.z - near.z);
+    if (d < (state.act === 2 ? 16 : 25) || d > 85 || inArena(q.x, q.z, 12)) continue;
+    p.panic = 0; p.dodge = 0; p.g.visible = true; p.act = ''; return true;
+  }
+  p.g.visible = false; return false;
+}
+const _lq = { x: 0, z: 0 };
+function obstacleAhead(m, look) {
+  const fx = Math.sin(m.h), fz = Math.cos(m.h);
+  const test = (x, z, r) => { const dx = x - m.pos.x, dz = z - m.pos.z, ahead = dx * fx + dz * fz, side = Math.abs(dx * fz - dz * fx); return ahead > 0 && ahead < look && side < r; };
+  if (state.act === 1 && pc && pc.g.visible && test(pc.pos.x, pc.pos.z, 2.6)) return true;
+  if (state.act === 2 && hero && hero.g.visible && test(hero.pos.x, hero.pos.z, 2.2)) return true;
+  for (const o of LIFE.cars) if (o !== m && o.g.visible && test(o.pos.x, o.pos.z, 2.2)) return true;
+  for (const o of LIFE.buses) if (o !== m && test(o.pos.x, o.pos.z, 2.4)) return true;
+  for (const e of enemyCars) if (!e.dead && test(e.pos.x, e.pos.z, 2.4)) return true;
+  return false;
+}
+function bumpPlayer(m, r) {
+  if (state.act !== 1 || !pc || !pc.g.visible || state.mode !== 'drive') return;
+  const dx = pc.pos.x - m.pos.x, dz = pc.pos.z - m.pos.z, d = Math.hypot(dx, dz);
+  if (d > r || d < 1e-3) return;
+  const nx = dx / d, nz = dz / d; pc.pos.x += nx * (r - d); pc.pos.z += nz * (r - d);
+  const vn = pc.vel.x * nx + pc.vel.z * nz;
+  if (vn < 0) { pc.vel.x -= nx * vn * 1.3; pc.vel.z -= nz * vn * 1.3; pc.vel.multiplyScalar(0.8); if (-vn > 6) { sfx.crash(-vn); sparks(new V3((pc.pos.x + m.pos.x) / 2, 1, (pc.pos.z + m.pos.z) / 2)); if (-vn > 12) damagePlayer((-vn - 12) * 0.5); m.wait = 1.6; } }
+}
+function updateLife(dt) {
+  if (!LIFE.ready) return;
+  const active = state.mode === 'drive' || state.mode === 'foot' || state.mode === 'preview' || state.mode === 'dialog';
+  const near = focus;
+  LIFE.shotT += dt;
+  for (const m of LIFE.cars) {
+    if (!active) { m.g.visible = false; continue; }
+    if (!m.g.visible || !m.a || Math.hypot(m.pos.x - near.x, m.pos.z - near.z) > 170 || inArena(m.pos.x, m.pos.z, 12)) { if (!spawnTraffic(m, near)) continue; }
+    if (m.wait > 0) { m.wait -= dt; m.v = 0; }
+    else { const target = obstacleAhead(m, 12) ? 0 : m.turn ? m.vmax * 0.55 : m.vmax; m.v += clamp(target - m.v, -dt * 16, dt * 5); }
+    moverStep(m, dt, (mm) => nodeNext(mm.a, mm.b));
+    m.g.position.set(m.pos.x, 0, m.pos.z); m.g.rotation.y = m.h;
+    for (const w of m.wheels) w.rotation.x += m.v * dt * 2.2;
+    bumpPlayer(m, 3.4);
+  }
+  for (const m of LIFE.buses) {
+    m.g.visible = active;
+    if (!active) continue;
+    if (m.wait > 0) { m.wait -= dt; m.v = 0; }
+    else {
+      const stop = !m.turn && m.stops.find((q) => q.seg === m.ri && m.s < q.s && q.s - m.s < 14);
+      const target = obstacleAhead(m, 15) ? 0 : stop ? Math.max(1.5, (stop.s - m.s) * 0.7) : m.turn ? m.vmax * 0.55 : m.vmax;
+      m.v += clamp(target - m.v, -dt * 10, dt * 3);
+      if (stop && stop.s - m.s < 0.8) { m.wait = 3.5; m.s = stop.s + 0.9; }
+    }
+    moverStep(m, dt, (mm) => { const r = mm.route.nodes; mm.ri = (mm.ri + 1) % r.length; return r[(mm.ri + 1) % r.length]; });
+    m.g.position.set(m.pos.x, 0, m.pos.z); m.g.rotation.y = m.h;
+    for (const w of m.wheels) w.rotation.x += m.v * dt * 2;
+    // a bus is long: two bump circles
+    const fx = Math.sin(m.h) * 3.2, fz = Math.cos(m.h) * 3.2;
+    for (const k of [-1, 1]) { const o = { pos: { x: m.pos.x + fx * k, z: m.pos.z + fz * k }, wait: 0 }; bumpPlayer(o, 3.0); if (o.wait) m.wait = 1.5; }
+  }
+  for (const p of LIFE.peds) {
+    if (!active) { p.g.visible = false; continue; }
+    if (!p.g.visible || pedPos(p, _lq) === null || Math.hypot(_lq.x - near.x, _lq.z - near.z) > 95 || inArena(_lq.x, _lq.z, 6)) { if (!spawnPed(p, near)) continue; }
+    // panic: gunfire nearby or a car coming at speed
+    const ap = state.act === 1 && pc ? pc.pos : hero ? hero.pos : near;
+    const dPlayer = Math.hypot(ap.x - _lq.x, ap.z - _lq.z);
+    if (LIFE.shotT < 1.5 && dPlayer < 32) p.panic = 4;
+    if (state.act === 1 && pc && Math.abs(pc.vf || 0) > 5 && dPlayer < 7 && p.dodge <= 0) { p.dodge = 0.6; p.panic = Math.max(p.panic, 2.5); p.dir = -p.dir; }
+    if (p.panic > 0) p.panic -= dt; if (p.dodge > 0) p.dodge -= dt;
+    const run = p.panic > 0, sp = run ? 4.6 : p.sp;
+    p.u += p.dir * sp * dt;
+    const face = pedPos(p, p.pos);
+    let x = p.pos.x, z = p.pos.z;
+    if (p.dodge > 0) { const sx = Math.cos(face), sz = -Math.sin(face); x += sx * 1.2 * (0.6 - p.dodge); z += sz * 1.2 * (0.6 - p.dodge); }
+    p.g.position.set(x, 0.15, z); p.g.rotation.y = face;
+    const want = run ? 'Run' : 'Walk';
+    if (p.act !== want) { playAct(p, want, 0.2); p.act = want; }
+  }
+}
+
+// ---- city landmarks (for future stories): central square with the city hall, metro, canal with bridges, the tunnel, bus stops ----
+const SQUARE = { x: 40, z: 40 };            // block between roads x 0..80, z 0..80
+const CANAL = { x: -120, hw: 4.5, segs: [[-185, -168], [-152, -88], [-72, -8], [8, 71]] }; // flows north from the southern edge
+const TUNNEL = { z: -160, x0: 13, x1: 67 };
+const BUS_STOPS = [];                        // filled by the bus routes in the "city life" module
+const inSquare = (x, z) => Math.abs(x - SQUARE.x) < 33 && Math.abs(z - SQUARE.z) < 33;
+const inCanalBand = (x, z, pad) => Math.abs(x - CANAL.x) < CANAL.hw + (pad || 0.6) && z < 72 && z > -190;
+const inTunnel = (x, z, pad) => x > TUNNEL.x0 - (pad || 0) && x < TUNNEL.x1 + (pad || 0) && Math.abs(z - TUNNEL.z) < 10.5;
+function cityText(w, h, draw) { return canvasTex(w, h, (g) => { g.textAlign = 'center'; g.textBaseline = 'middle'; draw(g, w, h); }); }
+function textPlane(tex, w, h, x, y, z, ry, colr) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: colr || new THREE.Color(1.4, 1.4, 1.4) }));
+  m.position.set(x, y, z); m.rotation.y = ry || 0; scene.add(m); return m;
+}
+const CANAL_WATER = new THREE.MeshStandardMaterial({ color: 0x2a5a7a, roughness: 0.06, metalness: 0.35, envMapIntensity: 2.2, emissive: 0x0a1a28 });
+function buildLandmarks() {
+  const stone = col(0xd8d0c0), stoneD = col(0x9a9284), plinth = col(0x5a544c), win = HDR(0xffd9a0, 1.5), metal = col(0x30323a);
+  // ---- central square: granite paving, monument, flower beds, benches, trees ----
+  const X = SQUARE.x, Z = SQUARE.z;
+  boxB(B.walk, X - 30, 0.15, Z - 30, X + 30, 0.17, Z + 30, { topWorld: 1 / 3, col: col(0xc8bca8), sides: false });
+  for (let r = 6; r <= 14; r += 8) for (let k = 0; k < 40; k++) { const a = k / 40 * PI * 2; putB(B.trim, G.box, X + Math.cos(a) * r, 0.18, Z - 10 + Math.sin(a) * r, 1.0, 0.03, 0.35, -a, col(0x8a8070)); }
+  // monument: stepped plinth, granite stele with a gold star
+  putB(B.trim, G.cyl, X, 0.45, Z - 10, 9, 0.6, 9, 0, stoneD); putB(B.trim, G.cyl, X, 0.95, Z - 10, 6.5, 0.5, 6.5, 0, stone);
+  putB(B.trim, G.box, X, 2.2, Z - 10, 3.2, 2.2, 3.2, 0, plinth); putB(B.trim, G.box, X, 9.5, Z - 10, 1.8, 12.5, 1.8, 0, col(0x6a6a74));
+  putB(B.trim, G.cone, X, 16.4, Z - 10, 1.9, 1.6, 1.9, PI / 4, col(0x6a6a74)); putB(B.neon, G.sph, X, 17.6, Z - 10, 0.55, 0.55, 0.55, 0, HDR(0xffd040, 5));
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) putB(B.bankL, G.box, X + dx * 2.6, 0.75, Z - 10 + dz * 2.6, 0.5, 0.3, 0.5, 0, HDR(0xfff0c0, 3));
+  addBox(X, Z - 10, 6.5, 6.5, 2.5);
+  const plaque = cityText(512, 128, (g, w, h) => { g.fillStyle = '#20242c'; g.fillRect(0, 0, w, h); g.fillStyle = '#e8c860'; g.font = 'bold 44px Georgia, serif'; g.fillText('ПОРТ-СЕВЕРНЫЙ', w / 2, 46); g.font = '28px Georgia, serif'; g.fillText('основан в 1871 году', w / 2, 96); });
+  textPlane(plaque, 2.9, 0.72, X, 2.3, Z - 11.62, PI);
+  // flower beds and trees along the plaza, benches facing the monument
+  for (const [dx, dz] of [[-20, -22], [20, -22], [-20, 2], [20, 2]]) {
+    boxB(B.trim, X + dx - 3, 0.15, Z + dz - 1.4, X + dx + 3, 0.6, Z + dz + 1.4, { col: stoneD }); boxB(B.grass, X + dx - 2.7, 0.6, Z + dz - 1.1, X + dx + 2.7, 0.62, Z + dz + 1.1, { topWorld: 1 / 4, sides: false });
+    for (let k = 0; k < 6; k++) putB(B.neon, G.sph, X + dx - 2.2 + k * 0.9, 0.75, Z + dz + (k % 2 ? 0.4 : -0.4), 0.28, 0.2, 0.28, 0, HDR(pick([0xff5a7a, 0xffd04a, 0xffffff, 0xc87aff]), 1.1));
+    addBox(X + dx, Z + dz, 6, 2.8, 0.6);
+  }
+  for (const [dx, dz] of [[-26, -26], [-26, 6], [26, 6], [-26, -10], [26, -10]]) {
+    putB(B.wood, G.cyl6, X + dx, 1.8, Z + dz, 0.35, 3.4, 0.35, 0, col(0x5a3a26));
+    const lc = col(pick([0x2f5a32, 0x3a6a34, 0x2a4d34])); putB(B.leaf, G.sph, X + dx, 4.6, Z + dz, 2.2, 1.9, 2.2, 1, lc); putB(B.leaf, G.sph, X + dx + 0.4, 5.8, Z + dz - 0.3, 1.5, 1.3, 1.5, 2, lc.clone().multiplyScalar(1.15));
+    addBox(X + dx, Z + dz, 0.9, 0.9, 3);
+  }
+  const benches = [];
+  for (const [dx, dz, ry] of [[-9, -10, PI / 2], [9, -10, -PI / 2], [0, -19, 0], [-6, -2, PI * 0.75], [6, -2, -PI * 0.75]]) benches.push({ x: X + dx, y: 0.17, z: Z + dz, ry, sx: 6 });
+  kitInstances('bench', benches, KIT.prop, true);
+  // lanterns around the plaza with warm pools of light
+  const lpGeo = new THREE.PlaneGeometry(13, 13); lpGeo.rotateX(-PI / 2);
+  for (const [dx, dz] of [[-12, -22], [12, -22], [-12, 2], [12, 2], [-24, -16], [24, -16], [-24, 12], [24, 12]]) {
+    putB(B.metal, G.cyl, X + dx, 2.3, Z + dz, 0.22, 4.4, 0.22, 0, metal); putB(B.metal, G.box, X + dx, 4.55, Z + dz, 0.7, 0.12, 0.7, 0, metal);
+    putB(B.neon, G.sph, X + dx, 4.95, Z + dz, 0.42, 0.5, 0.42, 0, HDR(0xffd9a0, 5)); addBox(X + dx, Z + dz, 0.4, 0.4, 4);
+    const pool = new THREE.Mesh(lpGeo, KIT.poolMat); pool.position.set(X + dx, 0.2, Z + dz); scene.add(pool);
+  }
+  // ---- city hall: two wings, a portico and a clock tower; faces the plaza and the road z = 0 ----
+  const hz0 = 52, hz1 = 70;
+  boxB(B.trim, X - 12.5, 0.15, hz0, X + 12.5, 11, hz1, { col: col(0xe6dccb) });
+  boxB(B.trim, X - 12.8, 0.15, hz0 - 0.3, X + 12.8, 1.2, hz1 + 0.3, { col: plinth, top: false });
+  boxB(B.trim, X - 12.9, 10.6, hz0 - 0.4, X + 12.9, 11.4, hz1 + 0.4, { col: stoneD });
+  boxB(B.roof, X - 12.1, 11.4, hz0 + 0.4, X + 12.1, 12.4, hz1 - 0.4, { col: col(0x3a4a5a) });
+  addBox(X, (hz0 + hz1) / 2, 25, hz1 - hz0, 11);
+  for (const fl of [3.2, 7.4]) for (let k = -10.5; k <= 10.5; k += 3) { if (Math.abs(k) < 3 && fl < 5) continue; putB(B.bankL, G.box, X + k, fl, hz0 - 0.05, 1.5, 2.3, 0.08, 0, win); putB(B.trim, G.box, X + k, fl + 1.4, hz0 - 0.1, 2.0, 0.3, 0.12, 0, stoneD); }
+  for (const z of [56, 60, 64, 68]) for (const sx of [-1, 1]) putB(B.bankL, G.box, X + sx * 12.55, 5.2, z, 0.08, 2.3, 1.5, 0, win);
+  // portico
+  for (let k = 0; k < 3; k++) boxB(B.trim, X - 8 - k * 0.6, 0.15, hz0 - 3.4 - k * 0.6, X + 8 + k * 0.6, 0.55 - k * 0.13, hz0, { col: k % 2 ? stoneD : stone });
+  for (const dx of [-6.6, -2.2, 2.2, 6.6]) { putB(B.trim, G.cyl, X + dx, 4.4, hz0 - 2.2, 1.1, 7.6, 1.1, 0, col(0xf2ead8)); addBox(X + dx, hz0 - 2.2, 1.1, 1.1, 8); }
+  boxB(B.trim, X - 8, 8.2, hz0 - 3.2, X + 8, 9.4, hz0, { col: stone });
+  const hallSign = cityText(1024, 128, (g, w, h) => { g.fillStyle = '#e6dccb'; g.fillRect(0, 0, w, h); g.fillStyle = '#2a3346'; g.font = 'bold 84px Georgia, serif'; g.fillText('М Э Р И Я', w / 2, h / 2 + 4); });
+  textPlane(hallSign, 13, 1.15, X, 8.8, hz0 - 3.22, PI, new THREE.Color(1, 1, 1));
+  putB(B.bankL, G.box, X, 3.0, hz0 - 0.05, 3.2, 5.2, 0.08, 0, HDR(0xffc880, 1.8)); // lit doorway
+  // clock tower with a spire and a flag
+  boxB(B.trim, X - 3.4, 11.4, hz0 + 2, X + 3.4, 24, hz0 + 8.8, { col: col(0xe6dccb) });
+  boxB(B.trim, X - 3.7, 23.6, hz0 + 1.7, X + 3.7, 24.6, hz0 + 9.1, { col: stoneD });
+  putB(B.roof, G.cone, X, 28.6, hz0 + 5.4, 6.4, 8, 6.4, PI / 4, col(0x2e5a4a));
+  putB(B.metal, G.box, X, 34.6, hz0 + 5.4, 0.12, 4.5, 0.12, 0, metal);
+  putB(B.neon, G.box, X + 1.0, 36.0, hz0 + 5.4, 2.0, 1.2, 0.05, 0, HDR(0x3a7ad8, 1.2)); putB(B.neon, G.box, X + 1.0, 35.4, hz0 + 5.42, 2.0, 0.4, 0.05, 0, HDR(0xff4a3a, 1.2));
+  const clock = cityText(256, 256, (g, w) => {
+    g.fillStyle = '#f6efe0'; g.beginPath(); g.arc(w / 2, w / 2, w / 2 - 6, 0, PI * 2); g.fill(); g.lineWidth = 10; g.strokeStyle = '#c8a030'; g.stroke();
+    g.fillStyle = '#2a2a30'; for (let k = 0; k < 12; k++) { const a = k / 12 * PI * 2; g.fillRect(w / 2 + Math.cos(a) * 100 - 4, w / 2 + Math.sin(a) * 100 - 4, 8, 8); }
+    g.strokeStyle = '#2a2a30'; g.lineCap = 'round'; g.lineWidth = 9; g.beginPath(); g.moveTo(w / 2, w / 2); g.lineTo(w / 2 + 40, w / 2 - 50); g.stroke();
+    g.lineWidth = 6; g.beginPath(); g.moveTo(w / 2, w / 2); g.lineTo(w / 2 - 20, w / 2 - 88); g.stroke();
+  });
+  textPlane(clock, 4.6, 4.6, X, 19.2, hz0 + 1.95, PI, new THREE.Color(1.6, 1.5, 1.3));
+  // flagpoles in front
+  for (const dx of [-11, 11]) { putB(B.metal, G.cyl, X + dx, 5, hz0 - 5, 0.18, 10, 0.18, 0, metal); putB(B.neon, G.box, X + dx + 1.1, 9.2, hz0 - 5, 2.2, 0.5, 0.05, 0, HDR(0xf4f4f4, 1)); putB(B.neon, G.box, X + dx + 1.1, 8.7, hz0 - 5, 2.2, 0.5, 0.05, 0, HDR(0x3a6ad8, 1)); putB(B.neon, G.box, X + dx + 1.1, 8.2, hz0 - 5, 2.2, 0.5, 0.05, 0, HDR(0xd83a3a, 1)); addBox(X + dx, hz0 - 5, 0.4, 0.4, 10); }
+  // ---- metro entrances: glass pavilions with the red «М» ----
+  for (const [mx, mz, ry] of [[66, 15, PI], [68, 33, PI / 2]]) buildMetro(mx, mz, ry);
+  // ---- canal with stone embankments, three road bridges and footbridges ----
+  const W = CANAL.hw, cx = CANAL.x;
+  for (const [z0, z1] of CANAL.segs) {
+    const wm = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, z1 - z0), CANAL_WATER); wm.rotation.x = -PI / 2; wm.position.set(cx, 0.22, (z0 + z1) / 2); wm.receiveShadow = true; scene.add(wm);
+    for (const s of [-1, 1]) boxB(B.walk, cx + s * (W + 0.6) - (s > 0 ? 0 : 3.4), 0.15, z0, cx + s * (W + 0.6) + (s > 0 ? 3.4 : 0), 0.2, z1, { topWorld: 1 / 3, col: col(0xb8b0a0), sides: false });
+    for (const s of [-1, 1]) {
+      boxB(B.trim, cx + s * W - (s > 0 ? 0 : 0.6), 0.02, z0, cx + s * W + (s > 0 ? 0.6 : 0), 1.0, z1, { col: stoneD });
+      for (let z = z0 + 1; z < z1; z += 3) putB(B.metal, G.box, cx + s * (W + 0.3), 1.45, z, 0.1, 0.9, 0.1, 0, metal);
+      putB(B.metal, G.box, cx + s * (W + 0.3), 1.9, (z0 + z1) / 2, 0.12, 0.1, z1 - z0, 0, metal);
+    }
+    addBox(cx, (z0 + z1) / 2, W * 2 + 1.2, z1 - z0, 1.0);
+  }
+  boxB(B.trim, cx - W - 0.6, 0.02, 70.4, cx + W + 0.6, 1.6, 71.2, { col: plinth }); // lock gate at the northern end
+  for (const r of [-160, -80, 0]) {
+    for (const s of [-1, 1]) {
+      boxB(B.trim, cx - W - 2, 0, r + s * 8 - 0.35, cx + W + 2, 1.15, r + s * 8 + 0.35, { col: stone });
+      boxB(B.trim, cx - W - 2.1, 1.15, r + s * 8 - 0.45, cx + W + 2.1, 1.3, r + s * 8 + 0.45, { col: stoneD });
+      for (const e of [-1, 1]) { putB(B.metal, G.cyl, cx + e * (W + 2.1), 2.2, r + s * 8, 0.16, 2.0, 0.16, 0, metal); putB(B.neon, G.sph, cx + e * (W + 2.1), 3.3, r + s * 8, 0.32, 0.32, 0.32, 0, HDR(0xffd9a0, 5)); }
+    }
+  }
+  for (const bz of [-120, -40, 40]) for (const s of [-1, 1]) {
+    const z = bz + s * 28.6;
+    boxB(B.wood, cx - W - 0.7, 1.0, z - 1.1, cx + W + 0.7, 1.15, z + 1.1, { col: col(0xa07a50) });
+    for (const e of [-1, 1]) putB(B.metal, G.box, cx, 1.65, z + e * 1.05, W * 2 + 1.4, 0.08, 0.08, 0, metal);
+  }
+  // ---- tunnel on the southern road: portals, walls, a roof and lamp strips inside ----
+  const tz = TUNNEL.z, t0 = TUNNEL.x0, t1 = TUNNEL.x1, conc = col(0x8a8a90);
+  for (const s of [-1, 1]) { boxB(B.trim, t0, 0, tz + s * 8.6 - (s > 0 ? 0 : 0.9), t1, 9.2, tz + s * 8.6 + (s > 0 ? 0.9 : 0), { col: conc }); addBox((t0 + t1) / 2, tz + s * 9.05, t1 - t0, 0.9, 9.2); }
+  boxB(B.roof, t0, 9.2, tz - 9.6, t1, 10.2, tz + 9.6, { col: col(0x55575e) });
+  for (let x = t0 + 2; x < t1; x += 4) for (const s of [-1, 1]) putB(B.neon, G.box, x, 9.05, tz + s * 4, 2.4, 0.1, 0.25, 0, HDR(0xffc070, 3));
+  for (const s of [-1, 1]) for (let x = t0 + 1; x < t1; x += 2) putB(B.metal, G.box, x, 1.0, tz + s * 8.1, 1.6, 0.2, 0.06, 0, col(0x3a3a40));
+  const tSign = cityText(512, 128, (g, w, h) => { g.fillStyle = '#1a3a6a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(8, 8, w - 16, h - 16); g.fillStyle = '#fff'; g.font = 'bold 64px Arial, sans-serif'; g.fillText('ТОННЕЛЬ', w / 2, h / 2 + 3); });
+  for (const [x, ry] of [[t0, -PI / 2], [t1, PI / 2]]) {
+    boxB(B.trim, x - 0.8, 9.2, tz - 10, x + 0.8, 12.2, tz + 10, { col: col(0xb0aca4) });
+    for (let k = -4; k <= 4; k++) putB(B.neon, G.box, x + (ry > 0 ? 0.82 : -0.82), 9.6, tz + k * 2, 0.04, 0.5, 1.0, 0, HDR(k % 2 ? 0x1a1a1a : 0xffc020, 1.2));
+    textPlane(tSign, 7, 1.75, x + (ry > 0 ? 0.84 : -0.84), 10.9, tz, ry);
+  }
+}
+function buildMetro(x, z, ry) {
+  const c = Math.cos(ry), s = Math.sin(ry), P = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
+  const glass = col(0x7ab8d8), frame = col(0x2a2c34);
+  // a 4 x 7 pavilion: stairs go down from the open front (local +z)
+  const parts = [[-2.1, 0, 0.2, 7, 2.6, glass], [2.1, 0, 0.2, 7, 2.6, glass], [0, -3.4, 4.4, 0.2, 2.6, frame]];
+  for (const [lx, lz, w, d, h, cc] of parts) { const [px, pz] = P(lx, lz); putB(B.trim, G.box, px, 0.15 + h / 2, pz, w, h, d, ry, cc); }
+  const [rx, rz] = P(0, 0); putB(B.roof, G.box, rx, 2.9, rz, 4.8, 0.3, 7.6, ry, col(0xc83a3a));
+  for (let k = 0; k < 6; k++) { const [px, pz] = P(0, 2.8 - k * 1.0); putB(B.trim, G.box, px, 0.1 - k * 0.12, pz, 3.8, 0.12, 1.0, ry, col(0x4a4a52).multiplyScalar(1 - k * 0.12)); }
+  const [hx, hz] = P(0, -2.6); putB(B.trim, G.box, hx, 0.12, hz, 3.8, 0.02, 1.4, ry, col(0x101014));
+  const [sx, sz] = P(0, 3.9);
+  putB(B.metal, G.cyl, sx - 2.4 * c, 2.1, sz + 2.4 * s, 0.14, 4.0, 0.14, 0, frame); // sign pole
+  const mTex = cityText(128, 128, (g, w) => { g.fillStyle = '#d82a2a'; g.beginPath(); g.arc(w / 2, w / 2, w / 2 - 4, 0, PI * 2); g.fill(); g.fillStyle = '#fff'; g.font = 'bold 84px Arial, sans-serif'; g.fillText('М', w / 2, w / 2 + 5); });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), new THREE.MeshBasicMaterial({ map: mTex, transparent: true, color: new THREE.Color(1.8, 1.8, 1.8), side: THREE.DoubleSide }));
+  m.position.set(sx - 2.4 * c, 4.4, sz + 2.4 * s); m.rotation.y = ry; scene.add(m);
+  const [lx2, lz2] = P(0, 0); putB(B.bankL, G.box, lx2, 2.7, lz2, 3.6, 0.06, 6.4, ry, HDR(0xe8f4ff, 1.6));
+  const L = Math.abs(c) > 0.5 ? [4.6, 7.6] : [7.6, 4.6]; addBox(x, z, L[0] - (Math.abs(c) > 0.5 ? 0 : 0), L[1], 1.2);
+}
+
 // ---- bank «Гранит»: a cut-away hall (no roof) so the top-down camera sees the heist ----
 // hall x 92..148, z -68..-12; entrance from the street (road z = 0); the vault door in the back wall
 const BANKX = { door: null, doorA: 0, doorT: 0, drill: null, laptop: null, top: [], topA: 1, glow: null, spin: 0 };
@@ -1073,9 +1461,10 @@ const CAR_S = 4.7;
 function makeCar(color, kind) {
   const g = new THREE.Group();
   const wreck = kind === 'wreck', player = kind === true || kind === 'player';
-  const name = player ? 'car_taxi' : wreck ? 'car_sedan' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon']);
+  const civ = kind === 'civ';
+  const name = player ? PLAYER_CAR.model : wreck ? 'car_sedan' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon']);
   const m = ASSETS.kit[name].clone(true);
-  const mat = wreck ? KIT.carWreck : player ? KIT.taxi : KIT.carDark;
+  const mat = wreck ? KIT.carWreck : player ? (PLAYER_CAR.mat || KIT.taxi) : civ ? civMat(color) : KIT.carDark;
   const wheels = [];
   m.traverse((o) => { if (o.isMesh) { o.material = mat; o.castShadow = true; } if (/wheel/.test(o.name)) wheels.push(o); });
   m.scale.setScalar(CAR_S); g.add(m);
@@ -1086,10 +1475,12 @@ function makeCar(color, kind) {
     box(tail, -0.7, 0.7, -2.23, 0.32, 0.12, 0.04); box(tail, 0.7, 0.7, -2.23, 0.32, 0.12, 0.04);
   }
   if (player) {
-    box(basic(new THREE.Color(3, 2.4, 0.7)), 0, 1.98, -0.15, 0.5, 0.12, 0.3);
+    if (PLAYER_CAR.model === 'car_taxi') box(basic(new THREE.Color(3, 2.4, 0.7)), 0, 1.98, -0.15, 0.5, 0.12, 0.3);
+    if (PLAYER_CAR.scale) m.scale.multiply(new V3(...PLAYER_CAR.scale));
+    if (PLAYER_CAR.neon) { const ng = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 6.4), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(...PLAYER_CAR.neon), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); ng.rotation.x = -PI / 2; ng.position.y = 0.06; g.add(ng); }
     const spot = new THREE.SpotLight(0xfff0d0, 3.2, 60, 0.5, 0.55, 1.2);
     spot.position.set(0, 0.9, 2.1); spot.target.position.set(0, 0, 18); g.add(spot, spot.target);
-  } else if (!wreck) {
+  } else if (!wreck && !civ) {
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 6.2), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(3, 0.15, 0.8), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     glow.rotation.x = -PI / 2; glow.position.y = 0.06; g.add(glow);
     box(basic(new THREE.Color(4, 0.2, 0.9)), -0.99, 0.5, 0, 0.03, 0.06, 3.4); box(basic(new THREE.Color(4, 0.2, 0.9)), 0.99, 0.5, 0, 0.03, 0.06, 3.4);
@@ -1165,7 +1556,7 @@ function makeHuman(look, scale) {
     fm.position.set(0, 0.35, 0.5); fm.renderOrder = 2; headB.add(fm);
   }
   const fist = model.getObjectByName('FistR');
-  if (fist) { const gun = new THREE.Group(); const a = new THREE.Mesh(gunGeoA, gunMat); a.position.set(0, 0.06, 0.22); gun.add(a); const b = new THREE.Mesh(gunGeoB, gunMat); b.position.set(0, -0.1, 0.02); b.rotation.x = 0.25; gun.add(b); gun.scale.setScalar(0.9); gun.position.set(0, 0.12, 0.08); gun.rotation.set(-1.57, 0, 0); fist.add(gun); }
+  if (fist && !look.noGun) { const gun = new THREE.Group(); const a = new THREE.Mesh(gunGeoA, gunMat); a.position.set(0, 0.06, 0.22); gun.add(a); const b = new THREE.Mesh(gunGeoB, gunMat); b.position.set(0, -0.1, 0.02); b.rotation.x = 0.25; gun.add(b); gun.scale.setScalar(0.9); gun.position.set(0, 0.12, 0.08); gun.rotation.set(-1.57, 0, 0); fist.add(gun); }
   model.scale.setScalar(HUMAN_S);
   const g = new THREE.Group(); g.add(model); g.scale.setScalar(scale || 1); scene.add(g);
   const mixer = new THREE.AnimationMixer(model), acts = {};
@@ -1205,6 +1596,7 @@ function twistTorso(h, ang) {
 function updateHumans(dt) {
   for (const h of HUMANS) {
     if (!h.g.parent) { HUMANS.delete(h); continue; }
+    if (!h.g.visible) continue;
     if (h.lockT > 0 && h.lockT < 1e8) { h.lockT -= dt; }
     h.mixer.update(dt);
     if (h.twist) twistTorso(h, h.twist);
@@ -1316,6 +1708,8 @@ window.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (state.mode === 'dialog' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) advanceDialog();
+  if (!e.repeat && e.code === 'KeyN') useBoost('nitro');
+  if (!e.repeat && e.code === 'KeyB') useBoost('shield');
 });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.down = false; });
@@ -1480,6 +1874,7 @@ function carPhysics(c, dt, throttle, steer, drift, maxF, keepSpeed) {
 const bGeo = new THREE.BoxGeometry(0.14, 0.14, 1.6);
 const bMatP = basic(0xffe27a), bMatE = basic(0xff4d6d);
 function fire(from, dir, speed, dmg, team) {
+  LIFE.shotT = 0;
   const m = new THREE.Mesh(bGeo, team === 'p' ? bMatP : bMatE);
   m.position.copy(from); m.lookAt(from.clone().add(dir)); scene.add(m);
   bullets.push({ m, pos: from.clone(), vel: dir.clone().multiplyScalar(speed), dmg, team, life: 1.3 });
@@ -1514,7 +1909,7 @@ function clearBullets() { for (const b of bullets) scene.remove(b.m); bullets.le
 // ---------------- damage ----------------
 let hurt = 0;
 function damagePlayer(d) {
-  if (state.invuln > 0) return;
+  if (state.invuln > 0 || PROF.god) return;
   if (state.act === 1) { pc.hp -= d * P.carArmor; } else { hero.hp -= d * P.footArmor; }
   hurt = Math.min(1, hurt + d / 20); shake = Math.min(1.2, shake + 0.15);
   checkPlayerDeath();
@@ -1527,17 +1922,17 @@ function damageEnemyCar(e, d) {
   if (e.invuln || e.disabled) return;
   e.hp -= d;
   if (e.noExplode) { if (e.hp <= 0) { e.hp = 0; e.disabled = true; e.noTarget = true; toast(e.kind === 'van' ? 'Фургон заглох!' : 'Машина встала', 2); sfx.crash(12); shake = Math.min(1.2, shake + 0.4); } return; }
-  if (e.hp <= 0 && !e.dead) { e.dead = true; explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; addCoins(25); }
+  if (e.hp <= 0 && !e.dead) { e.dead = true; explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); }
 }
 function damageEnemy(e, d) {
   e.hp -= d; e.hitT = 0.12; if (e.hp > 0) hitHuman(e);
   if (e.onHalf && e.hp > 0 && e.hp < e.max / 2) { const f = e.onHalf; e.onHalf = null; f(e); }
   if (e.hp <= 0 && !e.dead) {
-    e.dead = true; e.deadT = 0; killHuman(e); state.footKills++; addCoins(e.boss ? 60 : 12);
+    e.dead = true; e.deadT = 0; killHuman(e); state.footKills++; profStat('footKills'); if (e.boss) profStat('bosses'); addCoins(e.boss ? 60 : 12);
     for (let i = 0; i < 6; i++) spawnP(e.pos.clone().add(new V3(0, 1.2, 0)), { color: 0xffd060, size: 0.15, vel: rv().multiplyScalar(5), life: 0.4, add: true });
   }
 }
-function addCoins(n) { n = Math.round(n * P.coins); state.coins += n; toast('+' + n + ' монет'); }
+function addCoins(n) { n = Math.round(n * P.coins * (state.x2 ? 2 : 1)); state.coins += n; walletAdd(n); toast('+' + n + ' монет'); }
 
 // ---------------- UI helpers ----------------
 let toastT = 0;
@@ -1550,6 +1945,7 @@ function showModal(html, handlers) {
 }
 function hideModal() { $('modal').hidden = true; }
 function showAd(done) {
+  if (PROF.noAds || PROF.god) { done(); return; }
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
   const iv = setInterval(() => { n--; $('adCount').textContent = n; if (n <= 0) { clearInterval(iv); $('ad').hidden = true; done(); } }, 1000);
 }
@@ -1633,7 +2029,7 @@ function updateDrive(dt) {
   const thrKey = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   const throttle = clamp(thrKey - joy.y * 1.3, -1, 1), steer = clamp(steerKey + joy.x * 1.2, -1, 1);
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
-  const imp = carPhysics(pc, dt, throttle, steer, drift, P.maxSpeed, P.drift);
+  const nitro = state.nitroT > 0, imp = carPhysics(pc, dt, nitro ? 1 : throttle, steer, drift, P.maxSpeed + (nitro ? 16 : 0), P.drift);
   if (P.regen && pc.hp < 100) pc.hp = Math.min(100, pc.hp + 1.6 * dt);
   if (imp > 9) { damagePlayer((imp - 9) * 1.1); sfx.crash(imp); sparks(pc.pos.clone().add(new V3(0, 1, 0))); }
   if (drift && Math.abs(pc.vr) > 6 && Math.random() < 0.6) spawnP(pc.pos.clone().add(new V3(rand(-1, 1), 0.3, 0)), { color: 0x9a9aa8, size: 0.6, vel: new V3(0, 1, 0), life: 0.8, grow: 2, opacity: 0.35 });
@@ -1740,7 +2136,7 @@ function setupAct2() {
   state.act = 2; state.wave = 1; spawnQueue = [];
   clearBullets();
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
-  if (!hero) { const m = makeHuman(CH.look, 1); hero = Object.assign(m, { pos: new V3(), face: PI }); }
+  if (!hero) { const m = makeHuman(heroLook(), 1); hero = Object.assign(m, { pos: new V3(), face: PI }); }
   hero.pos.set(120, 0, -92); hero.face = PI; hero.hp = P.footMax; hero.dead = false; hero.fireCd = 0; hero.walk = 0; hero.g.visible = true; hero.g.rotation.set(0, PI, 0); reviveHuman(hero);
   pc.pos.set(GATE.x, 0, GATE.z + 2); pc.h = PI / 2; pc.vel.set(0, 0, 0); pc.g.position.copy(pc.pos); pc.g.rotation.set(0, pc.h, 0); pc.g.visible = true; pc.dead = false;
   yardGate.position.y = 0; if (!gateCollider) gateCollider = addBox(120, -88, 16, 1, 2.6);
@@ -1933,7 +2329,7 @@ function beginDrive(x, z, h) {
 }
 function beginFoot(x, z, face) {
   state.act = 2;
-  if (!hero) hero = Object.assign(makeHuman(CH.look, 1), { pos: new V3(), face });
+  if (!hero) hero = Object.assign(makeHuman(heroLook(), 1), { pos: new V3(), face });
   hero.pos.set(x, 0, z); hero.face = face; hero.hp = P.footMax; hero.dead = false; hero.fireCd = 0; hero.walk = 0; hero.twist = 0;
   hero.g.visible = true; hero.g.position.copy(hero.pos); hero.g.rotation.set(0, face, 0); reviveHuman(hero);
   arrow.visible = false; $('hpLabel').textContent = 'Здоровье';
@@ -2037,7 +2433,7 @@ function driveScripted(e, dt) {
   }
 }
 function finishChapter(n, coins, lines, next) {
-  ep2Save(n + 1); addCoins(coins);
+  ep2Save(n + 1); addCoins(coins); profStat('chapters');
   for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; }
   clearBullets(); setEngine(0, false); pc.vel.set(0, 0, 0);
   playDialog(lines, next);
@@ -2340,6 +2736,7 @@ function startEpisode(ep, ch) {
   if (showFig) showFig.g.visible = false; showDisc.visible = false; pvEnemy.g.visible = false;
   if (hero) { scene.remove(hero.g); hero = null; }
   state.ep = ep; state.coins = 0; state.carKills = 0; state.footKills = 0; state.time = 0; state.reviveUsed = {}; state.doubled = false;
+  state.x2 = false; state.nitroT = 0; state.shieldT = 0; if (PROF.inv.x2 > 0) { PROF.inv.x2--; state.x2 = true; saveProfile(); }
   if (ep === 2) { if (ch === 1) ch1(true); else startChapter(ch); }
   else startGen(ep, ch - 1, true);
 }
@@ -2357,6 +2754,7 @@ function renderChapters() {
   $('btnGo').textContent = selEp >= 2 ? (ep2Pick === 1 ? `Начать эпизод ${selEp}` : `Глава ${ep2Pick}`) : 'В путь';
 }
 function showEnd2() {
+  profEp(2);
   state.mode = 'end'; setEngine(0, false);
   $('hud').hidden = true; $('touch').hidden = true;
   const t = Math.round(state.time), mm2 = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
@@ -2375,7 +2773,7 @@ function showEnd2() {
       <button id="mNext" class="btn primary" type="button">Эпизод 3 →</button>
       <button id="mAgain" class="btn" type="button">В меню</button>
     </div>`, {
-    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; state.coins *= 2; render(); }); },
+    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
     mNext: () => { hideModal(); startEpisode(3, 1); },
     mAgain: () => { hideModal(); showSelect(); },
   });
@@ -2818,7 +3216,7 @@ function startGen(ep, i, withIntro) {
   let finished = false;
   const done = () => {
     if (finished) return; finished = true;
-    epSave(ep, i + 2); addCoins(c.coins || 150);
+    epSave(ep, i + 2); addCoins(c.coins || 150); profStat('chapters');
     for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; }
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
@@ -2866,7 +3264,7 @@ const GEN = {
         if (left > 0) { left -= dt; if (left <= 0) return failChapter('Не успели', `Время вышло: «${P_[leg].name}» не дождались. Попробуй другой путь.`); }
         if (pc.pos.distanceTo(P_[leg].v) < 11) {
           const q = P_[leg]; leg++; pc.vel.set(0, 0, 0);
-          if (leg >= P_.length) { if (c.loot) { addCoins(Math.round(loot * 10)); toast(`Довезли: ${loot.toFixed(1)} млн`, 2); } return done(); }
+          if (leg >= P_.length) { if (c.loot) { addCoins(Math.round(loot * 10)); profMax('loot', loot); toast(`Довезли: ${loot.toFixed(1)} млн`, 2); } return done(); }
           chase.max = Math.min(5, chase.max + (c.ramp || 0));
           if (q.say) { left = 0; playDialog(q.say.map(fixLine), () => { state.mode = 'drive'; startLeg(); }); } else { toast(`${q.name} — есть`, 1.4); startLeg(); }
         }
@@ -3042,6 +3440,7 @@ const GEN = {
   },
 };
 function showEndGen(ep) {
+  profEp(ep);
   const E = EPS[ep];
   state.mode = 'end'; setEngine(0, false); $('hud').hidden = true; $('touch').hidden = true;
   const t = Math.round(state.time);
@@ -3061,7 +3460,7 @@ function showEndGen(ep) {
       ${nextEp ? `<button id="mNext" class="btn primary" type="button">Эпизод ${nextEp} →</button>` : ''}
       <button id="mAgain" class="btn" type="button">В меню</button>
     </div>`, {
-    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; state.coins *= 2; render(); }); },
+    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
     mNext: () => { hideModal(); startEpisode(nextEp, 1); },
     mAgain: () => { hideModal(); showSelect(); },
   });
@@ -3162,12 +3561,299 @@ function updateHud(dt) {
   const boss = state.act === 2 && enemies.find((e) => e.boss && !e.dead);
   if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
   renderBars(bars, timer, tbad);
-  $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · мышь или пробел — стрельба' : 'W A S D — бег · мышь — прицел · клик — огонь';
+  $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : 'W A S D — бег · мышь — прицел · клик — огонь · B — щит';
+  updateBoostsHud();
   const ch = $('crosshair'); const showCh = state.mode === 'foot' && mouse.has && !isTouch;
   ch.hidden = !showCh; if (showCh) { ch.style.left = mouse.x + 'px'; ch.style.top = mouse.y + 'px'; }
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
   hurt = Math.max(0, hurt - dt * 1.5); $('hurt').style.opacity = hurt;
   drawMinimap();
+}
+
+// ---------------- profile: wallet, garage, shop, upgrades, achievements, accounts ----------------
+// Everything is stored in this browser (localStorage). Accounts and passwords here are a convenience for
+// several players on one device, not real security: a server is needed for that.
+function sha256(str) {
+  const K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
+  const bytes = Array.from(new TextEncoder().encode(str)), bl = bytes.length * 8;
+  bytes.push(0x80); while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 7; i >= 0; i--) bytes.push(i > 3 ? 0 : (bl >>> (i * 8)) & 255);
+  const H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19], w = new Array(64);
+  const r = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let o = 0; o < bytes.length; o += 64) {
+    for (let i = 0; i < 16; i++) w[i] = (bytes[o + i * 4] << 24) | (bytes[o + i * 4 + 1] << 16) | (bytes[o + i * 4 + 2] << 8) | bytes[o + i * 4 + 3];
+    for (let i = 16; i < 64; i++) { const s0 = r(w[i - 15], 7) ^ r(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = r(w[i - 2], 17) ^ r(w[i - 2], 19) ^ (w[i - 2] >>> 10); w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0; }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (r(e, 6) ^ r(e, 11) ^ r(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0, t2 = ((r(a, 2) ^ r(a, 13) ^ r(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0; H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+  }
+  return H.map((x) => (x >>> 0).toString(16).padStart(8, '0')).join('');
+}
+// the test hero: login «тест»; only the password hash is stored here
+const TEST_LOGIN = 'тест', TEST_HASH = '26d92e23a1eee3203bc21d5edb059510b5fb0f2e0d7745ed8392156f751478c6';
+const CARS = {
+  taxi: { name: 'Такси «Классика»', model: 'car_taxi', price: 0, speed: 0, armor: 1, paint: 'yellow', desc: 'Рабочая лошадка таксопарка. Ничего лишнего.' },
+  hatch: { name: 'Хэтч «Шустрик»', model: 'car_hatchback', price: 1500, speed: 3, armor: 1.12, paint: 'red', desc: 'Лёгкий и быстрый, но мнётся от каждого тарана.' },
+  sedan: { name: 'Седан «Бизнес»', model: 'car_sedan', price: 2500, speed: 1.5, armor: 0.9, paint: 'black', desc: 'Тихий, солидный, крепче такси.' },
+  wagon: { name: 'Универсал «Семейный»', model: 'car_stationwagon', price: 3500, speed: 0, armor: 0.78, paint: 'green', desc: 'Тяжёлый кузов держит удары.' },
+  police: { name: 'Перехватчик', model: 'car_police', price: 6000, speed: 5, armor: 0.85, paint: 'white', desc: 'Списанный полицейский перехватчик. Самый быстрый в городе.' },
+  van: { name: 'Броневан', model: 'car_stationwagon', scale: [1.12, 1.2, 1.12], price: 9000, speed: -2, armor: 0.55, paint: 'black', desc: 'Почти броневик: медленный, зато пули ему нипочём.' },
+};
+const PAINTS = {
+  yellow: { name: 'Жёлтый', c: [1.6, 1.25, 0.45] }, white: { name: 'Белый', c: [1.35, 1.35, 1.38] }, black: { name: 'Чёрный', c: [0.22, 0.22, 0.26] },
+  red: { name: 'Красный', c: [1.5, 0.28, 0.28] }, blue: { name: 'Синий', c: [0.3, 0.55, 1.5] }, green: { name: 'Зелёный', c: [0.35, 1.25, 0.5] },
+  purple: { name: 'Фиолетовый', c: [0.95, 0.35, 1.4] }, gold: { name: 'Золото', c: [1.7, 1.25, 0.35], metal: 0.85, pass: true },
+};
+const NEONS = { cyan: { name: 'Бирюзовый', c: [0.2, 2.6, 3] }, pink: { name: 'Розовый', c: [3, 0.3, 1.6] }, green: { name: 'Зелёный', c: [0.4, 3, 0.6] }, orange: { name: 'Оранжевый', c: [3, 1.2, 0.2] }, gold: { name: 'Золотой', c: [3, 2.2, 0.4], pass: true } };
+const OUTFITS = {
+  leather: { name: 'Кожанка', price: 800, colors: { Shirt: '#2a2220', Pants: '#1a1a20', Main: '#2a2220', Jacket: '#2a2220' } },
+  sport: { name: 'Спортивный', price: 800, colors: { Shirt: '#e83a5a', Pants: '#2a2a6a', Main: '#e83a5a' } },
+  suit: { name: 'Деловой', price: 1000, colors: { Shirt: '#3a3a48', Pants: '#2a2a34', Main: '#3a3a48', Detail: '#c8a030' } },
+  neon: { name: 'Неон', price: 1200, colors: { Shirt: '#3ae8ff', Pants: '#1a1a2a', Main: '#3ae8ff', Hair: '#ff3d8b' } },
+  gold: { name: 'Золотой', price: 0, pass: true, colors: { Shirt: '#d8a830', Pants: '#2a2218', Main: '#d8a830' } },
+};
+const UPGRADES = [
+  { id: 'engine', name: 'Двигатель', desc: '+1,2 к максимальной скорости за уровень' },
+  { id: 'body', name: 'Кузов', desc: 'машина получает на 8% меньше урона за уровень' },
+  { id: 'gun', name: 'Ствол', desc: '+8% урона за уровень' },
+  { id: 'rate', name: 'Затвор', desc: '+6% скорострельности за уровень' },
+  { id: 'vest', name: 'Бронежилет', desc: '+10 здоровья пешком и −5% урона за уровень' },
+];
+const UP_MAX = 5, upPrice = (lvl) => 400 * (lvl + 1);
+const ITEMS = {
+  nitro: { name: 'Нитро', price: 120, desc: '3 секунды ускорения. Клавиша N или кнопка «Нитро».' },
+  shield: { name: 'Щит', price: 250, desc: '6 секунд неуязвимости. Клавиша B или кнопка «Щит».' },
+  repair: { name: 'Ремкомплект', price: 150, desc: 'Сам чинит машину, когда прочность падает ниже 30%.' },
+  medkit: { name: 'Аптечка', price: 150, desc: 'Сама лечит героя, когда здоровье падает ниже 30%.' },
+  revive: { name: 'Второй шанс', price: 400, desc: 'Продолжить с места гибели без рекламы.' },
+  x2: { name: 'Двойные монеты', price: 600, desc: 'Все монеты ×2 в следующем эпизоде.' },
+};
+const PACKS = {
+  starter: { name: 'Стартовый набор', rub: 99, desc: 'Хэтч «Шустрик», 3 нитро, 3 аптечки и 2000 монет', grant: (p) => { if (!p.cars.includes('hatch')) { p.cars.push('hatch'); p.paints.hatch = ['red']; p.paint.hatch = 'red'; } p.inv.nitro += 3; p.inv.medkit += 3; p.coins += 2000; } },
+  coins5: { name: 'Мешок монет', rub: 149, desc: '5000 монет', grant: (p) => { p.coins += 5000; } },
+  coins20: { name: 'Сейф монет', rub: 449, desc: '20 000 монет', grant: (p) => { p.coins += 20000; } },
+  noads: { name: 'Без рекламы', rub: 199, desc: 'Продолжение и удвоение награды без роликов', grant: (p) => { p.noAds = true; } },
+  pass: { name: 'Сезонный пропуск «Большой куш»', rub: 299, desc: '+50% монет за всё, золотая краска, золотой неон и золотой костюм', grant: (p) => { p.pass = true; } },
+};
+const ACH = [
+  ['first', 'Первая смена', 'Пройди первую главу', 100, (p) => [p.st.chapters, 1]],
+  ['ep1', 'Груз доставлен', 'Пройди эпизод 1', 150, (p) => [p.st.eps.includes(1) ? 1 : 0, 1]],
+  ['s1', 'Конец ночи', 'Пройди первый сезон (эпизод 7)', 1000, (p) => [p.st.eps.includes(7) ? 1 : 0, 1]],
+  ['s2', 'Большой куш', 'Пройди второй сезон (эпизод 10)', 1500, (p) => [p.st.eps.includes(10) ? 1 : 0, 1]],
+  ['cars25', 'Таран', 'Сбей 25 машин', 200, (p) => [p.st.carKills, 25]],
+  ['cars100', 'Гроза дорог', 'Сбей 100 машин', 600, (p) => [p.st.carKills, 100]],
+  ['foes50', 'Стрелок', 'Победи 50 противников', 200, (p) => [p.st.footKills, 50]],
+  ['foes250', 'Ночной патруль', 'Победи 250 противников', 700, (p) => [p.st.footKills, 250]],
+  ['boss5', 'Охотник на боссов', 'Победи 5 боссов', 400, (p) => [p.st.bosses, 5]],
+  ['rich', 'Копилка', 'Заработай 5000 монет', 300, (p) => [p.st.earned, 5000]],
+  ['garage2', 'Автопарк', 'Купи вторую машину', 200, (p) => [p.cars.length, 2]],
+  ['garage6', 'Коллекционер', 'Собери все 6 машин', 1500, (p) => [p.cars.length, 6]],
+  ['tuning', 'Тюнинг', 'Прокачай любой параметр до максимума', 400, (p) => [Math.max(...Object.values(p.up)), UP_MAX]],
+  ['nitro10', 'Форсаж', 'Используй нитро 10 раз', 150, (p) => [p.st.nitro, 10]],
+  ['loot', 'Чистая работа', 'Довези 13 млн в главе «Отход»', 500, (p) => [Math.floor(p.st.loot), 13]],
+  ['tourist', 'Турист', 'Проедь через тоннель и по мосту через канал', 100, (p) => [(p.st.tunnel ? 1 : 0) + (p.st.bridge ? 1 : 0), 2]],
+  ['style', 'Стиляга', 'Купи покраску, неон или костюм', 150, (p) => [p.st.style ? 1 : 0, 1]],
+];
+function profDefaults(name, login) {
+  return { v: 1, name: name || 'Гость', login: login || null, coins: 300, cars: ['taxi'], car: 'taxi', paints: { taxi: ['yellow'] }, paint: { taxi: 'yellow' }, neons: [], neon: null, outfits: [], outfit: null,
+    up: { engine: 0, body: 0, gun: 0, rate: 0, vest: 0 }, inv: { nitro: 2, shield: 1, repair: 1, medkit: 1, revive: 0, x2: 0 }, ach: {},
+    st: { carKills: 0, footKills: 0, bosses: 0, chapters: 0, eps: [], earned: 0, nitro: 0, loot: 0, tunnel: 0, bridge: 0, style: 0, time: 0 }, noAds: false, pass: false };
+}
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } } };
+let PROF = profDefaults();
+const profKey = (login) => 'nf-profile:' + (login || 'guest');
+function loadProfile(login) {
+  const d = profDefaults(login === TEST_LOGIN ? 'Тест' : login ? login : 'Гость', login), s = store.get(profKey(login));
+  PROF = s ? Object.assign(d, s, { up: Object.assign(d.up, s.up), inv: Object.assign(d.inv, s.inv), st: Object.assign(d.st, s.st) }) : d;
+  PROF.god = login === TEST_LOGIN;
+  if (PROF.god) PROF.name = 'Тест';
+  store.set('nf-session', login || null);
+  applyLoadout();
+}
+function saveProfile() { const { god, ...rest } = PROF; store.set(profKey(PROF.login), rest); }
+function profLogin(login, pass) {
+  const l = (login || '').trim().toLowerCase();
+  if (!l) return 'Введи логин.';
+  if (l === TEST_LOGIN) { if (sha256(pass || '') !== TEST_HASH) return 'Неверный пароль.'; loadProfile(TEST_LOGIN); return null; }
+  const acc = store.get('nf-accounts') || {};
+  if (!acc[l]) return 'Такого профиля нет на этом устройстве. Нажми «Создать».';
+  if (acc[l] !== sha256(l + ':' + (pass || ''))) return 'Неверный пароль.';
+  loadProfile(l); return null;
+}
+function profRegister(login, pass) {
+  const l = (login || '').trim().toLowerCase();
+  if (l.length < 2) return 'Логин — от 2 символов.';
+  if (l === TEST_LOGIN || l === 'guest') return 'Этот логин занят.';
+  if ((pass || '').length < 4) return 'Пароль — от 4 символов.';
+  const acc = store.get('nf-accounts') || {};
+  if (acc[l]) return 'Такой профиль уже есть. Нажми «Войти».';
+  acc[l] = sha256(l + ':' + pass); store.set('nf-accounts', acc);
+  loadProfile(l); PROF.name = login.trim(); saveProfile(); return null;
+}
+// wallet and stats
+let achBusy = false;
+function walletAdd(n) { if (!n) return; PROF.coins += n; PROF.st.earned += Math.max(0, n); saveProfile(); checkAch(); }
+function canPay(price) { return PROF.god || PROF.coins >= price; }
+function pay(price) { if (!canPay(price)) return false; if (!PROF.god) PROF.coins -= price; saveProfile(); return true; }
+function profStat(k, n) { PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); }
+function profMax(k, v) { if (v > (PROF.st[k] || 0)) { PROF.st[k] = v; saveProfile(); checkAch(); } }
+function profEp(ep) { if (!PROF.st.eps.includes(ep)) { PROF.st.eps.push(ep); saveProfile(); } checkAch(); }
+function checkAch() {
+  if (achBusy) return; achBusy = true;
+  for (const [id, name, , reward, prog] of ACH) {
+    if (PROF.ach[id]) continue;
+    const [c, m] = prog(PROF);
+    if (c >= m) { PROF.ach[id] = Date.now(); PROF.coins += reward; PROF.st.earned += reward; saveProfile(); if (state.mode === 'drive' || state.mode === 'foot') toast(`Достижение «${name}»: +${reward}`, 2.2); }
+  }
+  achBusy = false; updateProfChip();
+}
+// loadout: the player's car model, paint, neon and the hero's outfit
+const PLAYER_CAR = { model: 'car_taxi', mat: null, neon: null, scale: null };
+function paintMat(id) { const P_ = PAINTS[id] || PAINTS.yellow, m = KIT.car.clone(); m.color = new THREE.Color(...P_.c); if (P_.metal) { m.metalness = P_.metal; m.roughness = 0.25; } return m; }
+function applyLoadout() {
+  if (!KIT.car) return;
+  const car = CARS[PROF.car] || CARS.taxi;
+  PLAYER_CAR.model = car.model; PLAYER_CAR.mat = paintMat(PROF.paint[PROF.car] || car.paint); PLAYER_CAR.scale = car.scale || null;
+  PLAYER_CAR.neon = PROF.neon && NEONS[PROF.neon] ? NEONS[PROF.neon].c : null;
+  if (pc) {
+    const m = makeCar(0, true), vis = pc.g.visible;
+    m.g.position.copy(pc.g.position); m.g.rotation.copy(pc.g.rotation); m.g.visible = vis;
+    scene.remove(pc.g); pc.g = m.g; pc.wheels = m.wheels;
+  }
+  applyChar();
+  if (hero) { scene.remove(hero.g); hero = null; }
+  updateProfChip();
+}
+function heroLook() { const o = OUTFITS[PROF.outfit]; return o ? Object.assign({}, CH.look, { colors: Object.assign({}, CH.look.colors || {}, o.colors) }) : CH.look; }
+function applyProfileMods() {
+  const car = CARS[PROF.car] || CARS.taxi, u = PROF.up;
+  P.maxSpeed += car.speed + 1.2 * u.engine;
+  P.carArmor *= car.armor * (1 - 0.08 * u.body);
+  P.dmg *= 1 + 0.08 * u.gun; P.fireMult *= 1 - 0.06 * u.rate;
+  P.footMax += 10 * u.vest; P.footArmor *= 1 - 0.05 * u.vest;
+  if (PROF.pass) P.coins *= 1.5;
+}
+// boosters during play
+let shieldMesh = null;
+function useBoost(id) {
+  if (state.mode !== 'drive' && state.mode !== 'foot') return;
+  if (id === 'nitro' && state.mode !== 'drive') return;
+  if (!PROF.inv[id]) { toast(`${ITEMS[id].name}: нет в запасе. Загляни в магазин.`, 1.6); return; }
+  if (id === 'nitro' && state.nitroT > 0) return;
+  PROF.inv[id]--; saveProfile();
+  if (id === 'nitro') { state.nitroT = 3; profStat('nitro'); toast('Нитро!', 1); }
+  if (id === 'shield') { state.shieldT = 6; state.invuln = Math.max(state.invuln, 6); toast('Щит: 6 секунд', 1.2); }
+  updateBoostsHud();
+}
+function updateBoosts(dt) {
+  if (state.nitroT > 0) {
+    state.nitroT -= dt;
+    if (state.mode === 'drive' && pc) {
+      const f = new V3(Math.sin(pc.h), 0, Math.cos(pc.h)); pc.vel.addScaledVector(f, 22 * dt);
+      if (Math.random() < 0.8) spawnP(pc.pos.clone().addScaledVector(f, -2.6).add(new V3(rand(-0.4, 0.4), 0.6, 0)), { color: pick([0x5ad8ff, 0xffa030]), size: 0.35, vel: f.clone().multiplyScalar(-6), life: 0.35, add: true, opacity: 0.9 });
+    }
+  }
+  if (state.shieldT > 0) state.shieldT -= dt;
+  if (!shieldMesh) { shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 1.2, 2), transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false })); scene.add(shieldMesh); }
+  const on = state.shieldT > 0 && (state.mode === 'drive' || state.mode === 'foot');
+  shieldMesh.visible = on;
+  if (on) { const t = state.act === 1 ? pc.pos : hero.pos; shieldMesh.position.set(t.x, 1, t.z); shieldMesh.scale.setScalar(state.act === 1 ? 3.4 : 1.5); shieldMesh.material.opacity = 0.14 + Math.sin(state.t * 10) * 0.05; }
+  // automatic repair kit and medkit
+  if (state.mode === 'drive' && pc && !pc.dead && pc.hp < 30 && PROF.inv.repair > 0) { PROF.inv.repair--; pc.hp = Math.min(100, pc.hp + 40); saveProfile(); toast('Ремкомплект: +40 к прочности', 1.6); }
+  if (state.mode === 'foot' && hero && !hero.dead && hero.hp < P.footMax * 0.3 && PROF.inv.medkit > 0) { PROF.inv.medkit--; hero.hp = Math.min(P.footMax, hero.hp + P.footMax * 0.5); saveProfile(); toast('Аптечка: +50% здоровья', 1.6); }
+  // the tourist achievement
+  if (state.mode === 'drive' && pc) {
+    if (!PROF.st.tunnel && inTunnel(pc.pos.x, pc.pos.z) && Math.abs(pc.pos.z - TUNNEL.z) < 8 && pc.pos.x > TUNNEL.x0 + 20 && pc.pos.x < TUNNEL.x1 - 20) profStat('tunnel');
+    if (!PROF.st.bridge && Math.abs(pc.pos.x - CANAL.x) < 2 && [-160, -80, 0].some((r) => Math.abs(pc.pos.z - r) < 8)) profStat('bridge');
+  }
+  PROF.st.time += dt;
+}
+let boostsShown = '';
+function updateBoostsHud() {
+  const I = PROF.inv, txt = `Нитро ×${I.nitro} (N) · Щит ×${I.shield} (B) · Рем ×${I.repair} · Аптечки ×${I.medkit}`;
+  if (txt !== boostsShown) { boostsShown = txt; $('boosts').textContent = txt; $('btnNitro').textContent = `Нитро ${I.nitro}`; $('btnShield').textContent = `Щит ${I.shield}`; }
+  $('godBadge').hidden = !PROF.god;
+}
+// ---------------- profile panel ----------------
+let profTab = 'me', profMsg = '';
+const coinsText = () => (PROF.god ? '∞' : PROF.coins.toLocaleString('ru-RU'));
+const profLevel = () => 1 + Math.floor(Math.sqrt(PROF.st.earned / 500));
+function updateProfChip() { const el = $('selProfile'); if (el) el.innerHTML = `<b>${esc(PROF.name)}</b> · ур. ${profLevel()} · <b>${coinsText()}</b> монет`; }
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function openProfile(tab) { profTab = tab || profTab; profMsg = ''; $('prof').hidden = false; renderProfile(); }
+function closeProfile() { $('prof').hidden = true; if (state.mode === 'select') selectChar(curIdx); updateProfChip(); }
+function priceBtn(act, id, price, owned, label) {
+  if (owned) return `<button class="btn sm" data-act="${act}" data-id="${id}" type="button">${label || 'Выбрать'}</button>`;
+  return `<button class="btn sm primary" data-act="buy-${act}" data-id="${id}" type="button" ${canPay(price) ? '' : 'disabled'}>${PROF.god ? 'Взять' : price.toLocaleString('ru-RU') + ' монет'}</button>`;
+}
+function bar(v, max) { return `<div class="pbar"><i style="width:${Math.round(Math.min(1, v / max) * 100)}%"></i></div>`; }
+function renderProfile() {
+  const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения']];
+  $('profTabs').innerHTML = tabs.map(([k, t]) => `<button class="chip${profTab === k ? ' active' : ''}" data-tab="${k}" type="button">${t}</button>`).join('');
+  $('profName').textContent = PROF.name; $('profSub').textContent = PROF.god ? 'тестовый профиль · бессмертие · все покупки бесплатно' : PROF.login ? 'профиль ' + PROF.login : 'гость · прогресс хранится в этом браузере';
+  $('profCoins').textContent = coinsText(); $('profAva').textContent = (PROF.name[0] || 'Г').toUpperCase();
+  let h = '';
+  const S = PROF.st;
+  if (profTab === 'me') {
+    const lvl = profLevel(), next = 500 * lvl * lvl, prev = 500 * (lvl - 1) * (lvl - 1);
+    const outfits = Object.entries(OUTFITS).map(([id, o]) => { const own = PROF.outfits.includes(id) || (o.pass && PROF.pass); return `<div class="pitem${PROF.outfit === id ? ' on' : ''}"><b>${o.name}</b><span>${o.pass ? 'из сезонного пропуска' : 'костюм героя'}</span>${o.pass && !own ? '<button class="btn sm" disabled type="button">Пропуск</button>' : priceBtn('outfit', id, o.price, own, PROF.outfit === id ? 'Надет' : 'Надеть')}</div>`; }).join('');
+    h = `<div class="pgrid2">
+      <div class="pbox"><div class="plabel">Уровень ${lvl}</div>${bar(S.earned - prev, next - prev)}<small>${S.earned.toLocaleString('ru-RU')} монет заработано всего · до следующего уровня ${(next - S.earned).toLocaleString('ru-RU')}</small></div>
+      <div class="pbox"><div class="plabel">Герой: ${esc(CH.name)} «${esc(CH.nick)}»</div><small>${esc(CH.perk[0])}: ${esc(CH.perk[1])}</small><button class="btn sm" data-act="hero" type="button">Сменить героя</button></div>
+    </div>
+    <div class="pstats">${[['Глав пройдено', S.chapters], ['Эпизодов', S.eps.length + ' из 10'], ['Машин сбито', S.carKills], ['Противников', S.footKills], ['Боссов', S.bosses], ['Достижений', Object.keys(PROF.ach).length + ' из ' + ACH.length], ['В игре', Math.round(S.time / 60) + ' мин']].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div>
+    <div class="plabel">Костюм героя</div><div class="pitems"><div class="pitem${!PROF.outfit ? ' on' : ''}"><b>Свой</b><span>как на портрете</span><button class="btn sm" data-act="outfit" data-id="" type="button">${!PROF.outfit ? 'Надет' : 'Надеть'}</button></div>${outfits}</div>
+    <div class="plabel">Вход</div>
+    ${PROF.login ? `<div class="prow"><span>Вы вошли как <b>${esc(PROF.login)}</b>.</span><button class="btn sm" data-act="logout" type="button">Выйти</button></div>` : ''}
+    <div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
+      <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>
+    <div class="pmsg">${esc(profMsg)}</div>
+    <div class="note">Профили хранятся только в этом браузере. Для настоящих аккаунтов нужен сервер.</div>`;
+  } else if (profTab === 'garage') {
+    h = '<div class="pitems cars">' + Object.entries(CARS).map(([id, c]) => {
+      const own = PROF.cars.includes(id), on = PROF.car === id;
+      const paints = own ? Object.entries(PAINTS).map(([pid, p]) => { const have = (PROF.paints[id] || []).includes(pid) || (p.pass && PROF.pass), sel = (PROF.paint[id] || c.paint) === pid; const rgb = p.c.map((v) => Math.min(255, Math.round(v * 150))).join(','); return `<button class="swatch${sel ? ' on' : ''}${have ? '' : ' locked'}" style="background:rgb(${rgb})" data-act="${have ? 'paint' : p.pass ? 'nopass' : 'buy-paint'}" data-id="${id}:${pid}" title="${p.name}${have ? '' : p.pass ? ' — сезонный пропуск' : ' — 300 монет'}" type="button"></button>`; }).join('') : '';
+      return `<div class="pitem car${on ? ' on' : ''}"><b>${c.name}</b><span>${c.desc}</span>
+        <div class="cstat"><small>Скорость</small>${bar(c.speed + 3, 8)}<small>Прочность</small>${bar(1.6 - c.armor, 1.1)}</div>
+        ${own ? `<div class="swatches">${paints}</div>` : ''}${priceBtn('car', id, c.price, own, on ? 'В гараже · выбрано' : 'Выбрать')}</div>`;
+    }).join('') + '</div>' +
+    `<div class="plabel">Неоновая подсветка (на любую машину)</div><div class="pitems">${[['', { name: 'Без подсветки' }], ...Object.entries(NEONS)].map(([id, n]) => { const own = !id || PROF.neons.includes(id) || (n.pass && PROF.pass); return `<div class="pitem${(PROF.neon || '') === id ? ' on' : ''}"><b>${n.name}</b><span>${n.pass ? 'из сезонного пропуска' : id ? 'неон под днищем' : ''}</span>${n.pass && !own ? '<button class="btn sm" disabled type="button">Пропуск</button>' : priceBtn('neon', id, 500, own)}</div>`; }).join('')}</div>`;
+  } else if (profTab === 'shop') {
+    h = `<div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem"><b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button" ${canPay(it.price) ? '' : 'disabled'}>${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
+    <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass); return `<div class="pitem prem"><b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
+    <div class="pmsg">${esc(profMsg)}</div>`;
+  } else if (profTab === 'up') {
+    h = '<div class="pitems">' + UPGRADES.map((u) => { const l = PROF.up[u.id]; return `<div class="pitem"><b>${u.name}</b><span>${u.desc}</span><div class="pips">${[0, 1, 2, 3, 4].map((j) => `<i class="${j < l ? 'on' : ''}"></i>`).join('')}</div>${l >= UP_MAX ? '<button class="btn sm" disabled type="button">Максимум</button>' : `<button class="btn sm primary" data-act="buy-up" data-id="${u.id}" type="button" ${canPay(upPrice(l)) ? '' : 'disabled'}>${PROF.god ? 'Улучшить' : upPrice(l) + ' монет'}</button>`}</div>`; }).join('') + '</div>';
+  } else {
+    h = '<div class="pitems">' + ACH.map(([id, name, desc, reward, prog]) => { const [c, m] = prog(PROF), got = !!PROF.ach[id]; return `<div class="pitem ach${got ? ' on' : ''}"><b>${got ? '★ ' : ''}${name}</b><span>${desc} · награда ${reward}</span>${bar(got ? m : c, m)}<small>${got ? 'получено' : `${Math.min(c, m)} / ${m}`}</small></div>`; }).join('') + '</div>';
+  }
+  $('profBody').innerHTML = h;
+}
+function profAction(act, id) {
+  profMsg = '';
+  const has = (arr, v) => arr.includes(v);
+  if (act === 'hero') { closeProfile(); return; }
+  if (act === 'login' || act === 'register') { const err = (act === 'login' ? profLogin : profRegister)($('pLogin').value, $('pPass').value); profMsg = err || (PROF.god ? 'Тестовый профиль: бессмертие и бесплатные покупки включены.' : 'Готово: профиль загружен.'); }
+  else if (act === 'logout') { loadProfile(null); profMsg = 'Вы вышли. Сейчас играет гость.'; }
+  else if (act === 'outfit') { PROF.outfit = id || null; saveProfile(); applyLoadout(); }
+  else if (act === 'buy-outfit') { if (pay(OUTFITS[id].price)) { PROF.outfits.push(id); PROF.outfit = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'car') { PROF.car = id; saveProfile(); applyLoadout(); }
+  else if (act === 'buy-car') { if (pay(CARS[id].price) && !has(PROF.cars, id)) { PROF.cars.push(id); PROF.paints[id] = [CARS[id].paint]; PROF.paint[id] = CARS[id].paint; PROF.car = id; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'paint') { const [c, p] = id.split(':'); PROF.paint[c] = p; saveProfile(); applyLoadout(); }
+  else if (act === 'buy-paint') { const [c, p] = id.split(':'); if (pay(300)) { (PROF.paints[c] = PROF.paints[c] || []).push(p); PROF.paint[c] = p; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'nopass') profMsg = 'Этот цвет — из сезонного пропуска (вкладка «Магазин»).';
+  else if (act === 'neon') { PROF.neon = id || null; saveProfile(); applyLoadout(); }
+  else if (act === 'buy-neon') { if (pay(500)) { PROF.neons.push(id); PROF.neon = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'buy-item') { if (pay(ITEMS[id].price)) { PROF.inv[id]++; saveProfile(); } }
+  else if (act === 'buy-up') { const l = PROF.up[id]; if (l < UP_MAX && pay(upPrice(l))) { PROF.up[id]++; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'buy-pack') {
+    if (PROF.god) { PACKS[id].grant(PROF); saveProfile(); applyLoadout(); checkAch(); profMsg = `«${PACKS[id].name}» выдан (тестовый профиль).`; }
+    else profMsg = 'Оплата в рублях подключается через платёжный SDK площадки (Яндекс Игры, VK Play). В прототипе покупка — заглушка, деньги не списываются.';
+  }
+  renderProfile();
 }
 
 // ---------------- drivers ----------------
@@ -3191,6 +3877,7 @@ const gx = (m, f) => (CH.sex === 'f' ? f : m);
 function applyChar() {
   const [Z, S, V] = CH.stats, fx = CH.fx || {};
   P = { footMax: 70 + 12 * Z + (fx.footHp || 0), maxSpeed: 32 + 1.2 * V + (fx.speed || 0), fireMult: (1.15 - 0.06 * S) * (fx.fire || 1), dmg: (0.8 + 0.08 * S) * (fx.dmg || 1), carArmor: fx.carArmor || 1, footArmor: fx.footArmor || 1, aim: fx.aim || 1, coins: fx.coins || 1, regen: !!fx.regen, drift: !!fx.drift };
+  applyProfileMods();
   WHO.hero = { name: CH.name, color: CH.accent, init: CH.name[0] };
 }
 const yearsWord = (n) => { const a = n % 10, b = n % 100; if (b >= 11 && b <= 14) return 'лет'; if (a === 1) return 'год'; if (a >= 2 && a <= 4) return 'года'; return 'лет'; };
@@ -3256,7 +3943,7 @@ function selectChar(i) {
   $('selPerk').textContent = CH.perk[0]; $('selPerkText').textContent = CH.perk[1];
   $('stageName').textContent = CH.name; $('stageNick').textContent = `«${CH.nick}»`;
   if (showFig) scene.remove(showFig.g);
-  showFig = makeHuman(CH.look, 1);
+  showFig = makeHuman(heroLook(), 1);
   showFig.g.position.copy(SHOW); poseHuman(showFig, { idle: true, t: state.t });
   showFig.spin = 1.4;
   rimLight.color.set(CH.accent); showDisc.material.color.set(CH.accent);
@@ -3355,10 +4042,12 @@ function showDead() {
     <h2 class="h2 bad">${act === 1 ? 'Машина разбита' : CH.name + ' ' + gx('ранен', 'ранена')}</h2>
     <p class="lead">${act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>
     <div class="btns">
-      <button id="mRevive" class="btn primary" type="button" ${used ? 'disabled' : ''}>Продолжить за рекламу</button>
+      ${PROF.inv.revive > 0 ? `<button id="mChance" class="btn primary" type="button">Второй шанс (×${PROF.inv.revive})</button>` : ''}
+      <button id="mRevive" class="btn primary" type="button" ${used ? 'disabled' : ''}>${PROF.noAds ? 'Продолжить' : 'Продолжить за рекламу'}</button>
       <button id="mRetry" class="btn" type="button">${state.ep >= 2 ? 'Начать главу заново' : 'Начать акт заново'}</button>
     </div>
     <div class="note">${used ? 'Продолжение за рекламу — один раз за акт.' : 'Продолжение вернёт 60% прочности на месте.'}</div>`, {
+    mChance: () => { PROF.inv.revive--; saveProfile(); hideModal(); revive(); },
     mRevive: () => { hideModal(); showAd(() => { state.reviveUsed[rk] = true; revive(); }); },
     mRetry: () => { hideModal(); if (state.ep >= 2) startChapter(state.ch); else if (act === 1) { setupAct1(); state.mode = 'drive'; } else { setupAct2(); } state.fireLock = true; },
   });
@@ -3376,7 +4065,7 @@ function revive() {
 }
 function showEnd() {
   state.mode = 'end'; setEngine(0, false);
-  state.coins += 150; $('hud').hidden = true; $('touch').hidden = true;
+  state.coins += 150; walletAdd(150); profStat('chapters'); profEp(1); $('hud').hidden = true; $('touch').hidden = true;
   const t = Math.round(state.time), mm2 = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   const render = () => showModal(`
     <div class="kicker">Эпизод 1 пройден</div>
@@ -3400,7 +4089,7 @@ function showEnd() {
       <div class="car-card"><b>Броневан «Бизон»</b><span>Скорость 2 · броня 5</span><span class="price">Набор за 149 ₽</span></div>
     </div>
     <div class="note">Покупки в прототипе не работают: витрина показывает, что можно продавать.</div>`, {
-    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; state.coins *= 2; render(); }); },
+    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
     mAgain: () => { hideModal(); showSelect(); },
     mEp2: () => { hideModal(); startEpisode2(1); },
   });
@@ -3410,9 +4099,16 @@ function showEnd() {
 $('btnPlay').addEventListener('click', showSelect);
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
+$('btnProfile').addEventListener('click', () => openProfile('me'));
+$('selProfile').addEventListener('click', () => openProfile('me'));
+$('profClose').addEventListener('click', closeProfile);
+$('prof').addEventListener('click', (e) => { if (e.target.id === 'prof') closeProfile(); });
+$('profTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { profTab = b.dataset.tab; profMsg = ''; renderProfile(); } });
+$('profBody').addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) profAction(b.dataset.act, b.dataset.id); });
+for (const [id, k] of [['btnNitro', 'nitro'], ['btnShield', 'shield']]) $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); useBoost(k); });
 window.addEventListener('keydown', (e) => {
   if (state.mode === 'preview' && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); showSelect(); return; }
-  if (state.mode !== 'select') return;
+  if (state.mode !== 'select' || !$('prof').hidden) return;
   let i = curIdx;
   if (e.code === 'ArrowRight') i = (i + 1) % 10; else if (e.code === 'ArrowLeft') i = (i + 9) % 10;
   else if (e.code === 'ArrowDown' || e.code === 'ArrowUp') i = (i + 5) % 10;
@@ -3440,8 +4136,9 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt);
+  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
+  if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateRain(dt, focus);
   flash.intensity *= Math.exp(-dt * 12);
   beam.material.opacity = 0.18 + Math.sin(state.t * 3) * 0.06;
@@ -3454,18 +4151,20 @@ function loop(now) {
 $('loading').textContent = 'Загрузка города… 0%';
 loadAssets((k) => { $('loading').textContent = 'Загрузка города… ' + Math.round(k * 100) + '%'; }).then(() => {
   buildWorld();
+  loadProfile(store.get('nf-session'));
+  initLife();
   buildRoster();
   renderPortraits();
   pc = Object.assign(makeCar(0xffb703, true), { pos: new V3(-165, 0, 4), vel: new V3(), h: PI / 2, hp: 100, vf: 0 });
   pvEnemy = Object.assign(makeCar(0x2b2b33, false), { pos: new V3(), h: PI / 2 });
-  applyChar();
+  applyChar(); updateProfChip(); updateBoostsHud();
   $('loading').hidden = true;
   showPreview();
   requestAnimationFrame(loop);
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>
