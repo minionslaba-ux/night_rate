@@ -397,7 +397,7 @@ body:has(#dialog:not([hidden])) .touch { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v21'; window.__errs = [];
+window.APP_VER = 'v22'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -794,7 +794,7 @@ const DOOR = new V3(120, 0, -131);
 const START = { x: -160, z: 158, h: PI };
 
 const B = {};
-['brick', 'office', 'glass', 'shop', 'trim', 'roof', 'metal', 'neon', 'sign', 'awning', 'walk', 'grass', 'leaf', 'mark', 'container', 'wood', 'water', 'bankL', 'bankA', 'ad'].forEach((k) => { B[k] = batch(); });
+['brick', 'office', 'glass', 'shop', 'trim', 'roof', 'metal', 'neon', 'sign', 'awning', 'walk', 'grass', 'leaf', 'mark', 'container', 'wood', 'water', 'bankL', 'bankA', 'ad', 'asph', 'glassA'].forEach((k) => { B[k] = batch(); });
 const FAC = ['brick', 'office', 'glass'];
 const AWN = [0xb8323a, 0x2f6a4a, 0x2a4f8a, 0xd08a2a, 0x6a3a8a, 0x2a7a7a];
 const NEON = [0xff3d8b, 0x3de8ff, 0xffd23a, 0x7cff6a, 0xb46bff];
@@ -911,6 +911,285 @@ function building(cx, cz, w, d, h, opt) {
     putB(B.neon, G.box, bx, base + shopH + 4.5, bz, 0.56, 5.6, 0.2, 0, nc);
   }
   if (opt.collide) addBox(cx, cz, w, d, h);
+}
+
+// ---------------- airport «Северный»: beyond the bay, at the end of the expressway (episode 13) ----------------
+// Landside (z 452–600): quay, parking, fuel farm, the ramp down from the expressway, the curb road. Terminal z 600–650.
+// Airside (z 650–1000): apron with jet bridges and airliners, cargo yard, hangar, taxiway (z 775), runway (z 850), control tower.
+const AIR = { x0: -255, x1: 255, z0: 452, z1: 985, on: false };
+const AP = {
+  term: { x0: -130, x1: 130, z0: 600, z1: 650, h: 16 }, hall: { x0: -58, x1: 58 },
+  cargo: { x0: 150, x1: 242, z0: 600, z1: 650 }, hangar: { x0: -238, x1: -158, z0: 680, z1: 746 },
+  tower: { x: 200, z: 568 }, taxiZ: 775, rwyZ: 850, rwyHW: 22, rwyX0: -262, rwyX1: 262, stands: [-100, -40, 40, 100],
+};
+const inAirport = (x, z) => x > AIR.x0 - 40 && x < AIR.x1 + 40 && z > AIR.z0 - 30 && z < AIR.z1 + 40;
+const AIRX = { strobes: [], radar: null, jet: null, planes: [], beacon: [] };
+
+// curtain-wall glass: dark panels, slim mullions, warm light inside
+const airGlassTex = canvasTex(256, 256, (g, w, h) => {
+  g.fillStyle = '#0c1424'; g.fillRect(0, 0, w, h);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+    const lit = Math.random() < 0.55, gr = g.createLinearGradient(0, y * 64, 0, y * 64 + 64);
+    gr.addColorStop(0, lit ? '#3a4a66' : '#141c2e'); gr.addColorStop(1, lit ? '#d8b878' : '#1a2438'); g.fillStyle = gr; g.fillRect(x * 64 + 3, y * 64 + 3, 58, 58);
+  }
+  g.fillStyle = '#8a92a4'; for (let i = 0; i <= 4; i++) { g.fillRect(i * 64 - 2, 0, 4, h); g.fillRect(0, i * 64 - 2, w, 4); }
+});
+airGlassTex.wrapS = airGlassTex.wrapT = THREE.RepeatWrapping;
+
+// a modern airliner (or a business jet): fuselage, wings, engines, tail, windows, gear; a fictional livery «Северные линии»
+function makeAirliner(o) {
+  o = o || {}; const L = o.len || 36, R = o.r || 2.0, g = new THREE.Group();
+  const white = std(0xeef0f4, { roughness: 0.35, metalness: 0.15 }), grey = std(0x9aa0aa, { roughness: 0.4, metalness: 0.5 }), dark = std(0x1c1e24, { roughness: 0.6 });
+  const tail = std(o.tail || 0xe8702a, { roughness: 0.4 }), stripe = std(o.stripe || 0x1aa0a8, { roughness: 0.4 });
+  const add = (geo, m, x, y, z, rx, ry, rz) => { const k = new THREE.Mesh(geo, m); k.position.set(x, y, z); k.rotation.set(rx || 0, ry || 0, rz || 0); k.castShadow = true; g.add(k); return k; };
+  const Y = R + (o.bizjet ? 1.1 : 1.6);
+  add(new THREE.CylinderGeometry(R, R, L * 0.72, 20), white, 0, Y, 0, PI / 2);                                    // fuselage
+  add(new THREE.SphereGeometry(R, 20, 12, 0, PI * 2, 0, PI / 2), white, 0, Y, L * 0.36, PI / 2).scale.set(1, 1.7, 1);   // nose
+  add(new THREE.ConeGeometry(R, L * 0.22, 20), white, 0, Y + R * 0.25, -L * 0.47, -PI / 2).scale.set(1, 1, 0.8);         // tail cone
+  add(new THREE.CylinderGeometry(R * 1.005, R * 1.005, L * 0.7, 20, 1, true, PI * 0.42, PI * 0.16), stripe, 0, Y, 0, PI / 2);   // cheatline
+  add(new THREE.CylinderGeometry(R * 1.005, R * 1.005, L * 0.7, 20, 1, true, -PI * 0.58, PI * 0.16), stripe, 0, Y, 0, PI / 2);
+  const win = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.9, 1.3) });
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < (o.bizjet ? 6 : 26); k++) add(new THREE.BoxGeometry(0.06, 0.32, 0.22), win, s * R * 0.985, Y + R * 0.3, L * 0.3 - k * (o.bizjet ? 1.3 : 0.95));
+    add(new THREE.BoxGeometry(0.06, 0.5, 0.8), dark, s * R * 0.9, Y + R * 0.55, L * 0.43, 0, 0, s * 0.5);   // cockpit windows
+  }
+  // wings: swept slabs; engines under them (or on the tail of a business jet)
+  const span = o.bizjet ? 9 : 17, chord = o.bizjet ? 3.2 : 6.5;
+  for (const s of [-1, 1]) {
+    const w = add(new THREE.BoxGeometry(span, 0.35, chord), white, s * (R + span / 2 - 0.4), Y - R * 0.45, -L * 0.04 - span * 0.18, 0, s * 0.36, s * -0.06);
+    w.position.y += 0; add(new THREE.BoxGeometry(0.5, 1.4, 0.9), tail, s * (R + span - 0.9), Y - R * 0.2, -L * 0.04 - span * 0.5, 0, s * 0.36);   // winglets
+    if (!o.bizjet) {
+      const ex = s * (R + span * 0.32), ez = L * 0.04 - span * 0.06;
+      add(new THREE.CylinderGeometry(1.15, 1.0, 4.2, 16), grey, ex, Y - R * 0.95, ez, PI / 2);
+      add(new THREE.CircleGeometry(1.0, 16), dark, ex, Y - R * 0.95, ez + 2.12);
+      add(new THREE.BoxGeometry(0.25, 0.9, 2.2), grey, ex, Y - R * 0.5, ez - 0.4);
+    } else {
+      add(new THREE.CylinderGeometry(0.7, 0.6, 3.2, 14), grey, s * (R + 0.8), Y + 0.3, -L * 0.36, PI / 2);
+      add(new THREE.BoxGeometry(1.0, 0.25, 0.9), grey, s * (R + 0.3), Y + 0.3, -L * 0.36);
+    }
+    add(new THREE.BoxGeometry(o.bizjet ? 3.2 : 6.5, 0.22, o.bizjet ? 1.6 : 2.6), white, s * (o.bizjet ? 1.6 : 3.4), o.bizjet ? Y + R + 3.0 : Y + R * 0.3, -L * 0.5 + 0.6, 0, s * 0.35);   // stabilisers
+  }
+  add(new THREE.BoxGeometry(0.35, o.bizjet ? 3.4 : 6.5, o.bizjet ? 3.2 : 5.2), tail, 0, Y + R + (o.bizjet ? 1.4 : 2.9), -L * 0.47, -0.42);   // fin
+  // gear and lights
+  for (const [x, z] of [[0, L * 0.3], [-R * 1.3, -L * 0.06], [R * 1.3, -L * 0.06]]) { add(new THREE.CylinderGeometry(0.12, 0.12, Y - R, 6), grey, x, (Y - R) / 2, z); add(new THREE.CylinderGeometry(0.45, 0.45, 0.35, 12), dark, x, 0.45, z, 0, 0, PI / 2); }
+  const nav = (c, x, y, z) => add(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: c }), x, y, z);
+  nav(new THREE.Color(5, 0.2, 0.2), -(R + span - 0.6), Y - R * 0.3, -L * 0.04 - span * 0.5); nav(new THREE.Color(0.2, 5, 0.6), R + span - 0.6, Y - R * 0.3, -L * 0.04 - span * 0.5);
+  const beacon = nav(new THREE.Color(6, 0.3, 0.2), 0, Y + R + 0.15, 0); AIRX.beacon.push(beacon);
+  // the airline name along both sides (fictional)
+  const nameTex = cityText(512, 64, (q, w, h) => { q.clearRect(0, 0, w, h); q.fillStyle = '#1a6a78'; q.font = 'bold 40px Arial, sans-serif'; q.fillText(o.bizjet ? 'ЧАСТНЫЙ БОРТ' : 'СЕВЕРНЫЕ ЛИНИИ', w / 2, h / 2); });
+  for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(o.bizjet ? 6 : 11, o.bizjet ? 0.75 : 1.4), new THREE.MeshBasicMaterial({ map: nameTex, transparent: true })); p.position.set(s * (R + 0.02), Y + R * 0.62, L * 0.12); p.rotation.y = s * PI / 2; g.add(p); }
+  g.userData = { L, R, Y, span };
+  return g;
+}
+
+function groundText(tex, w, h, x, z, ry) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: new THREE.Color(1.1, 1.1, 1.1), polygonOffset: true, polygonOffsetFactor: -3 }));
+  m.rotation.set(-PI / 2, 0, ry || 0); m.position.set(x, 0.06, z); scene.add(m); return m;
+}
+
+function buildAirport() {
+  const conc = col(0xb4b4bc), concD = col(0x7a7a84), metal = col(0x3a3c44), white = col(0xe8e8ec), yel = col(0xf0c040), red = col(0xd83a2a);
+  const light = (x, y, z, c, k, s) => putB(B.neon, G.sph, x, y, z, s || 0.25, s || 0.25, s || 0.25, 0, HDR(c, k || 4));
+  const solid = (x0, z0, x1, z1, h) => addBox((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, h);
+  // ground: grass everywhere, asphalt roads, concrete apron and the quay
+  boxB(B.grass, -330, -0.06, 444, 330, -0.04, 1010, { topWorld: 1 / 8, sides: false });
+  boxB(B.trim, -330, -1.7, 440, 330, 0.25, 452, { col: concD });
+  for (let x = -326; x <= 326; x += 4) putB(B.metal, G.cyl, x, 0.75, 451, 0.12, 1.0, 0.12, 0, metal);
+  putB(B.metal, G.box, 0, 1.25, 451, 656, 0.08, 0.08, 0, metal);
+  const asph = (x0, z0, x1, z1) => boxB(B.asph, x0, 0, z0, x1, 0.012, z1, { topWorld: 1 / 10, sides: false });
+  asph(-245, 560, 245, 590);                 // curb road in front of the terminal
+  asph(68, 452, 92, 560);                    // from the ramp
+  asph(-240, 470, -160, 560); asph(-160, 540, 60, 560);   // to the parking and the fuel farm
+  asph(-150, 465, 40, 538);                  // parking lot
+  asph(140, 470, 250, 560); asph(242, 560, 255, 760);     // service road to the cargo yard, along the east fence
+  boxB(B.walk, -250, 0.02, 650, 250, 0.05, 762, { topWorld: 1 / 6, col: col(0xa8a8ae) });   // apron
+  boxB(B.walk, -130, 0.02, 590, 130, 0.2, 600, { topWorld: 1 / 4, col: col(0xc8c4bc) });     // pavement at the doors
+  asph(AIR.x0, AP.taxiZ - 11, AIR.x1, AP.taxiZ + 11);                                         // taxiway
+  for (const x of [-200, 0, 200]) asph(x - 11, AP.taxiZ + 11, x + 11, AP.rwyZ - AP.rwyHW);   // links to the runway
+  asph(AP.rwyX0, AP.rwyZ - AP.rwyHW, AP.rwyX1, AP.rwyZ + AP.rwyHW);                          // runway
+  // ---- markings ----
+  const mk = (x0, z0, x1, z1, c) => boxB(B.mark, x0, 0.05, z0, x1, 0.07, z1, { sides: false, col: c });
+  for (let x = -240; x < 240; x += 9) mk(x, 574.85, x + 4.5, 575.15, white);          // curb road centre
+  for (let x = -146; x < 36; x += 4.2) { mk(x, 465, x + 0.15, 475, white); mk(x, 528, x + 0.15, 538, white); }   // parking bays
+  for (let x = AP.rwyX0 + 70; x < AP.rwyX1 - 70; x += 22) mk(x, AP.rwyZ - 0.45, x + 12, AP.rwyZ + 0.45, white);   // runway centreline
+  mk(AP.rwyX0 + 4, AP.rwyZ - AP.rwyHW + 1.5, AP.rwyX1 - 4, AP.rwyZ - AP.rwyHW + 2.1, white); mk(AP.rwyX0 + 4, AP.rwyZ + AP.rwyHW - 2.1, AP.rwyX1 - 4, AP.rwyZ + AP.rwyHW - 1.5, white);
+  for (const end of [-1, 1]) {
+    const x0 = end < 0 ? AP.rwyX0 + 6 : AP.rwyX1 - 36;
+    for (let k = -7; k <= 7; k++) { if (!k) continue; const z = AP.rwyZ + k * 2.6; mk(x0, z - 0.8, x0 + 30, z + 0.8, white); }   // threshold «piano keys»
+    for (const dx of [70, 110, 150]) for (const s of [-1, 1]) { const x = end < 0 ? AP.rwyX0 + dx : AP.rwyX1 - dx - 18; mk(x, AP.rwyZ + s * 6 - 1.2, x + 18, AP.rwyZ + s * 6 + 1.2, white); }   // touchdown zone
+    const num = cityText(256, 128, (q, w, h) => { q.clearRect(0, 0, w, h); q.fillStyle = '#f2f2f4'; q.font = 'bold 120px Arial, sans-serif'; q.fillText(end < 0 ? '09' : '27', w / 2, h / 2 + 6, w - 24); });
+    groundText(num, 18, 9, end < 0 ? AP.rwyX0 + 50 : AP.rwyX1 - 50, AP.rwyZ, end < 0 ? -PI / 2 : PI / 2);
+  }
+  for (let x = AIR.x0; x < AIR.x1; x += 6) mk(x, AP.taxiZ - 0.2, x + 4, AP.taxiZ + 0.2, yel);   // taxiway centreline
+  for (const sx of AP.stands) {   // lead-in lines and stop bars on the apron
+    mk(sx - 0.2, 668, sx + 0.2, 762, yel); mk(sx - 4, 669, sx + 4, 669.4, yel);
+    const n = cityText(128, 128, (q, w, h) => { q.clearRect(0, 0, w, h); q.fillStyle = '#f0c040'; q.font = 'bold 100px Arial'; q.fillText(String(AP.stands.indexOf(sx) + 1), w / 2, h / 2 + 4, w - 24); });
+    groundText(n, 4, 4, sx + 5, 676, PI);
+  }
+  // ---- lights: taxiway (green centre, blue edges), runway (white edges, green/red ends), approach strobes, PAPI ----
+  for (let x = AIR.x0 + 4; x < AIR.x1; x += 15) { light(x, 0.15, AP.taxiZ, 0x3aff7a, 3, 0.18); light(x, 0.3, AP.taxiZ - 11.5, 0x3a6aff, 4, 0.22); light(x, 0.3, AP.taxiZ + 11.5, 0x3a6aff, 4, 0.22); }
+  for (let x = AP.rwyX0 + 2; x <= AP.rwyX1; x += 20) for (const s of [-1, 1]) light(x, 0.35, AP.rwyZ + s * (AP.rwyHW + 1), 0xfff4e0, 5, 0.25);
+  for (let z = AP.rwyZ - AP.rwyHW; z <= AP.rwyZ + AP.rwyHW; z += 3) { light(AP.rwyX0 - 1, 0.35, z, 0x3aff6a, 5, 0.24); light(AP.rwyX1 + 1, 0.35, z, 0xff3a2a, 5, 0.24); }
+  for (let k = 1; k <= 6; k++) {   // approach lights beyond the western end, with a running strobe
+    const x = AP.rwyX0 - k * 12;
+    for (let z = -8; z <= 8; z += 2) light(x, 1.0, AP.rwyZ + z, 0xfff0d0, 3, 0.2);
+    putB(B.metal, G.box, x, 0.5, AP.rwyZ, 0.3, 1, 18, 0, metal);
+    const sm = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(8, 8, 9) })); sm.position.set(x, 1.6, AP.rwyZ); sm.visible = false; scene.add(sm); AIRX.strobes.push(sm);
+  }
+  for (let k = 0; k < 4; k++) { putB(B.metal, G.box, AP.rwyX0 + 60, 0.5, AP.rwyZ + AP.rwyHW + 8 + k * 2.4, 1.4, 0.9, 1.4, 0, metal); light(AP.rwyX0 + 60.8, 0.6, AP.rwyZ + AP.rwyHW + 8 + k * 2.4, k < 2 ? 0xffffff : 0xff2a2a, 6, 0.3); }
+  // ---- the ramp: the expressway comes down to the airport ----
+  const ex = EXPRESS.x, ang = Math.atan2(EXPRESS.y + 1, 90);
+  putB(B.trim, G.box, ex, (EXPRESS.y + 1) / 2, 515, EXPRESS.w, 1.0, Math.hypot(90, EXPRESS.y + 1), 0, concD, ang);
+  boxB(B.mark, ex - 7.6, 0.02, 560, ex + 7.6, 0.03, 562, { sides: false, col: white });
+  for (const s of [-1, 1]) putB(B.trim, G.box, ex + s * 7.8, (EXPRESS.y + 1) / 2 + 0.9, 515, 0.4, 1.1, Math.hypot(90, EXPRESS.y + 1), 0, conc, ang);
+  for (const z of [482, 508, 534]) { const h = (560 - z) / 90 * (EXPRESS.y + 1); putB(B.trim, G.box, ex, h / 2, z, 4, h, 2, 0, conc); }
+  // ---- terminal: glass hall with a big canopy, wings, roof sign, lit interior ----
+  const T = AP.term, H = T.h, glass = B.glassA;
+  boxB(B.walk, T.x0, 0, T.z0, T.x1, 0.2, T.z1, { topWorld: 1 / 3, col: col(0xd8d4cc), sides: false });   // polished floor
+  // the front wall: glass with three entrances to the hall; solid glass wings
+  const front = [[T.x0, -34], [-26, -4], [4, 26], [34, T.x1]];
+  for (const [a, b] of front) { boxB(glass, a, 0.2, T.z0 - 0.3, b, H - 1, T.z0, { us: 1 / 12, vs: 1 / 12 }); solid(a, T.z0 - 0.4, b, T.z0 + 0.2, H); }
+  for (const [a, b] of [[-34, -26], [-4, 4], [26, 34]]) { boxB(glass, a, 4.2, T.z0 - 0.3, b, H - 1, T.z0, { us: 1 / 12, vs: 1 / 12 }); boxB(B.neon, a + 0.5, 3.9, T.z0 - 0.4, b - 0.5, 4.1, T.z0 - 0.3, { col: HDR(0xffe0a0, 3) }); }
+  boxB(glass, T.x0, 0.2, T.z1, T.x1, H - 1, T.z1 + 0.3, { us: 1 / 12, vs: 1 / 12 }); solid(T.x0, T.z1 - 0.2, -4, T.z1 + 0.4, H); solid(4, T.z1 - 0.2, T.x1, T.z1 + 0.4, H);   // back wall, gate to the apron at x -4..4
+  for (const x of [T.x0, T.x1]) { boxB(glass, x - 0.3, 0.2, T.z0, x + 0.3, H - 1, T.z1, { us: 1 / 12, vs: 1 / 12 }); solid(x - 0.5, T.z0, x + 0.5, T.z1, H); }
+  for (const x of [AP.hall.x0, AP.hall.x1]) { boxB(B.trim, x - 0.4, 0.2, T.z0, x + 0.4, H - 1, T.z1, { col: col(0xc8c4bc) }); solid(x - 0.5, T.z0, x + 0.5, T.z1, H); }   // hall side walls
+  putB(B.trim, G.box, 0, H - 0.5, (T.z0 - 12 + T.z1 + 1) / 2, T.x1 - T.x0 + 2, 1, T.z1 - T.z0 + 13, 0, col(0xd0d0d6));   // roof with a canopy over the curb (a closed box: the ceiling is seen from the hall)
+  boxB(B.neon, T.x0, H - 1.1, T.z0 - 12, T.x1, H - 1.0, T.z0 - 11.6, { col: HDR(0xfff0d0, 2.5) });
+  for (let x = T.x0 + 10; x < T.x1; x += 20) { putB(B.metal, G.cyl, x, (H - 1) / 2, T.z0 - 10, 0.5, H - 1, 0.5, 0, col(0xb8bcc4)); addBox(x, T.z0 - 10, 1, 1, H); }
+  for (let x = T.x0 + 6; x < T.x1; x += 12) light(x, H - 1.2, T.z0 - 6, 0xfff0d0, 3, 0.35);
+  const roofSign = cityText(1024, 128, (q, w, h) => { q.fillStyle = 'rgba(0,0,0,0)'; q.clearRect(0, 0, w, h); q.fillStyle = '#e8f4ff'; q.font = 'bold 92px Arial, sans-serif'; q.fillText('АЭРОПОРТ «СЕВЕРНЫЙ»', w / 2, h / 2 + 4, w - 40); });
+  textPlane(roofSign, 56, 7, 0, H + 3.6, T.z0 - 12.6, PI, new THREE.Color(2.2, 2.4, 2.6));
+  for (const x of [-24, 24]) putB(B.metal, G.box, x, H + 1.5, T.z0 - 12.3, 0.3, 3, 0.3, 0, metal);
+  const doorSign = cityText(512, 96, (q, w, h) => { q.fillStyle = '#123a5a'; q.fillRect(0, 0, w, h); q.fillStyle = '#fff'; q.font = 'bold 54px Arial'; q.fillText('ВЫЛЕТ · DEPARTURES', w / 2, h / 2 + 2, w - 24); });
+  for (const x of [-30, 0, 30]) textPlane(doorSign, 7, 1.3, x, 5.2, T.z0 - 0.45, PI);
+  // inside the hall: check-in islands, departures board, security frames, seats, a café, columns, ceiling lights
+  for (const cx of [-30, 30]) {
+    boxB(B.trim, cx - 14, 0.2, 628, cx + 14, 1.3, 631, { col: col(0x3a4a68) }); solid(cx - 14, 628, cx + 14, 631, 1.3);
+    boxB(B.metal, cx - 14, 0.2, 631.2, cx + 14, 0.7, 633.2, { col: col(0x2a2c32) });   // baggage belt
+    for (let k = 0; k < 6; k++) { putB(B.neon, G.box, cx - 11.5 + k * 4.6, 1.6, 629.4, 0.6, 0.4, 0.06, 0, HDR(0x7ad6ff, 2.2)); }
+    const reg = cityText(512, 96, (q, w, h) => { q.fillStyle = '#0f2a4a'; q.fillRect(0, 0, w, h); q.fillStyle = '#ffd23a'; q.font = 'bold 50px Arial'; q.fillText(cx < 0 ? 'РЕГИСТРАЦИЯ 1–6' : 'РЕГИСТРАЦИЯ 7–12', w / 2, h / 2 + 2, w - 24); });
+    textPlane(reg, 10, 1.9, cx, 5.4, 627.9, PI);
+    for (let k = 0; k < 5; k++) { putB(B.metal, G.cyl, cx - 12 + k * 6, 0.65, 622, 0.08, 0.9, 0.08, 0, metal); }
+    putB(B.trim, G.box, cx, 1.0, 622, 24, 0.06, 0.06, 0, col(0x2a5aa0));   // queue tape
+  }
+  const board = cityText(1024, 384, (q, w, h) => {
+    q.fillStyle = '#05070c'; q.fillRect(0, 0, w, h); q.textAlign = 'left'; q.font = 'bold 34px "Courier New", monospace';
+    q.fillStyle = '#ffd23a'; q.fillText('РЕЙС    НАПРАВЛЕНИЕ        ВРЕМЯ  СТАТУС', 24, 34);
+    const rows = [['СЛ 101', 'МУРМАНСК', '02:40', 'ПОСАДКА'], ['СЛ 214', 'КАЛИНИНГРАД', '03:05', 'РЕГИСТРАЦИЯ'], ['СЛ 330', 'СОЧИ', '03:20', 'ПО РАСПИСАНИЮ'], ['СЛ 412', 'ВЛАДИВОСТОК', '04:10', 'ЗАДЕРЖАН'], ['ЧБ 007', 'ЧАСТНЫЙ РЕЙС', '03:00', 'ВЫРУЛИВАЕТ'], ['СЛ 518', 'КАЗАНЬ', '05:15', 'ПО РАСПИСАНИЮ']];
+    rows.forEach((r, i) => { q.fillStyle = r[3] === 'ЗАДЕРЖАН' ? '#ff5a4a' : r[3] === 'ВЫРУЛИВАЕТ' ? '#7aff9a' : '#e8ecf6'; q.fillText(`${r[0].padEnd(8)} ${r[1].padEnd(18)} ${r[2]}  ${r[3]}`, 24, 92 + i * 50); });
+  });
+  boxB(B.trim, -11.6, 4.3, 649.4, 11.6, 13, 649.7, { col: col(0x1a1c22) });
+  textPlane(board, 22, 8.2, 0, 8.6, 649.25, PI, new THREE.Color(1.6, 1.6, 1.6));
+  for (const x of [-21, -7, 7, 21]) {   // security frames and scanner belts in front of the gate
+    putB(B.trim, G.box, x - 1.1, 1.3, 642, 0.3, 2.6, 0.8, 0, col(0xd8dce4)); putB(B.trim, G.box, x + 1.1, 1.3, 642, 0.3, 2.6, 0.8, 0, col(0xd8dce4)); putB(B.trim, G.box, x, 2.65, 642, 2.5, 0.3, 0.8, 0, col(0xd8dce4));
+    putB(B.neon, G.box, x, 2.85, 642, 0.5, 0.12, 0.12, 0, HDR(0x5aff8a, 3)); solid(x - 1.3, 641.6, x - 0.9, 642.4, 2.6); solid(x + 0.9, 641.6, x + 1.3, 642.4, 2.6);
+    putB(B.metal, G.box, x + 3, 0.6, 642, 1.2, 0.9, 4.5, 0, col(0x2a2c32)); solid(x + 2.4, 639.8, x + 3.6, 644.2, 0.9);
+  }
+  for (const [x0, x1] of [[-50, -18], [18, 50]]) for (const z of [609, 613.5]) {   // seat rows
+    boxB(B.trim, x0, 0.2, z - 0.4, x1, 0.75, z + 0.4, { col: col(0x1e3a6a) }); boxB(B.trim, x0, 0.75, z + 0.3, x1, 1.25, z + 0.45, { col: col(0x1e3a6a) }); solid(x0, z - 0.5, x1, z + 0.5, 0.8);
+  }
+  boxB(B.wood, -54, 0.2, 638, -44, 1.2, 646, { col: col(0x8a5a3a) }); solid(-54, 638, -44, 646, 1.2);
+  const cafe = cityText(512, 96, (q, w, h) => { q.fillStyle = '#2a1406'; q.fillRect(0, 0, w, h); q.fillStyle = '#ffb35a'; q.font = 'bold 52px Arial'; q.fillText('КОФЕ «ФОНАРЬ»', w / 2, h / 2 + 2, w - 24); });
+  textPlane(cafe, 8, 1.5, -49, 3.4, 637.8, PI);
+  for (let x = -50; x <= 50; x += 20) for (const z of [618, 638]) { if (Math.abs(x) < 6 && z === 638) continue; putB(B.trim, G.cyl, x, H / 2, z, 0.9, H, 0.9, 0, col(0xe4e0d8)); addBox(x, z, 1.4, 1.4, H); }
+  for (let x = -54; x <= 54; x += 9) boxB(B.neon, x - 3, H - 1.4, 603, x + 3, H - 1.3, 647, { col: HDR(0xfff4e0, 1.6) });
+  // the wings behind glass are offices and lounges: lit floors seen through the facade
+  for (const [a, b] of [[T.x0 + 1, AP.hall.x0 - 1], [AP.hall.x1 + 1, T.x1 - 1]]) { boxB(B.trim, a, 5.5, T.z0 + 1, b, 5.8, T.z1 - 1, { col: col(0x8a8a92) }); boxB(B.trim, a, 10.5, T.z0 + 1, b, 10.8, T.z1 - 1, { col: col(0x8a8a92) }); }
+  // jet bridges from the back of the terminal to each stand
+  for (const sx of AP.stands) {
+    boxB(B.trim, sx - 1.6, 3.6, T.z1, sx + 1.6, 6.6, 668, { col: col(0xd8dce4) });
+    boxB(glass, sx - 1.65, 4.4, T.z1, sx + 1.65, 6.0, 668, { us: 1 / 6, vs: 1 / 3, top: false });
+    putB(B.metal, G.cyl, sx, 1.9, 662, 0.5, 3.6, 0.5, 0, metal); putB(B.metal, G.box, sx, 0.5, 662, 3.4, 0.9, 1.2, 0, metal); addBox(sx, 662, 3.4, 1.2, 3.6);
+    putB(B.trim, G.cyl, sx, 5.1, 656, 3.2, 3.2, 3.2, 0, col(0xc8ccd4));   // rotunda
+  }
+  // ---- airliners at the stands and the service around them ----
+  for (const [sx, tail, stripe] of [[-100, 0xe8702a, 0x1aa0a8], [40, 0x1a7ab8, 0xe8702a], [100, 0xe8702a, 0x1aa0a8]]) {
+    const pl = makeAirliner({ tail, stripe }); pl.position.set(sx, 0, 690); pl.rotation.y = PI; scene.add(pl); AIRX.planes.push(pl);
+    addBox(sx, 690, 4.4, 34, 6);
+  }
+  const svc = (x, z, ry, kind) => {
+    const c = kind === 'fuel' ? col(0xe8e8ec) : kind === 'cater' ? col(0xf0f0f4) : col(0xf0c030);
+    if (kind === 'tug') { putB(B.trim, G.box, x, 0.8, z, 2.2, 1.0, 3.2, ry, c); putB(B.trim, G.box, x, 1.7, z - 0.6 * Math.cos(ry), 1.6, 0.9, 1.2, ry, col(0x2a2c32)); for (let k = 1; k <= 3; k++) { const dz = Math.cos(ry) * (2.8 + k * 3.4), dx = Math.sin(ry) * (2.8 + k * 3.4); putB(B.metal, G.box, x + dx, 0.6, z + dz, 2.0, 0.3, 2.8, ry, metal); putB(B.container, G.box, x + dx, 1.3, z + dz, 1.8, 1.2, 2.4, ry, col([0x3a6ab8, 0xb83a3a, 0x8a8a92, 0x3a8a5a][Math.floor(hr(x, z, k) * 4)])); } addBox(x, z, 3, 3, 2); }
+    else if (kind === 'fuel') { putB(B.trim, G.box, x, 1.4, z + 3.4 * Math.cos(ry), 2.6, 2.4, 2.4, ry, col(0xd83a2a)); putB(B.trim, G.cyl, x, 2.0, z - 1.0 * Math.cos(ry), 2.4, 6.0, 2.4, ry, c, PI / 2); addBox(x, z, 3, 9, 3); }
+    else if (kind === 'stairs') { putB(B.trim, G.box, x, 0.9, z, 2.4, 1.2, 4.6, ry, c); putB(B.metal, G.box, x, 2.8, z - 0.8 * Math.cos(ry), 1.8, 0.3, 5.5, ry, col(0xc8ccd4), -0.6); addBox(x, z, 2.6, 5, 2); }
+    else if (kind === 'cater') { putB(B.trim, G.box, x, 1.0, z + 2.4 * Math.cos(ry), 2.4, 1.6, 2.2, ry, col(0x2a2c32)); putB(B.trim, G.box, x, 2.6, z - 1.2 * Math.cos(ry), 2.6, 2.6, 4.4, ry, c); addBox(x, z, 2.8, 7, 3); }
+    else if (kind === 'gpu') { putB(B.trim, G.box, x, 0.8, z, 1.6, 1.3, 2.4, ry, col(0x3a8a5a)); addBox(x, z, 1.6, 2.4, 1.3); }
+  };
+  svc(-112, 700, 0, 'tug'); svc(-90, 712, PI, 'fuel'); svc(-106, 676, 0, 'stairs'); svc(30, 704, 0, 'cater'); svc(52, 680, 0, 'gpu'); svc(112, 704, PI, 'tug'); svc(88, 676, 0, 'fuel');
+  svc(-40, 700, 0, 'stairs'); svc(-28, 690, 0, 'gpu'); svc(-4, 724, PI / 2, 'tug');
+  for (const x of [-130, -70, -10, 70, 130]) {   // apron floodlight masts
+    putB(B.metal, G.cyl6, x, 11, 668, 0.4, 22, 0.4, 0, metal); putB(B.metal, G.box, x, 22.2, 668, 4.2, 1.2, 0.6, 0, metal);
+    for (let k = -1.5; k <= 1.5; k += 1) light(x + k, 22.2, 668.4, 0xfff0d8, 6, 0.32);
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), KIT.poolMat || new THREE.MeshBasicMaterial({ color: 0x302010, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })); pool.rotation.x = -PI / 2; pool.position.set(x, 0.08, 684); scene.add(pool);
+    addBox(x, 668, 1, 1, 22);
+  }
+  // ---- control tower ----
+  const TW = AP.tower;
+  boxB(B.trim, TW.x - 11, 0, TW.z - 8, TW.x + 11, 7, TW.z + 8, { col: col(0xc8c8d0) }); solid(TW.x - 11, TW.z - 8, TW.x + 11, TW.z + 8, 7);
+  boxB(glass, TW.x - 11.1, 1.5, TW.z - 8.1, TW.x + 11.1, 6, TW.z + 8.1, { us: 1 / 10, vs: 1 / 5, top: false });
+  putB(B.trim, G.cyl, TW.x, 24, TW.z, 6.5, 42, 6.5, 0, col(0xd8d8de)); addBox(TW.x, TW.z, 6.5, 6.5, 45);
+  putB(B.trim, G.cyl, TW.x, 44, TW.z, 13, 1.2, 13, 0, col(0xb8b8c0));
+  putB(B.neon, G.cyl, TW.x, 46.6, TW.z, 12.4, 4.2, 12.4, 0, HDR(0x5affb0, 0.7));
+  putB(B.trim, G.cyl, TW.x, 49, TW.z, 14, 0.8, 14, 0, col(0x2a2c34));
+  putB(B.metal, G.cyl6, TW.x, 53, TW.z, 0.3, 7, 0.3, 0, metal); light(TW.x, 56.8, TW.z, 0xff2020, 8, 0.45);
+  const twSign = cityText(512, 96, (q, w, h) => { q.clearRect(0, 0, w, h); q.fillStyle = '#e8f4ff'; q.font = 'bold 60px Arial'; q.fillText('КДП · СЕВЕРНЫЙ', w / 2, h / 2 + 2, w - 24); });
+  textPlane(twSign, 12, 2.2, TW.x, 9.4, TW.z - 8.2, PI);
+  // ---- cargo terminal and yard ----
+  const C = AP.cargo;
+  boxB(B.container, C.x0, 0, C.z0, C.x1, 13, C.z1, { us: 1 / 4, vs: 1 / 13, col: col(0x8a9098) }); solid(C.x0, C.z0, C.x1, C.z1, 13);
+  for (let x = C.x0 + 10; x < C.x1 - 5; x += 16) { boxB(B.metal, x - 3, 0, C.z1, x + 3, 5, C.z1 + 0.3, { col: col(0x3a3c44) }); light(x, 5.6, C.z1 + 0.5, 0xffd9a0, 4, 0.3); putB(B.trim, G.box, x, 0.6, C.z1 + 1.4, 6.4, 1.2, 2.4, 0, col(0x2a2a30)); }
+  const cargoSign = cityText(512, 96, (q, w, h) => { q.fillStyle = '#1a1a20'; q.fillRect(0, 0, w, h); q.fillStyle = '#ffd23a'; q.font = 'bold 56px Arial'; q.fillText('ГРУЗОВОЙ ТЕРМИНАЛ', w / 2, h / 2 + 2, w - 24); });
+  textPlane(cargoSign, 22, 4, (C.x0 + C.x1) / 2, 10, C.z1 + 0.35, 0); textPlane(cargoSign, 22, 4, (C.x0 + C.x1) / 2, 10, C.z0 - 0.35, PI);
+  const uld = (x, z, n, c) => { for (let k = 0; k < n; k++) { putB(B.container, G.box, x, 0.95 + k * 1.75, z, 3.0, 1.7, 2.4, 0, c); putB(B.trim, G.box, x + 1.2, 1.55 + k * 1.75, z, 0.8, 0.5, 2.4, 0, c, 0, 0.6); } addBox(x, z, 3.2, 2.6, n * 1.75); };
+  for (const [x, z, n] of [[166, 672, 2], [180, 672, 1], [216, 670, 2], [232, 684, 1], [168, 706, 3], [188, 716, 1], [214, 704, 2], [230, 722, 1], [178, 690, 1]]) uld(x, z, n, col([0xa8acb4, 0x6a8ab8, 0xb8a070][Math.floor(hr(x, z, 3) * 3)]));
+  for (const [x, z, ry] of [[204, 680, 0.3], [160, 690, -0.4]]) { putB(B.trim, G.box, x, 0.9, z, 1.4, 1.2, 2.4, ry, col(0xf0b020)); putB(B.metal, G.box, x + Math.sin(ry) * 1.6, 1.6, z + Math.cos(ry) * 1.6, 1.2, 3.0, 0.15, ry, metal); addBox(x, z, 1.6, 2.6, 1.5); }   // forklifts
+  const cargoPlane = makeAirliner({ tail: 0x5a5a62, stripe: 0xf0b020, len: 44, r: 2.6 }); cargoPlane.position.set(200, 0, 752); cargoPlane.rotation.y = PI / 2; scene.add(cargoPlane); AIRX.planes.push(cargoPlane); addBox(200, 752, 44, 5.4, 7);
+  // ---- hangar of the private aviation: open towards the apron (east), the business jet inside ----
+  const HG = AP.hangar, HH = 15;
+  boxB(B.container, HG.x0, 0, HG.z0, HG.x1, HH, HG.z0 + 0.6, { us: 1 / 4, vs: 1 / HH, col: col(0x6a7078) }); solid(HG.x0, HG.z0, HG.x1, HG.z0 + 0.6, HH);
+  boxB(B.container, HG.x0, 0, HG.z1 - 0.6, HG.x1, HH, HG.z1, { us: 1 / 4, vs: 1 / HH, col: col(0x6a7078) }); solid(HG.x0, HG.z1 - 0.6, HG.x1, HG.z1, HH);
+  boxB(B.container, HG.x0, 0, HG.z0, HG.x0 + 0.6, HH, HG.z1, { us: 1 / 4, vs: 1 / HH, col: col(0x6a7078) }); solid(HG.x0, HG.z0, HG.x0 + 0.6, HG.z1, HH);
+  const arch = new THREE.Mesh(new THREE.CylinderGeometry((HG.z1 - HG.z0) / 2, (HG.z1 - HG.z0) / 2, HG.x1 - HG.x0, 24, 1, true, 0, PI), new THREE.MeshStandardMaterial({ map: ribTex, color: 0x7a8088, roughness: 0.6, metalness: 0.4, side: THREE.DoubleSide }));
+  arch.rotation.set(0, 0, PI / 2); arch.position.set((HG.x0 + HG.x1) / 2, HH - 0.5, (HG.z0 + HG.z1) / 2); arch.scale.set(0.35, 1, 1); scene.add(arch);
+  for (const x of [HG.x0 + 0.05, HG.x1 - 0.05]) { const cap = new THREE.Mesh(new THREE.CircleGeometry((HG.z1 - HG.z0) / 2, 24, 0, PI), new THREE.MeshStandardMaterial({ map: ribTex, color: 0x5a6068, roughness: 0.7, side: THREE.DoubleSide })); cap.rotation.y = PI / 2; cap.scale.set(1, 0.35, 1); cap.position.set(x, HH - 0.5, (HG.z0 + HG.z1) / 2); scene.add(cap); }
+  boxB(B.walk, HG.x0, 0.02, HG.z0, HG.x1, 0.06, HG.z1, { topWorld: 1 / 5, col: col(0x8a8a90) });
+  for (let z = HG.z0 + 8; z < HG.z1; z += 12) for (let x = HG.x0 + 12; x < HG.x1; x += 20) { putB(B.metal, G.box, x, HH - 1, z, 0.2, 2, 0.2, 0, metal); light(x, HH - 2.1, z, 0xfff0d8, 3, 0.4); }
+  for (const [x, z, w, d, h] of [[-232, 690, 3, 6, 1.0], [-232, 734, 3, 6, 1.0], [-212, 742, 8, 2, 2.2], [-185, 688, 6, 2, 1.6], [-176, 738, 4, 4, 1.2]]) { boxB(B.wood, x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2, { col: col(0x8a6a48) }); solid(x - w / 2, z - d / 2, x + w / 2, z + d / 2, h); }
+  const hgSign = cityText(512, 96, (q, w, h) => { q.fillStyle = '#16161c'; q.fillRect(0, 0, w, h); q.fillStyle = '#7ad6ff'; q.font = 'bold 56px Arial'; q.fillText('АНГАР 3 · ДЕЛОВАЯ АВИАЦИЯ', w / 2, h / 2 + 2, w - 24); });
+  textPlane(hgSign, 26, 4.8, HG.x1 + 0.3, HH + 3, (HG.z0 + HG.z1) / 2, PI / 2);
+  for (const z of [HG.z0, HG.z1]) putB(B.metal, G.box, HG.x1, HH / 2, z, 1.2, HH, 1.2, 0, metal);
+  AIRX.jet = makeAirliner({ bizjet: true, len: 22, r: 1.35, tail: 0x1a1a22, stripe: 0xc8a030 });
+  AIRX.jet.position.set(-205, 0, 704); AIRX.jet.rotation.y = PI / 2; scene.add(AIRX.jet);
+  AIRX.jetCol = addBox(-205, 704, 22, 2.8, 3);
+  // ---- fuel farm, parking, fences, windsock, radar ----
+  for (const [x, z] of [[-222, 488], [-200, 488], [-222, 514], [-200, 514]]) { putB(B.trim, G.cyl, x, 5, z, 9, 10, 9, 0, col(0xe0e0e4)); putB(B.trim, G.cyl, x, 10.2, z, 9.4, 0.5, 9.4, 0, col(0xb8b8c0)); putB(B.metal, G.box, x + 4.6, 5, z, 0.3, 10, 1.2, 0, metal); addBox(x, z, 9, 9, 10); }
+  const parkTypes = { car_sedan: [], car_hatchback: [], car_stationwagon: [] };
+  for (let x = -144; x < 34; x += 4.2) for (const z of [470, 533]) if (hr(x, z, 5) < 0.7) parkTypes[['car_sedan', 'car_hatchback', 'car_stationwagon'][Math.floor(hr(x, z, 6) * 3)]].push({ x: x + 2.1, y: 0.02, z, ry: z < 500 ? 0 : PI, sx: CAR_S });
+  Object.entries(parkTypes).forEach(([n, list]) => kitInstances(n, list, KIT.car, true));
+  addBox(-55, 470, 190, 6, 1.5); addBox(-55, 533, 190, 6, 1.5);
+  const pSign = cityText(128, 128, (q, w, h) => { q.fillStyle = '#1a4ab8'; q.fillRect(0, 0, w, h); q.fillStyle = '#fff'; q.font = 'bold 100px Arial'; q.fillText('P', w / 2, h / 2 + 4, w - 24); });
+  for (const x of [-150, 40]) { putB(B.metal, G.cyl6, x, 2, 545, 0.12, 4, 0.12, 0, metal); textPlane(pSign, 1.6, 1.6, x, 4.4, 544.9, PI); }
+  for (let x = AIR.x0; x <= AIR.x1; x += 6) { putB(B.metal, G.cyl6, x, 1.4, AIR.z1, 0.1, 2.8, 0.1, 0, metal); }
+  putB(B.metal, G.box, 0, 1.4, AIR.z1, AIR.x1 - AIR.x0, 2.6, 0.04, 0, col(0x2a2c34));
+  putB(B.metal, G.cyl6, -150, 4, 885, 0.15, 8, 0.15, 0, metal);
+  for (let k = 0; k < 5; k++) putB(B.trim, G.cyl, -150 + 1.2 + k * 1.1, 7.6 - k * 0.12, 885, 0.9 - k * 0.08, 1.1, 0.9 - k * 0.08, 0, col(k % 2 ? 0xffffff : 0xff6a1a), 0, PI / 2 - 0.15);
+  putB(B.metal, G.box, 230, 6, 905, 1.2, 12, 1.2, 0, metal);
+  const radar = new THREE.Group(); radar.position.set(230, 12.4, 905);
+  const dish = new THREE.Mesh(new THREE.BoxGeometry(9, 2.2, 0.4), std(0xe8e8ec, { roughness: 0.4 })); dish.rotation.x = 0.25; radar.add(dish);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 2), std(0x3a3c44)); arm.position.z = -0.9; radar.add(arm); scene.add(radar); AIRX.radar = radar;
+  // the airport road sign at the bottom of the ramp
+  const welcome = cityText(1024, 256, (q, w, h) => { q.fillStyle = '#0d5a3a'; q.fillRect(0, 0, w, h); q.strokeStyle = '#fff'; q.lineWidth = 8; q.strokeRect(10, 10, w - 20, h - 20); q.fillStyle = '#fff'; q.font = 'bold 84px Arial'; q.fillText('✈ АЭРОПОРТ «СЕВЕРНЫЙ»', w / 2, 92, w - 24); q.font = 'bold 56px Arial'; q.fillText('Вылет ↑     Грузовой терминал →', w / 2, 186, w - 24); });
+  for (const s of [-1, 1]) putB(B.metal, G.cyl6, EXPRESS.x + s * 8, 3.5, 548, 0.2, 7, 0.2, 0, metal);
+  textPlane(welcome, 16, 4, EXPRESS.x, 7.6, 548, PI);
+}
+
+function updateAirport(dt) {
+  if (!AIRX.radar) return;
+  AIRX.radar.rotation.y += dt * 1.2;
+  if (!AIR.on && !(focus.z > 400)) return;
+  const n = AIRX.strobes.length, ph = (state.t * 2.2) % 1.6; let k = Math.floor(ph / 1.6 * 10);   // a running «rabbit» towards the runway
+  AIRX.strobes.forEach((m, i) => { m.visible = (n - 1 - i) === k; });
+  const on = Math.sin(state.t * 6) > 0.6; AIRX.beacon.forEach((b) => { b.visible = on; });
 }
 
 function buildWorld() {
@@ -1032,13 +1311,15 @@ function buildWorld() {
   kitInstances('streetlight', lamps, KIT.prop, true);
   kitInstances('trafficlight_A', tlights, KIT.prop, true);
 
-  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale();
+  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport();
 
   // one material per batch: a few draw calls for the whole city
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
   meshB(B.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, envMapIntensity: 0.2 }), false);
   meshB(B.metal, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.7, envMapIntensity: 0.8 }), true);
   KIT.neonMat = meshB(B.neon, new THREE.MeshBasicMaterial({ vertexColors: true }), false).material;
+  meshB(B.asph, new THREE.MeshStandardMaterial({ map: asphaltTex, vertexColors: true, color: 0x9a9aa2, roughness: 0.85, envMapIntensity: 0.6 }), false);
+  meshB(B.glassA, new THREE.MeshStandardMaterial({ map: airGlassTex, emissiveMap: airGlassTex, emissive: new THREE.Color(0.42, 0.38, 0.32), color: 0x8a90a0, vertexColors: true, roughness: 0.15, metalness: 0.55, envMapIntensity: 1.6 }), false);
   meshB(B.sign, new THREE.MeshBasicMaterial({ map: signAtlas, vertexColors: true, color: new THREE.Color(1.7, 1.7, 1.7) }), false);
   meshB(B.ad, new THREE.MeshBasicMaterial({ map: adAtlas, vertexColors: true, color: new THREE.Color(1.25, 1.25, 1.25) }), false);
   meshB(B.walk, new THREE.MeshStandardMaterial({ map: pavingTex, vertexColors: true, color: 0x9a948c, roughness: 0.6, envMapIntensity: 0.9 }), false);
@@ -1625,12 +1906,12 @@ function buildCityScale() {
   }
   // the expressway over the street x = 80: pillars on the pavements, a deck with lamps; it runs out of town and over the bay
   const X = EXPRESS.x, Y = EXPRESS.y, hw = EXPRESS.w / 2, conc = col(0x8a8a92), concD = col(0x5a5a62);
-  putB(B.trim, G.box, X, Y + 0.5, 130, EXPRESS.w, 1.0, 860, 0, concD);   // a closed box: the underside is visible from the street
-  boxB(B.mark, X - hw + 0.2, Y + 1.0, -300, X + hw - 0.2, Y + 1.02, 560, { col: col(0x2a2a30), sides: false });
-  for (let z = -300; z < 560; z += 6) putB(B.mark, G.box, X, Y + 1.04, z, 0.18, 0.02, 3, 0, col(0xe8e8ec));
+  putB(B.trim, G.box, X, Y + 0.5, 85, EXPRESS.w, 1.0, 770, 0, concD);   // a closed box: the underside is visible from the street
+  boxB(B.mark, X - hw + 0.2, Y + 1.0, -300, X + hw - 0.2, Y + 1.02, 470, { col: col(0x2a2a30), sides: false });
+  for (let z = -300; z < 470; z += 6) putB(B.mark, G.box, X, Y + 1.04, z, 0.18, 0.02, 3, 0, col(0xe8e8ec));
   for (const s of [-1, 1]) {
-    boxB(B.trim, X + s * hw - (s > 0 ? 0.4 : 0), Y + 1, -300, X + s * hw + (s > 0 ? 0 : 0.4), Y + 2.1, 560, { col: conc });
-    for (let z = -296; z < 560; z += 24) {
+    boxB(B.trim, X + s * hw - (s > 0 ? 0.4 : 0), Y + 1, -300, X + s * hw + (s > 0 ? 0 : 0.4), Y + 2.1, 470, { col: conc });
+    for (let z = -296; z < 470; z += 24) {
       putB(B.metal, G.cyl, X + s * (hw - 0.3), Y + 4.6, z, 0.2, 7, 0.2, 0, col(0x3a3a40));
       putB(B.neon, G.box, X + s * (hw - 1.4), Y + 8.0, z, 2.4, 0.15, 0.4, 0, HDR(0xffd9a0, 4));
     }
@@ -1641,14 +1922,14 @@ function buildCityScale() {
     putB(B.trim, G.box, X, Y - 0.5, z, 21, 1, 1.8, 0, conc);
   }
   // over the water: tall piers and two cable-stayed pylons
-  for (let z = 190; z < 560; z += 40) putB(B.trim, G.box, X, (Y - 6) / 2, z, 6, Y + 6, 4, 0, conc);
-  for (const pz of [300, 460]) {
+  for (let z = 190; z < 470; z += 40) putB(B.trim, G.box, X, (Y - 6) / 2, z, 6, Y + 6, 4, 0, conc);
+  for (const pz of [270, 390]) {
     for (const s of [-1, 1]) putB(B.trim, G.box, X + s * (hw + 1.2), 36, pz, 2.2, 72, 3, 0, col(0xa8a8b0));
     putB(B.trim, G.box, X, 66, pz, EXPRESS.w + 5, 2.4, 3, 0, col(0xa8a8b0));
     putB(B.neon, G.sph, X - hw - 1.2, 73, pz, 0.6, 0.6, 0.6, 0, HDR(0xff2030, 8)); putB(B.neon, G.sph, X + hw + 1.2, 73, pz, 0.6, 0.6, 0.6, 0, HDR(0xff2030, 8));
   }
   const cablePts = [];
-  for (const pz of [300, 460]) for (const s of [-1, 1]) for (let k = 1; k <= 9; k++) for (const dir of [-1, 1]) {
+  for (const pz of [270, 390]) for (const s of [-1, 1]) for (let k = 1; k <= 9; k++) for (const dir of [-1, 1]) {
     cablePts.push(new V3(X + s * (hw + 1.2), 64 - k * 2.6, pz), new V3(X + s * (hw - 0.2), Y + 2.1, pz + dir * k * 8.5));
   }
   const cables = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(cablePts), new THREE.LineBasicMaterial({ color: new THREE.Color(1.4, 1.4, 1.6), transparent: true, opacity: 0.7 }));
@@ -1657,10 +1938,11 @@ function buildCityScale() {
   const far = batch();
   const tower = (x, z, w, d, h) => boxB(far, x - w / 2, -1, z - d / 2, x + w / 2, h, z + d / 2, { us: 1 / 22, vs: 1 / 44, top: false });
   const rnd = (a, b) => a + Math.random() * (b - a);
-  for (let i = 0; i < 70; i++) { const x = rnd(-560, 640), z = rnd(470, 720); tower(x, z, rnd(16, 40), rnd(16, 40), rnd(40, 190)); }
+  for (let i = 0; i < 70; i++) { const x = rnd(-560, 640), z = rnd(470, 720), w = rnd(16, 40), d = rnd(16, 40), h = rnd(40, 190); if (Math.abs(x) < 340) continue; tower(x, z, w, d, h); }
+  for (let i = 0; i < 40; i++) { const x = rnd(-700, 700), z = rnd(1040, 1250); tower(x, z, rnd(16, 40), rnd(16, 40), rnd(40, 160)); }
   for (let i = 0; i < 90; i++) {
     const a = rnd(0, PI * 2), r = rnd(330, 620), x = Math.cos(a) * r, z = Math.sin(a) * r * 0.9 - 40;
-    if (z > 160 && z < 470) continue;   // keep the bay open
+    if ((z > 160 && z < 470) || (z > 440 && Math.abs(x) < 360)) continue;   // keep the bay and the airport open
     tower(x, z, rnd(14, 34), rnd(14, 34), rnd(25, 120));
   }
   skyMatFar = new THREE.MeshBasicMaterial({ map: tex.em, color: new THREE.Color(0.75, 0.68, 0.6), fog: false });
@@ -1669,13 +1951,13 @@ function buildCityScale() {
   EXPRESS.cars = [];
   for (let i = 0; i < 8; i++) {
     const m = makeCar(pick(CIV_COLORS), 'civ'), dir = i % 2 ? 1 : -1;
-    EXPRESS.cars.push(Object.assign(m, { z: rnd(-300, 560), dir, v: rnd(18, 26), lane: dir > 0 ? 3.6 : -3.6 }));
+    EXPRESS.cars.push(Object.assign(m, { z: rnd(-300, 470), dir, v: rnd(18, 26), lane: dir > 0 ? 3.6 : -3.6 }));
   }
 }
 function updateCityScale(dt) {
   if (!EXPRESS.cars) return;
   for (const c of EXPRESS.cars) {
-    c.z += c.dir * c.v * dt; if (c.z > 560) c.z = -300; if (c.z < -300) c.z = 560;
+    c.z += c.dir * c.v * dt; if (c.z > 470) c.z = -300; if (c.z < -300) c.z = 470;
     c.g.position.set(EXPRESS.x - c.lane, EXPRESS.y + 1.05, c.z); c.g.rotation.y = c.dir > 0 ? 0 : PI;
   }
   // smoke from the factory chimneys when they are close
@@ -2502,7 +2784,7 @@ function updateNav(pos, goal) {
   const onGoalRoad = (horiz && Math.abs(pos.z - GA[1]) < 9 && pos.x >= Math.min(GA[0], GB[0]) - 2 && pos.x <= Math.max(GA[0], GB[0]) + 2)
     || (vert && Math.abs(pos.x - GA[0]) < 9 && pos.z >= Math.min(GA[1], GB[1]) - 2 && pos.z <= Math.max(GA[1], GB[1]) + 2)
     || Math.hypot(pos.x - NG.x, pos.z - NG.z) < 12;
-  if (onGoalRoad) NAV.pts.push(NG.clone());
+  if (onGoalRoad || AIR.on) NAV.pts.push(NG.clone());
   else {
     const cand = [];
     const vr = ROADS.find((r) => Math.abs(pos.x - r) < 9), hr = ROADS.find((r) => Math.abs(pos.z - r) < 9);
@@ -2558,7 +2840,8 @@ function collideCircle(pos, vel, r) {
     const vn = vel.x * nx + vel.z * nz;
     if (vn < 0) { vel.x -= nx * vn * 1.35; vel.z -= nz * vn * 1.35; vel.multiplyScalar(0.94); impact = Math.max(impact, -vn); }
   }
-  pos.x = clamp(pos.x, -LIM, LIM); pos.z = clamp(pos.z, -LIM, LIM + 2);
+  if (AIR.on) { pos.x = clamp(pos.x, AIR.x0, AIR.x1); pos.z = clamp(pos.z, AIR.z0, AIR.z1); }
+  else { pos.x = clamp(pos.x, -LIM, LIM); pos.z = clamp(pos.z, -LIM, LIM + 2); }
   return impact;
 }
 function los(a, b) {
@@ -2616,7 +2899,7 @@ function updateBullets(dt) {
       if (b.team === 'p') {
         const list = state.act === 1 ? enemyCars : enemies;
         for (const t of list) {
-          if (t.dead || t.noTarget) continue; const r = state.act === 1 ? 2.5 : (t.boss ? 1.05 : 0.8);
+          if (t.dead || t.noTarget) continue; const r = t.hitR || (state.act === 1 ? 2.5 : (t.boss ? 1.05 : 0.8));
           if (segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos); sfx.hit(); if (state.act === 1) damageEnemyCar(t, b.dmg); else damageEnemy(t, b.dmg); hitMarker(t.dead || t.disabled); break; }
         }
         if (!hit && HELI && heliHit(prevP, b.pos)) { hit = true; sfx.hit(); damageHeli(b.dmg); hitMarker(HELI && HELI.crash); }
@@ -2646,7 +2929,7 @@ function checkPlayerDeath() {
 function damageEnemyCar(e, d) {
   if (e.invuln || e.disabled) return;
   e.hp -= d;
-  if (e.noExplode) { if (e.hp <= 0) { e.hp = 0; e.disabled = true; e.noTarget = true; toast(e.kind === 'van' ? 'Фургон заглох!' : 'Машина встала', 2); sfx.crash(12); shake = Math.min(1.2, shake + 0.4); } return; }
+  if (e.noExplode) { if (e.hp <= 0) { e.hp = 0; e.disabled = true; e.noTarget = true; toast(e.kind === 'van' ? 'Фургон заглох!' : e.kind === 'plane' ? 'Самолёт обездвижен!' : 'Машина встала', 2); sfx.crash(12); shake = Math.min(1.2, shake + 0.4); } return; }
   if (e.hp <= 0 && !e.dead) { e.dead = true; explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); }
 }
 function damageEnemy(e, d) {
@@ -2702,6 +2985,8 @@ const WHO = {
   orlova: { name: 'Капитан Орлова, полиция', color: '#6a9aff', init: 'О' },
   kravets: { name: 'Кравец, заместитель мэра', color: '#b0a0c8', init: 'К' },
   maska: { name: 'Маска', color: '#e8e8e8', init: 'М' },
+  tower: { name: 'Вышка «Северный»', color: '#7ad6ff', init: 'В' },
+  shturman: { name: 'Штурман, пилот Веры', color: '#ff8a4a', init: 'Ш' },
 };
 const dlg = { lines: [], i: 0, shown: 0, done: null, prev: null };
 function playDialog(lines, done) {
@@ -2801,6 +3086,7 @@ function updateDrive(dt) {
   if (state.spawnT <= 0 && alive < maxAlive) { spawnEnemyCar(); state.spawnT = rand(3.5, 6); }
   for (const e of enemyCars) {
     if (e.dead) continue;
+    if (e.plane) continue;
     if (e.script) { driveScripted(e, dt); continue; }
     const dist = e.pos.distanceTo(pc.pos), see = dist < 34 && los(e.pos, pc.pos);
     let tx, tz;
@@ -3048,7 +3334,7 @@ const LOOKS = {
 // ---- stage helpers ----
 let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
-  removeHeli();
+  removeHeli(); AIR.on = false;
   for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
@@ -3502,7 +3788,7 @@ function startEpisode(ep, ch) {
   else startGen(ep, ch - 1, true);
 }
 function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else startMission(); }
-const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол', 12: 'Похищение мэра' };
+const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол', 12: 'Похищение мэра', 13: 'Последний рейс' };
 function renderChapters() {
   const eb = $('epChips');
   eb.innerHTML = Object.keys(EP_NAMES).map((k) => `<button class="chip${selEp === +k ? ' active' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
@@ -3967,6 +4253,73 @@ const EPS = {
         outro: [['mayor', 'Кравец арестован прямо в кабинете. Город снова мой… то есть наш.'], ['orlova', 'Таксист, приношу извинения от всего управления.'], ['hero', 'Извинения принимаются. А штрафы за превышение?'], ['orlova', '…Не испытывай судьбу.']] },
     ],
   },
+  13: {
+    title: 'Последний рейс', faction: 'night', zone: 'airport', chaseMsg: 'Хвост! Люди Веры',
+    logline: 'Вера сбежала при перевозке в суд. Через час из аэропорта «Северный» вылетает частный борт ЧБ 007, а в её сумке — ключи от счетов, на которых держится весь ночной город. Полиция застряла на мосту, и до вылета успевает только жёлтое такси.',
+    endTitle: 'Рейс отменён', endLead: 'Борт ЧБ 007 стоит поперёк полосы, Вера снова в наручниках, а ключи от счетов у капитана Орловой. Утренние рейсы «Северного» задержаны на два часа.',
+    teaser: 'Следующая остановка — вокзал.',
+    chapters: [
+      { t: 'Эстакада', type: 'escape', start: [80, 556, 'S'], secs: 100, chase: 3, goal: [-20, 578], goalName: 'Терминал «Вылет»',
+        about: 'Эстакада выводит прямо к аэропорту, но люди Веры ждали такси у съезда. Продержаться 1:40 на привокзальной площади и парковке, потом прорваться к терминалу.',
+        intro: [['radio', 'Срочно: при перевозке в суд сбежала Вера, известная как Диспетчер. Конвой атакован на старом мосту.'], ['orlova', 'Таксист, слышишь? Мост перекрыт, мои машины стоят. Она едет в «Северный» — частный борт, вылет через час.'], ['hero', 'Уже на эстакаде. Вижу аэропорт.'], ['mark', 'И я вижу. На съезде тебя ждут три машины без номеров.']],
+        outro: [['hero', 'Оторвалась. Терминал прямо передо мной.'], ['orlova', 'Камеры в зале вылета отключены изнутри. Значит, её люди уже там.'], ['mark', 'Оставь такси у входа. Пешком быстрее.']] },
+      { t: 'Зал вылета', type: 'arena', arena: 'terminal', docs: 3, docName: 'Записи с камер', guards: 5, waves: [4, 5], heavyFrom: 2,
+        about: 'Ночной зал вылета: стойки регистрации, табло, кафе. Люди Веры стёрли записи камер, но копии остались в трёх пультах. Найти их и отбиться.',
+        intro: [['leva', 'Пульты охраны — у стоек регистрации, у кафе и у рамок досмотра. В каждом копия записи за последний час.'], ['hero', 'Значит, по залу в обход. Тихо не выйдет.']],
+        outro: [['leva', 'На записи Вера и рыжий парень с картой пилота. Они прошли через служебный досмотр десять минут назад.'], ['hero', 'Значит, она уже за рамками. Догоняю.']] },
+      { t: 'Досмотр', type: 'arena', arena: 'terminal', waves: [5], heavyFrom: 1, survive: 90, surviveObj: 'Держи рамки досмотра, пока Орлова перекрывает выходы: 1:30.', exit: true, exitObj: 'Ворота на перрон открыты — к выходу!',
+        about: 'Рамки досмотра — единственный проход на перрон. Люди Веры хотят запереть его изнутри. Держаться полторы минуты, пока полиция перекрывает остальные выходы.',
+        intro: [['orlova', 'Мои ребята перекрывают выходы к стоянкам. Полторы минуты, и всё будет закрыто.'], ['hero', 'Полторы минуты я продержусь.']],
+        outro: [['orlova', 'Выходы наши. Перрон — твой.'], ['tower', 'Вышка «Северный», всем бортам: ночные вылеты по расписанию. Частный ЧБ 007 — ожидайте разрешения.'], ['hero', 'Значит, она ещё на земле.']] },
+      { t: 'Перрон', type: 'hunt', start: [0, 700, 'E'], kills: 5, chase: 3,
+        about: 'На перроне такси Марка: он пригнал его через служебные ворота. Люди Веры гоняют на служебных машинах между самолётами. Сбить пять машин.',
+        intro: [['mark', 'Такси у второй стоянки. Ключи в замке. На перроне служебные машины Веры — они разгоняют рабочих.'], ['hero', 'Между самолётами? Аккуратно не получится.']],
+        outro: [['mark', 'Чисто. Смотри: багажный тягач с одной тележкой едет не к самолётам, а в сторону грузового двора.'], ['hero', 'Тележка одна, а охраны при ней трое. Посмотрим, куда едет.']] },
+      { t: 'Багажный тягач', type: 'tail', start: [-60, 760, 'E'], car: [-25, 762, 'E'], speed: 13, name: 'Багажный тягач', stops: { 1: 4 },
+        route: [[60, 762], [140, 762], [150, 712], [196, 664]],
+        about: 'Проследить за багажным тягачом через перрон. Стрелять нельзя: на тележке груз Веры, и она должна думать, что всё идёт по плану.',
+        intro: [['leva', 'На тележке один чемодан, а по документам пятьсот килограммов. Это не багаж.'], ['hero', 'Держусь на расстоянии.']],
+        outro: [['hero', 'Грузовой двор. Тележку закатили в контейнер.'], ['leva', 'Контейнер оформлен на борт ЧБ 007. Если найдёшь накладную, узнаем, что там на самом деле.']] },
+      { t: 'Грузовой двор', type: 'arena', arena: 'cargo', docs: 3, docName: 'Накладная ЧБ 007', guards: 6, waves: [4, 5], heavyFrom: 2,
+        about: 'Грузовой двор среди авиаконтейнеров и погрузчиков. Три части накладной на груз ЧБ 007 у охраны. Собрать и отбиться.',
+        intro: [['hero', 'Контейнеры в два яруса, погрузчики, охрана. Хорошее место, чтобы спрятать чемодан.']],
+        outro: [['leva', 'Накладная собрана. «Оборудование связи», пятьсот килограммов. Это сервер Диспетчера.'], ['sonya', 'Тот самый, с которого она вела всю сеть. Если он улетит, всё начнётся заново в другом городе.'], ['mark', 'Над полем вертолёт! Без огней, заходит со стороны залива.']] },
+      { t: 'Вертолёт над полем', type: 'helichase', start: [120, 762, 'W'], from: [260, 700], hp: 1300, downAt: 0.5, speed: 20, chase: 2, fireFrom: 0.85, fleeTo: [-200, 960], name: 'Вертолёт без огней', alt: 16,
+        route: [[100, 775], [-120, 775], [-220, 850], [0, 850], [180, 850], [120, 700], [-60, 700], [-160, 640]],
+        fleeMsg: 'Вертолёт задымился и уходит за полосу!',
+        about: 'Вертолёт без огней прикрывает вывоз груза и обстреливает такси. Держаться под ним над перроном и полосой и стрелять. Подбить наполовину — и он уйдёт.',
+        intro: [['tower', 'Неопознанный вертолёт над полем, ответьте вышке! Повторяю, ответьте!'], ['hero', 'Он не ответит. Но я ему отвечу.']],
+        outro: [['mark', 'Ушёл за полосу и сел в поле. Пилота взяла охрана аэропорта.'], ['orlova', 'Пилот говорит: самолёт Веры заправляют прямо сейчас. Топливозаправщик ушёл к ангарам.']] },
+      { t: 'Топливозаправщик', type: 'stop', start: [150, 600, 'W'], car: [245, 640, 'N'], hp: 520, speed: 24, scale: 1.2, shoot: false, name: 'Топливозаправщик', chase: 2,
+        route: [[245, 575], [100, 575], [-150, 575], [-245, 575], [-245, 660], [-150, 660], [-100, 762], [100, 762], [245, 762], [245, 640]],
+        stopObj: 'Заправщик встал. Подъезжай.',
+        about: 'Без топлива ЧБ 007 не взлетит. Остановить топливозаправщик, пока он кружит по аэродрому к ангарам. Взрывать нельзя: рядом самолёты.',
+        intro: [['orlova', 'Только не взрывай. Рядом три самолёта с пассажирами.'], ['hero', 'Тогда по колёсам.']],
+        outro: [['hero', 'Заправщик стоит. Водитель сбежал.'], ['leva', 'Плохие новости: борт успели заправить наполовину. Хватит, чтобы долететь до соседней страны.'], ['sonya', 'Значит, нужно, чтобы вышка не дала взлёт. Через вышку я могу закрыть полосу. Но мне нужен доступ к их рации.']] },
+      { t: 'Вышка', type: 'arena', arena: 'tower', ally: { who: 'sonya', at: [198, 588], hp: 230, name: 'Соня', fem: true }, waves: [4], heavyFrom: 1,
+        drill: { kind: 'laptop', at: [200, 590], label: 'Связь с вышкой', secs: 75, jam: [15, 22], fixT: 2, startMsg: 'Соня подключилась к рации вышки', jamMsg: 'Помехи! Перезапусти ноутбук', jamShort: 'Связь сорвалась — подойди к ноутбуку', obj: 'Соня закрывает полосу через рацию вышки. Не подпускай людей Веры.', fixObj: 'Помехи сорвали связь. Подойди к ноутбуку и перезапусти.', okMsg: 'Связь восстановлена', doneMsg: 'Полоса закрыта!', doneObj: 'Полоса закрыта. Добей охрану у вышки.' },
+        about: 'У подножия диспетчерской вышки Соня подключается к рации и закрывает полосу для борта ЧБ 007. Люди Веры глушат связь — ноутбук приходится перезапускать вручную.',
+        intro: [['sonya', 'Дай мне минуту с небольшим. И чтобы никто не подходил к ноутбуку.'], ['hero', 'Никто не подойдёт.']],
+        outro: [['tower', 'Борт ЧБ 007, вылет запрещён. Полоса закрыта. Повторяю: вылет запрещён.'], ['sonya', 'Готово. Без разрешения они не взлетят.'], ['mark', 'Ангар номер три открывается. Они выкатывают самолёт без разрешения.']] },
+      { t: 'Ангар 3', type: 'arena', arena: 'hangar', waves: [4, 5], heavyFrom: 1,
+        boss: { look: 'shturman', name: 'Штурман', hp: 900, scale: 1.15, burst: 3, dmg: 9, speed: 5.5,
+          say: [['shturman', 'Таксист? Вера говорила, что ты приедешь. Я ставил на то, что не успеешь.'], ['hero', 'Ставки больше не принимаются.']] },
+        about: 'Ангар деловой авиации: ящики, верстаки и сам ЧБ 007 на тягаче. Две волны охраны и Штурман, пилот и правая рука Веры.',
+        intro: [['hero', 'Самолёт ещё в ангаре. Значит, взлетать без пилота не будут.'], ['leva', 'Пилот — Штурман. Рыжий с записи. Бывший военный лётчик.']],
+        outro: [['hero', 'Штурман готов. Но самолёт… он уже катится!'], ['vera2', 'Прощай, таксист. За штурвалом я тоже неплохо сижу.'], ['mark', 'Она сама ведёт самолёт! На рулёжку, к полосе!']] },
+      { t: 'Взлётная полоса', type: 'plane', start: [-140, 740, 'S'], name: 'Борт ЧБ 007', hp: 1500, taxi: 10, acc: 3, vmax: 70, rotateX: 180, hold: 3, chase: 2,
+        route: [[-150, 712], [-150, 760], [-200, 775], [-236, 805], [-240, 850]],
+        about: 'Вера сама ведёт самолёт: рулёжка, разворот и разбег по полосе. Стрелять и таранить, пока борт не оторвался от земли.',
+        intro: [['orlova', 'Таксист, у меня ни одной машины ближе километра. Это твоя полоса.'], ['hero', 'Тогда пристегнитесь, капитан. Это будет мой самый длинный разбег.']],
+        outro: [['hero', 'Стоит. Двигатель горит, но стоит.'], ['vera2', 'Ты испортил мне вечер, таксист.'], ['hero', 'Это ночной тариф. Выходите, конечная.']] },
+      { t: 'Конечная', type: 'arena', arena: [-20, 862], jetAt: [-40, 846, PI / 2], waves: [4], heavyFrom: 1,
+        boss: { look: 'verab', name: 'Вера', hp: 760, scale: 1.0, burst: 3, dmg: 8, speed: 6.5,
+          say: [['vera2', 'Думаешь, всё кончилось? У меня ещё половина города в должниках.'], ['hero', 'Пусть расплачиваются с капитаном Орловой.']] },
+        about: 'На полосе у подбитого самолёта последние люди Веры прикрывают её с сервером. Отбиться и задержать саму Веру, пока не подъехала полиция.',
+        intro: [['mark', 'К самолёту едут две машины без огней. Последние, кто ещё за неё.'], ['hero', 'Пусть едут. Я никуда не тороплюсь.']],
+        outro: [['orlova', 'Вера, вы задержаны. Опять.'], ['vera2', 'Капитан, вы же знаете: из тюрьмы я выхожу легко.'], ['orlova', 'В этот раз — с сервером в вещдоках. Без него вы просто пассажир.'], ['sonya', 'Сервер цел. Вся её сеть теперь у полиции.'], ['mark', 'Ну что, такси свободно? Пассажиры ждут. Говорят, на вокзале сегодня неспокойно.']] },
+    ],
+  },
 };
 
 // ---- chapter engine for episodes 3–7 ----
@@ -3974,8 +4327,9 @@ const DIRS = { N: PI, S: 0, E: PI / 2, W: -PI / 2 };
 const hdg = (h) => (typeof h === 'string' ? DIRS[h] : h);
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const fixLine = ([w, t]) => [w, t.replace(/\{name\}/g, CH.name).replace(/\{g:([^|}]*)\|([^}]*)\}/g, (_, a, b) => gx(a, b))];
-function epMax(ep) { try { return clamp(parseInt(localStorage.getItem('nf-ep' + ep + '-ch'), 10) || 1, 1, 6); } catch (e) { return 1; } }
-function epSave(ep, n) { try { if (n > epMax(ep)) { localStorage.setItem('nf-ep' + ep + '-ch', String(Math.min(6, n))); if (typeof cloudSaveSoon === 'function') cloudSaveSoon(); } } catch (e) { /* storage unavailable */ } }
+const epLen = (ep) => (typeof EPS !== 'undefined' && EPS[ep] ? EPS[ep].chapters.length : 6);
+function epMax(ep) { try { return clamp(parseInt(localStorage.getItem('nf-ep' + ep + '-ch'), 10) || 1, 1, epLen(ep)); } catch (e) { return 1; } }
+function epSave(ep, n) { try { if (n > epMax(ep)) { localStorage.setItem('nf-ep' + ep + '-ch', String(Math.min(epLen(ep), n))); if (typeof cloudSaveSoon === 'function') cloudSaveSoon(); } } catch (e) { /* storage unavailable */ } }
 
 const ALLY_LOOKS = {
   ded: { model: 'savva', skin: '#e4b898', colors: { Shirt: '#5a4636', Pants: '#2e2e34', Hat: '#4a4a52', Detail: '#8a6a4a' }, face: { brow: '#e8e8e8', iris: '#4a6a8a', mouth: 'smirk', stache: '#ececec', wrinkles: true } },
@@ -3995,6 +4349,7 @@ const BOSS_LOOKS = {
   baron: { model: 'boss', skin: '#c89a7a', colors: { Black: '#e8e4da', Shirt: '#2a2a2a', Details: '#c8a030', Belt: '#c8a030', Hair: '#2a2018' }, face: { brow: '#2a2018', iris: '#2a1a10', mouth: 'smirk', angry: true, stubble: '#2a2018' } },
   twin: { model: 'crow', skin: '#e0b494', colors: { Main: '#3a3a40', Grey: '#8a8a90', Black: '#1a1a1e', Helmet: '#3a3a40' }, face: { brow: '#1a1a1e', iris: '#3a5a8a', mouth: 'grim', angry: true } },
   verab: LOOKS.vera,
+  shturman: { model: 'crow', skin: '#f0c8a8', colors: { Main: '#2a2a32', Grey: '#c87a3a', Black: '#141418', Helmet: '#b85a2a' }, face: { brow: '#b85a2a', iris: '#3a6a9a', mouth: 'smirk', angry: true, stubble: '#b85a2a' } },
 };
 const FACTIONS = {
   mask: { thug1: { Details: '#e8e8e8' }, thug2: { Shirt: '#1a1a1e', Pants: '#141418', Hair: '#15151a' }, thug3: { Shirt: '#2a2a2e', Pants: '#101012', Hair: '#15151a' }, heavy: { Shirt: '#101012', Pants: '#101012' } },
@@ -4031,6 +4386,18 @@ function arenaDef(a) {
   if (a === 'park') return { r: { x0: -74, x1: -6, z0: 6, z1: 74 }, start: [-14, 40, -PI / 2], car: [0, 46, PI],
     edges: [[-70, 10], [-70, 70], [-10, 12], [-12, 70], [-40, 9], [-40, 71], [-71, 40]],
     inner: [[-60, 20], [-20, 64], [-62, 62], [-24, 18], [-50, 40], [-40, 60]], docs: [[-60, 22], [-22, 62], [-62, 60], [-24, 20]], mid: [-30, 40], boss: [-60, 40] };
+  if (a === 'terminal') return { r: { x0: -56, x1: 56, z0: 603, z1: 647 }, start: [0, 605, 0], car: [0, 585, PI / 2], exit: new V3(0, 0, 646),
+    edges: [[-54, 645], [54, 645], [-54, 606], [54, 606], [-14, 646], [14, 646], [0, 645], [-40, 636], [40, 636]],
+    inner: [[-30, 625], [30, 625], [0, 630], [-15, 638], [15, 638], [-45, 618], [45, 618]], docs: [[-48, 642], [48, 643], [-22, 616], [24, 637]], mid: [0, 620], boss: [0, 640] };
+  if (a === 'cargo') return { r: { x0: 152, x1: 244, z0: 654, z1: 735 }, start: [198, 656, 0], car: [198, 600, PI / 2],
+    edges: [[155, 733], [175, 734], [200, 734], [225, 734], [243, 700], [243, 668], [156, 690], [156, 664], [240, 734]],
+    inner: [[170, 690], [192, 704], [204, 692], [230, 710], [200, 670], [182, 724]], docs: [[158, 726], [238, 728], [190, 664], [224, 662]], mid: [198, 690], boss: [198, 725] };
+  if (a === 'hangar') return { r: { x0: -235, x1: -150, z0: 683, z1: 743 }, start: [-152, 718, -PI / 2], car: [-140, 718, PI / 2],
+    edges: [[-232, 686], [-232, 740], [-200, 686], [-200, 740], [-175, 686], [-175, 740], [-233, 715], [-152, 686], [-152, 741]],
+    inner: [[-215, 692], [-215, 728], [-190, 692], [-188, 730], [-172, 712], [-224, 718]], docs: [[-230, 690], [-230, 738], [-178, 738], [-196, 690]], mid: [-180, 716], boss: [-222, 726] };
+  if (a === 'tower') return { r: { x0: 166, x1: 238, z0: 538, z1: 598 }, start: [200, 596, PI], car: [150, 586, PI / 2],
+    edges: [[168, 540], [236, 540], [168, 596], [236, 596], [168, 568], [237, 568], [200, 539], [184, 597], [218, 597]],
+    inner: [[180, 548], [222, 548], [180, 588], [222, 588], [200, 584], [174, 568], [228, 568]], docs: [[172, 545], [232, 545], [176, 592], [230, 592]], mid: [200, 586], boss: [200, 548] };
   const [x, z] = a;
   return { r: { x0: x - 30, x1: x + 30, z0: z - 30, z1: z + 30 }, start: [x + 3, z + 22, PI], car: [x + 4, z + 28, PI],
     edges: [[x - 28, z - 3], [x + 28, z + 3], [x - 3, z - 28], [x - 26, z - 14], [x + 26, z - 14], [x - 14, z - 26], [x + 14, z - 26], [x - 26, z + 12], [x + 26, z + 12]],
@@ -4078,6 +4445,8 @@ function startGen(ep, i, withIntro) {
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
   };
+  AIR.on = (c.zone || E.zone) === 'airport';
+  resetJet(c.jetAt);
   MIS = GEN[c.type](c, title, done, E);
   if (c.carStyle || E.carStyle) MIS.carStyle = c.carStyle || E.carStyle; if (c.chaseMsg || E.chaseMsg) MIS.chaseMsg = c.chaseMsg || E.chaseMsg;
   if (c.police) { MIS.carStyle = 'police'; MIS.chaseMsg = c.chaseMsg || 'Полиция на хвосте! Стрелять по ней нельзя'; withPolice(MIS, c); }
@@ -4086,7 +4455,60 @@ function startGen(ep, i, withIntro) {
   if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; });
 }
 
+// the business jet: parked in hangar 3, or set down where a chapter needs it
+function resetJet(at) {
+  const J = AIRX.jet; if (!J) return;
+  if (!J.parent) scene.add(J);
+  const [x, z, h] = at || [-205, 704, PI / 2]; J.position.set(x, 0, z); J.rotation.set(0, h, 0);
+  const i = colliders.indexOf(AIRX.jetCol); if (i >= 0) colliders.splice(i, 1);
+  const ax = Math.abs(Math.sin(h)) > 0.7; AIRX.jetCol = addBox(x, z, ax ? 22 : 2.8, ax ? 2.8 : 22, 3);
+}
 const GEN = {
+  plane(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const J = AIRX.jet, path = c.route.map(([x, z]) => new V3(x, 0, z));
+    const i0 = colliders.indexOf(AIRX.jetCol); if (i0 >= 0) colliders.splice(i0, 1);
+    const e = { g: J, pos: J.position.clone(), vel: new V3(), h: J.rotation.y, hp: c.hp, max: c.hp, plane: true, kind: 'plane', hitR: 7, noExplode: true, dead: false, disabled: false, noTarget: false, wheels: [], v: 0, pi: 0, ph: 'taxi', hold: c.hold || 3 };
+    enemyCars.push(e);
+    const chase = { max: c.chase || 2 }; state.spawnT = 6;
+    setObjective(c.obj || `Останови самолёт, пока он не взлетел: стреляй и тарань. ${c.name} выруливает на полосу.`);
+    const fw = new V3();
+    return { title, chase, navName: c.name, navGoal: () => e.pos,
+      update(dt) {
+        setBeam(e.pos);
+        if (e.disabled) {
+          e.v = Math.max(0, e.v - 14 * dt);
+          setObjective(c.stopObj || 'Самолёт обездвижен. Подъезжай к трапу.'); chase.max = 0;
+          if (e.v < 1 && pc.pos.distanceTo(e.pos) < 18) return done();
+        } else if (e.ph === 'taxi') {
+          const T = path[e.pi]; const d = Math.hypot(T.x - e.pos.x, T.z - e.pos.z);
+          if (d < 5) { e.pi++; if (e.pi >= path.length) { e.ph = 'hold'; toast('Самолёт на полосе!', 1.6); } }
+          else { const want = Math.atan2(T.x - e.pos.x, T.z - e.pos.z); e.h += wrapA(want - e.h) * Math.min(1, dt * 1.6); }
+          e.v += ((c.taxi || 10) - e.v) * Math.min(1, dt * 0.8);
+        } else if (e.ph === 'hold') { e.v = Math.max(0, e.v - 8 * dt); e.hold -= dt; if (e.hold <= 0) { e.ph = 'roll'; toast('Разбег! Он взлетает!', 2); sfx.crash(6); } }
+        else if (e.ph === 'roll') {
+          e.h += wrapA(PI / 2 - e.h) * Math.min(1, dt * 2); e.v = Math.min(c.vmax || 70, e.v + (c.acc || 3) * dt);
+          if (e.pos.x > c.rotateX) return failChapter('Самолёт взлетел', c.failText || 'Самолёт оторвался от полосы. Бей по нему сильнее, пока он рулит и разгоняется.');
+        }
+        fw.set(Math.sin(e.h), 0, Math.cos(e.h)); e.vel.copy(fw).multiplyScalar(e.v); e.pos.addScaledVector(e.vel, dt);
+        J.position.copy(e.pos); J.rotation.y = e.h;
+        if (!e.disabled && Math.random() < dt * (e.ph === 'roll' ? 30 : 6)) for (const s of [-1, 1]) spawnP(e.pos.clone().addScaledVector(fw, -9).add(new V3(Math.cos(e.h) * s * 1.6, 2.6, -Math.sin(e.h) * s * 1.6)), { color: 0x5a5a64, size: 0.8, vel: fw.clone().multiplyScalar(-6), life: 0.8, grow: 2.5, opacity: 0.25 });
+        if (e.disabled && Math.random() < dt * 10) spawnP(e.pos.clone().add(new V3(0, 3, 0)), { color: 0x2a2a30, size: 1.2, vel: new V3(0, 3, 0), life: 1.6, grow: 2, opacity: 0.6 });
+        // ramming: the taxi bounces off the fuselage and the jet takes damage
+        const rel = pc.pos.clone().sub(e.pos), along = clamp(rel.dot(fw), -10, 10), side = rel.clone().addScaledVector(fw, -along); side.y = 0;
+        const sd = side.length();
+        if (sd < 2.6) {
+          const n = sd > 0.01 ? side.multiplyScalar(1 / sd) : new V3(-fw.z, 0, fw.x); pc.pos.addScaledVector(n, 2.6 - sd);
+          const vn = pc.vel.dot(n) - e.vel.dot(n);
+          if (vn < -3) { damageEnemyCar(e, -vn * 6); damagePlayer(-vn * 0.35); sfx.crash(-vn); sparks(pc.pos.clone().add(new V3(0, 1.2, 0))); pc.vel.addScaledVector(n, -vn * 1.3); }
+        }
+      },
+      hud() {
+        const st = e.disabled ? 'обездвижен' : e.ph === 'taxi' ? 'выруливает' : e.ph === 'hold' ? 'на старте' : `разбег ${Math.round(e.v * 3.6)} км/ч`;
+        const left = e.ph === 'roll' ? Math.max(0, c.rotateX - e.pos.x) : null;
+        return { bars: [{ label: `${c.name}: ${st}`, frac: e.hp / e.max, color: '#ff8a3a' }], timer: left !== null && !e.disabled ? `До отрыва: ${Math.round(left)} м` : '', bad: left !== null && left < 150 };
+      } };
+  },
   escape(c, title, done) {
     beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
     const goal = new V3(c.goal[0], 0, c.goal[1]), chase = { max: c.chase || 4 };
@@ -4460,6 +4882,20 @@ const mmStatic = document.createElement('canvas'); mmStatic.width = mmStatic.hei
 })();
 // minimap: centred on the player and turned like the camera, so «right» on the map is right on screen
 const MM_R = 95; // metres from the centre to the edge
+let mmAir = null;
+function drawAirMap() {
+  const W = AIR.x1 - AIR.x0 + 30, H = AIR.z1 - AIR.z0 + 30, k = 1;   // 1 px per metre
+  mmAir = document.createElement('canvas'); mmAir.width = W; mmAir.height = H;
+  const g = mmAir.getContext('2d'), P = (x, z) => [x - AIR.x0 + 15, z - AIR.z0 + 15], R = (x0, z0, x1, z1, c) => { const [a, b] = P(x0, z0); g.fillStyle = c; g.fillRect(a, b, (x1 - x0) * k, (z1 - z0) * k); };
+  R(AIR.x0 - 15, AIR.z0 - 15, AIR.x1 + 15, AIR.z1 + 15, '#16241c');
+  R(-245, 560, 245, 590, '#4a5078'); R(68, 452, 92, 560, '#4a5078'); R(-240, 470, -160, 560, '#4a5078'); R(-160, 540, 60, 560, '#4a5078'); R(-150, 465, 40, 538, '#3a4060'); R(140, 470, 250, 560, '#4a5078'); R(242, 560, 255, 760, '#4a5078');
+  R(-250, 650, 250, 762, '#3a3e52'); R(AIR.x0, AP.taxiZ - 11, AIR.x1, AP.taxiZ + 11, '#4a5078'); for (const x of [-200, 0, 200]) R(x - 11, AP.taxiZ + 11, x + 11, AP.rwyZ - AP.rwyHW, '#4a5078');
+  R(AP.rwyX0, AP.rwyZ - AP.rwyHW, AP.rwyX1, AP.rwyZ + AP.rwyHW, '#5a6088');
+  R(AP.term.x0, AP.term.z0, AP.term.x1, AP.term.z1, '#c8bca8'); R(AP.cargo.x0, AP.cargo.z0, AP.cargo.x1, AP.cargo.z1, '#8a8a92'); R(AP.hangar.x0, AP.hangar.z0, AP.hangar.x1, AP.hangar.z1, '#6a7078');
+  R(AP.tower.x - 11, AP.tower.z - 8, AP.tower.x + 11, AP.tower.z + 8, '#a8a8b0'); for (const [x, z] of [[-222, 488], [-200, 488], [-222, 514], [-200, 514]]) R(x - 4.5, z - 4.5, x + 4.5, z + 4.5, '#8a8a92');
+  g.fillStyle = '#e8ecf6'; g.font = 'bold 18px Arial'; g.textAlign = 'center'; const t = (s, x, z) => { const [a, b] = P(x, z); g.fillText(s, a, b); };
+  t('ТЕРМИНАЛ', 0, 630); t('ГРУЗОВОЙ', 196, 630); t('АНГАР', -198, 718); t('ВПП', 0, 856);
+}
 function drawMinimap() {
   const W = 300, k = W / 2 / MM_R, me = state.act === 1 ? pc : hero; if (!me) return;
   // in the car the camera follows the heading; on foot it always looks north (-z)
@@ -4469,6 +4905,7 @@ function drawMinimap() {
   mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.fillStyle = '#0c0e1e'; mctx.fillRect(0, 0, W, W);
   mctx.save(); mctx.translate(W / 2, W / 2); mctx.rotate(rot); mctx.scale(k, k); mctx.translate(-me.pos.x, -me.pos.z);
   mctx.drawImage(mmStatic, -180, -180, 360, 360);
+  if (AIR.on || (me.pos.z > 380)) { if (!mmAir) drawAirMap(); mctx.drawImage(mmAir, AIR.x0 - 15, AIR.z0 - 15, AIR.x1 - AIR.x0 + 30, AIR.z1 - AIR.z0 + 30); }
   if (state.act === 1 && pc && NAV.pts.length) {
     mctx.strokeStyle = 'rgba(77,255,166,.9)'; mctx.lineWidth = 4 / k; mctx.lineJoin = 'round'; mctx.setLineDash([8 / k, 5 / k]); mctx.lineDashOffset = -state.t * 24 / k;
     mctx.beginPath(); mctx.moveTo(pc.pos.x, pc.pos.z); for (const q of NAV.pts) mctx.lineTo(q.x, q.z); mctx.stroke(); mctx.setLineDash([]);
@@ -5578,7 +6015,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); updateAirport(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateRain(dt, focus);
