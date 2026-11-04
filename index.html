@@ -4150,7 +4150,7 @@ function loop(now) {
 $('loading').textContent = 'Загрузка города… 0%';
 loadAssets((k) => { $('loading').textContent = 'Загрузка города… ' + Math.round(k * 100) + '%'; }).then(() => {
   buildWorld();
-  loadProfile(store.get('nf-session'));
+  { const ses = store.get('nf-session'); loadProfile(ses === TEST_LOGIN ? null : ses); } // the test profile always needs the password again
   initLife();
   buildRoster();
   renderPortraits();
