@@ -236,10 +236,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
   <div class="sel-panel">
     <div class="sel-top">
       <h2 class="sel-title">Выбери водителя</h2>
-      <div class="episodes" aria-label="Эпизод">
-        <button id="epBtn1" class="chip active" type="button">Эпизод 1 · Кейс</button>
-        <button id="epBtn2" class="chip" type="button">Эпизод 2 · Двойной тариф</button>
-      </div>
+      <div id="epChips" class="episodes" aria-label="Эпизод"></div>
       <div id="chapters" class="episodes" aria-label="Глава" hidden></div>
     </div>
     <div class="group-label">Мужчины</div>
@@ -327,7 +324,7 @@ const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 1200);
 camera.position.set(0, 80, 140);
 
 // post-processing: HDR scene -> bloom -> ACES tone map + sRGB + vignette
-let composer = null, bloomPass = null;
+let composer = null, bloomPass = null, finalPass = null;
 const FinalShader = {
   uniforms: { tDiffuse: { value: null }, exposure: { value: 1.05 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -347,7 +344,7 @@ function setupPost() {
     composer.addPass(new THREE.RenderPass(scene, camera));
     bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.55, 0.95);
     composer.addPass(bloomPass);
-    composer.addPass(new THREE.ShaderPass(FinalShader));
+    finalPass = new THREE.ShaderPass(FinalShader); composer.addPass(finalPass);
   } catch (e) { composer = null; }
 }
 setupPost();
@@ -773,7 +770,7 @@ function buildWorld() {
   BT.forEach((t) => bld[t].forEach((list, v) => kitInstances('building_' + t, list, KIT.bld[v], true)));
 
   // street lamps, trees, traffic lights, parked cars
-  const poolMat = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.0, 0.6, 0.3), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+  const poolMat = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.0, 0.6, 0.3), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }); KIT.poolMat = poolMat;
   const poolGeo = new THREE.PlaneGeometry(14, 14); poolGeo.rotateX(-PI / 2);
   const lampHead = HDR(0xffd9a0, 6), metalC = col(0x34363e);
   const parked = [], lamps = [], tlights = [];
@@ -823,7 +820,7 @@ function buildWorld() {
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
   meshB(B.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, envMapIntensity: 0.2 }), false);
   meshB(B.metal, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.7, envMapIntensity: 0.8 }), true);
-  meshB(B.neon, new THREE.MeshBasicMaterial({ vertexColors: true }), false);
+  KIT.neonMat = meshB(B.neon, new THREE.MeshBasicMaterial({ vertexColors: true }), false).material;
   meshB(B.walk, new THREE.MeshStandardMaterial({ map: pavingTex, vertexColors: true, color: 0x9a948c, roughness: 0.6, envMapIntensity: 0.9 }), false);
   meshB(B.grass, new THREE.MeshStandardMaterial({ map: grassTex, vertexColors: true, roughness: 1 }), false);
   meshB(B.leaf, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -1430,6 +1427,13 @@ const WHO = {
   leva: { name: 'Лёва, бухгалтер', color: '#7fd4a8', init: 'Л' },
   hook: { name: 'Крюк, бригадир порта', color: '#ff8a3a', init: 'К' },
   crow: { name: 'Ворон', color: '#9aa0b8', init: 'В' },
+  vera2: { name: 'Вера', color: '#c08bff', init: 'В' },
+  sonya: { name: 'Соня', color: '#5ad1c8', init: 'С' },
+  host: { name: 'Пётр Семёныч, хозяин таксопарка', color: '#d9b26b', init: 'П' },
+  kassir: { name: 'Кассир', color: '#c8a030', init: 'К' },
+  lisa: { name: 'Лиса', color: '#ff6a3a', init: 'Л' },
+  baron: { name: 'Барон', color: '#3ad0c0', init: 'Б' },
+  twin: { name: 'Близнец', color: '#8a9ab8', init: 'Б' },
 };
 const dlg = { lines: [], i: 0, shown: 0, done: null, prev: null };
 function playDialog(lines, done) {
@@ -1497,7 +1501,7 @@ function updateDrive(dt) {
   // player gun: auto-aims at the nearest pursuer
   pc.fireCd -= dt;
   if (!fireHeld()) state.fireLock = false;
-  const noFire = state.ep === 2 && MIS && MIS.noFire;
+  const noFire = state.ep >= 2 && MIS && MIS.noFire;
   if (noFire && fireHeld() && toastT <= 0) toast('Слежка: стрелять нельзя', 1.2);
   if (!noFire && fireHeld() && !state.fireLock && pc.fireCd <= 0) {
     pc.fireCd = 0.11 * P.fireMult;
@@ -1622,7 +1626,7 @@ function updateFoot(dt) {
   const mv = new V3(mx, 0, mz); if (mv.length() > 1) mv.normalize();
   const vel = mv.clone().multiplyScalar(9);
   hero.pos.addScaledVector(vel, dt); collideCircle(hero.pos, vel, 0.6);
-  if (state.ep === 2 && MIS && MIS.arena) { const A = MIS.arena; hero.pos.x = clamp(hero.pos.x, A.x0, A.x1); hero.pos.z = clamp(hero.pos.z, A.z0, A.z1); }
+  if (state.ep >= 2 && MIS && MIS.arena) { const A = MIS.arena; hero.pos.x = clamp(hero.pos.x, A.x0, A.x1); hero.pos.z = clamp(hero.pos.z, A.z0, A.z1); }
   // aim
   let aim = null;
   if (mouse.has && !isTouch) { ndc.set(mouse.x / window.innerWidth * 2 - 1, -(mouse.y / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera); if (ray.ray.intersectPlane(aimPlane, aimPt)) aim = aimPt.clone(); }
@@ -1695,7 +1699,7 @@ function updateFoot(dt) {
     medkit.rotation.y += dt * 2; medkit.position.y = 0.7 + Math.sin(state.t * 3) * 0.15;
     if (medkit.position.distanceTo(new V3(hero.pos.x, medkit.position.y, hero.pos.z)) < 1.6) { hero.hp = Math.min(P.footMax, hero.hp + 50); scene.remove(medkit); medkit = null; toast('Аптечка: +50 здоровья'); }
   }
-  if (state.ep === 2) { updateAllies(dt); updatePickups(dt); if (MIS) MIS.update(dt); return; }
+  if (state.ep >= 2) { updateAllies(dt); updatePickups(dt); if (MIS) MIS.update(dt); return; }
   const alive = enemies.filter((e) => !e.dead).length;
   if (alive === 0 && spawnQueue.length === 0) {
     if (state.wave === 1) {
@@ -1756,7 +1760,7 @@ function clearStage() {
   for (const k of pickups) scene.remove(k.m); pickups.length = 0;
   if (medkit) { scene.remove(medkit); medkit = null; }
   clearBullets(); trail.length = 0; spawnQueue = [];
-  setBeam(null); arrow.visible = false; heroLight.intensity = 0;
+  setBeam(null); arrow.visible = false; heroLight.intensity = 0; toastT = 0; $('toast').hidden = true;
   if (hero) hero.g.visible = false;
   yardGate.position.y = -3; if (gateCollider) { colliders.splice(colliders.indexOf(gateCollider), 1); gateCollider = null; }
   warehouseDoor.position.y = 0;
@@ -1889,7 +1893,7 @@ function finishChapter(n, coins, lines, next) {
 function failChapter(title, text) {
   state.mode = 'dead'; setEngine(0, false);
   showModal(`
-    <div class="kicker">Эпизод 2 · ${MIS.title}</div>
+    <div class="kicker">Эпизод ${state.ep} · ${MIS.title}</div>
     <h2 class="h2 bad">${title}</h2>
     <p class="lead">${text}</p>
     <div class="btns"><button id="mRetry" class="btn primary" type="button">Начать главу заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>`, {
@@ -1897,7 +1901,7 @@ function failChapter(title, text) {
     mMenu: () => { hideModal(); showSelect(); },
   });
 }
-function startChapter(n) { state.fireLock = true; [null, ch1, ch2, ch3, ch4, ch5, ch6][n](false); }
+function startChapter(n) { state.fireLock = true; setMood('night'); if (state.ep === 2) [null, ch1, ch2, ch3, ch4, ch5, ch6][n](false); else startGen(state.ep, n - 1, false); }
 
 // ---- prologue + chapter 1: tail the courier ----
 function ch1(intro) {
@@ -2175,27 +2179,31 @@ function ch6() {
   setObjective('Склад №7. Зачисти двор.');
 }
 
-function startEpisode2(ch) {
-  initAudio(); hideModal();
+function startEpisode2(ch) { startEpisode(2, ch); }
+function startEpisode(ep, ch) {
+  initAudio(); hideModal(); setMood('night');
   $('select').hidden = true; $('preview').hidden = true; $('hud').hidden = false; $('touch').hidden = !isTouch;
   document.body.classList.toggle('touch-on', isTouch);
   applyChar();
   if (showFig) showFig.g.visible = false; showDisc.visible = false; pvEnemy.g.visible = false;
   if (hero) { scene.remove(hero.g); hero = null; }
-  state.ep = 2; state.coins = 0; state.carKills = 0; state.footKills = 0; state.time = 0; state.reviveUsed = {}; state.doubled = false;
-  if (ch === 1) ch1(true); else startChapter(ch);
+  state.ep = ep; state.coins = 0; state.carKills = 0; state.footKills = 0; state.time = 0; state.reviveUsed = {}; state.doubled = false;
+  if (ep === 2) { if (ch === 1) ch1(true); else startChapter(ch); }
+  else startGen(ep, ch - 1, true);
 }
-function startSelected() { if (selEp === 2) startEpisode2(ep2Pick); else startMission(); }
+function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else startMission(); }
+const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет' };
 function renderChapters() {
-  $('epBtn1').classList.toggle('active', selEp === 1); $('epBtn2').classList.toggle('active', selEp === 2);
-  const box = $('chapters'), max = ep2Max(); box.hidden = selEp !== 2;
+  const eb = $('epChips');
+  eb.innerHTML = Object.keys(EP_NAMES).map((k) => `<button class="chip${selEp === +k ? ' active' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
+  eb.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { selEp = +b.dataset.ep; ep2Pick = selEp >= 2 ? epMax(selEp) : 1; renderChapters(); }));
+  const box = $('chapters'), max = selEp >= 2 ? epMax(selEp) : 1; box.hidden = selEp < 2;
   if (ep2Pick > max) ep2Pick = max;
-  box.innerHTML = EP2_TITLES.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1}. ${t}</button>`).join('');
+  const titles = selEp === 2 ? EP2_TITLES : selEp >= 3 ? EPS[selEp].chapters.map((c) => c.t) : [];
+  box.innerHTML = titles.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1}. ${t}</button>`).join('');
   box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { ep2Pick = +b.dataset.ch; renderChapters(); }));
-  $('btnGo').textContent = selEp === 2 ? (ep2Pick === 1 ? 'Начать эпизод 2' : `Глава ${ep2Pick}`) : 'В путь';
+  $('btnGo').textContent = selEp >= 2 ? (ep2Pick === 1 ? `Начать эпизод ${selEp}` : `Глава ${ep2Pick}`) : 'В путь';
 }
-$('epBtn1').addEventListener('click', () => { selEp = 1; renderChapters(); });
-$('epBtn2').addEventListener('click', () => { selEp = 2; ep2Pick = ep2Max(); renderChapters(); });
 function showEnd2() {
   state.mode = 'end'; setEngine(0, false);
   $('hud').hidden = true; $('touch').hidden = true;
@@ -2212,9 +2220,510 @@ function showEnd2() {
     </div>
     <div class="btns">
       <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mNext" class="btn primary" type="button">Эпизод 3 →</button>
       <button id="mAgain" class="btn" type="button">В меню</button>
     </div>`, {
     mDouble: () => { hideModal(); showAd(() => { state.doubled = true; state.coins *= 2; render(); }); },
+    mNext: () => { hideModal(); startEpisode(3, 1); },
+    mAgain: () => { hideModal(); showSelect(); },
+  });
+  render();
+}
+
+// ---------------- episodes 3–7: chapters as data ----------------
+// type: escape | deliver | hunt | tail | stop (driving) · arena (on foot: docs → waves → survive → boss → exit)
+// text tokens: {name} — the driver's name; {g:male|female} — gendered word
+const EPS = {
+  3: {
+    title: 'Конечная остановка', faction: 'night',
+    logline: 'Вера подставила героя: камеры на складе №7 засняли его такси. Теперь «Ночные», люди Веры, ищут его по всему городу, а у Веры — тетрадь Лёвы с маршрутами.',
+    endTitle: 'Тетрадь без страниц', endLead: 'Копии сожжены, оригинал у тебя, но страницы о Диспетчере вырваны. Вера опять на шаг впереди, а в город едут гастролёры.',
+    teaser: 'Эпизод 4. Встречная полоса',
+    chapters: [
+      { t: 'Розыск', type: 'escape', start: [0, 120, 'N'], secs: 100, chase: 4, goal: [-80, -40], goalName: 'Гараж Марка',
+        about: 'Утренние новости показывают такси героя у склада №7. «Ночные» прочёсывают город. Нужно продержаться 1:40 и добраться до гаража Марка.',
+        intro: [['mark', 'Ты {g:видел|видела} новости? Камеры на складе засняли такси. Твоё такси, {name}.'], ['hero', 'Вера подчистила хвосты. Теперь хвост — это я.'], ['mark', '«Ночные», люди Веры, уже ищут твою машину. Продержись, пока я открываю гараж. Потом — ко мне.']],
+        outro: [['hero', 'Гараж Марка. Ворота открыты.'], ['mark', 'Загоняй. Здесь нас не найдут... надеюсь.']] },
+      { t: 'Гараж', type: 'arena', arena: [-80, -80], ally: { who: 'mark', at: [-74, -72], hp: 220, name: 'Марк' }, waves: [4, 5, 6], heavyFrom: 3,
+        about: 'Марк перебивает номера на такси, а «Ночные» нашли гараж. Три волны, Марк должен уцелеть.',
+        intro: [['mark', 'Мне нужно пять минут, чтобы перебить номера.'], ['hero', 'Пяти минут у нас нет. «Ночные» уже на перекрёстке.'], ['mark', 'Тогда я работаю, а ты прикрываешь.']],
+        outro: [['mark', 'Номера новые. Машина чистая.'], ['leva', 'Я кое-что узнал. Курьер Веры каждую ночь возит копии моей тетради в ломбард. Сейчас он как раз выезжает.']] },
+      { t: 'Курьер Веры', type: 'tail', start: [0, -5, 'N'], car: [0, -40, 'N'], speed: 18, name: 'Курьер', stops: { 3: 4, 7: 5, 10: 4, 13: 5 },
+        route: [[0, -80], [80, -80], [80, -160], [160, -160], [160, -80], [160, 0], [80, 0], [80, 80], [0, 80], [0, 160], [-80, 160], [-80, 80], [-160, 80], [-160, 0], [-80, 0], [-80, -14]],
+        about: 'Слежка за курьером Веры через полгорода. Ближе 15 м — растёт подозрение, дальше 80 м — цель теряется.',
+        intro: [['leva', 'Серебристый седан. Не спугни его: если поймёт, что за ним хвост, сожжёт копии.']],
+        outro: [['hero', 'Ломбард «Золотая ночь». Курьер зашёл с чёрного хода.'], ['leva', 'Копии в ячейках. Ключи у охраны.']] },
+      { t: 'Ломбард', type: 'arena', arena: [-80, 0], docs: 4, docName: 'Ключ', guards: 6,
+        boss: { look: 'kassir', name: 'Кассир', hp: 520, scale: 1.2, burst: 3, dmg: 8, speed: 4.4,
+          say: [['kassir', 'Ячейки закрыты до утра, {g:гражданин|гражданка}.'], ['hero', 'Я открою пораньше.']] },
+        about: 'Пешком у ломбарда: найти 4 ключа от ячеек у охраны, потом справиться с Кассиром.',
+        intro: [['hero', 'Охрана у каждого угла. Ключи, похоже, у них в карманах.']],
+        outro: [['kassir', 'Пусто! Вера всё забрала час назад. Грузовики уже едут в порт.'], ['hero', 'Сколько грузовиков?'], ['kassir', 'Три. Бронированные. Ты их не остановишь.']] },
+      { t: 'Перехват', type: 'stop', convoy: 3, start: [-80, 25, 'S'], car: [-80, 70, 'S'], hp: 260, speed: 26, name: 'Грузовик',
+        route: [[-80, 80], [0, 80], [0, 160], [80, 160], [80, 80], [160, 80], [160, -80], [80, -80], [80, 0], [0, 0], [0, 80]],
+        about: 'Колонна из трёх бронированных грузовиков с копиями тетради. Взрывать можно и нужно.',
+        intro: [['hero', 'Три грузовика, и в каждом копии. Значит, все три должны сгореть.']],
+        outro: [['hero', 'Три грузовика, три пожара. Копий больше нет.'], ['leva', 'Остался оригинал. Он у Лисы — правой руки Веры. Она ждёт груз на складе №7.']] },
+      { t: 'Тетрадь', type: 'arena', arena: 'yard', waves: [5, 5], heavyFrom: 2, exit: true, exitObj: 'Войди на склад за тетрадью.',
+        boss: { look: 'lisa', name: 'Лиса', hp: 750, scale: 1.15, burst: 5, dmg: 8, speed: 5.8,
+          say: [['lisa', 'Вера говорила, что ты {g:упрямый|упрямая}. Не говорила, что {g:глупый|глупая}.'], ['hero', 'Отдай тетрадь, и разойдёмся.']] },
+        about: 'Склад №7: две волны «Ночных», затем Лиса — быстрая, стреляет веером. После — войти на склад.',
+        intro: [['hero', 'Склад №7. Опять. Кажется, это место меня любит.']],
+        outro: [['hero', 'Тетрадь. Половины страниц нет.'], ['mark', 'Вырваны страницы про Диспетчера. Вера знала, что мы придём.'], ['vera2', 'Не ищи меня, водитель. У меня гости из другого города. Тебе они понравятся.']] },
+    ],
+  },
+  4: {
+    title: 'Встречная полоса', faction: 'tour',
+    logline: 'Вера позвала в город гастролёров — банду Барона с бирюзовыми фарами. Они перекрывают маршруты и ищут свидетельницу Соню, которая видела, кто им заплатил.',
+    endTitle: 'Гастролёры уехали', endLead: 'Барон сдал Веру, контракты с её подписью у тебя. Но деньги на всё это шли через твой собственный таксопарк.',
+    teaser: 'Эпизод 5. Красный свет',
+    chapters: [
+      { t: 'Гастролёры', type: 'hunt', start: [0, 40, 'N'], kills: 6, chase: 3,
+        about: 'Бирюзовые машины гастролёров перекрывают город. Сбить 6 машин.',
+        intro: [['mark', 'На всех въездах в город чужие машины. Бирюзовые фары, номера не наши.'], ['hero', 'Гастролёры. Вера позвала.'], ['mark', 'Они перекрывают маршруты. Покажи им, кто здесь ездит ночью.']],
+        outro: [['hero', 'Шесть машин. Остальные разбежались.'], ['leva', 'Я перехватил их рацию. Они ищут девушку по имени Соня. Она видела, кто их позвал.']] },
+      { t: 'Свидетель', type: 'deliver', start: [0, -40, 'S'], chase: 3, ramp: 1,
+        pts: [
+          { p: [160, 40], name: 'Дом Сони', say: [['sonya', 'Вы от Марка? Быстрее, они уже на лестнице!'], ['hero', 'Садись. Пристегнись. Не кричи.'], ['sonya', 'Сначала в тайник у старого рынка. Там флешка с записью.']] },
+          { p: [-160, -120], name: 'Тайник у рынка', t: 55, say: [['sonya', 'Есть! Тут видно, как женщина в фиолетовом пальто платит их главному. Барону.']] },
+          { p: [-80, 120], name: 'Безопасная квартира', t: 45 },
+        ],
+        about: 'Забрать Соню, заехать за флешкой с записью и успеть в безопасную квартиру. Погоня усиливается с каждой точкой.',
+        intro: [['leva', 'Соня живёт на Восточной. Гастролёры будут там через пару минут.']],
+        outro: [['sonya', 'Спасибо. Тут есть подвал, я спрячусь.'], ['hero', 'Мы ещё вернёмся за тобой.']] },
+      { t: 'Мост', type: 'escape', start: [-80, 120, 'N'], secs: 110, chase: 5, goal: [80, -120], goalName: 'Развязка у моста',
+        about: 'Гастролёры сели на хвост всей стаей. Не драться, а продержаться 1:50 и уйти к мосту.',
+        intro: [['leva', 'Их слишком много. Не дерись, отрывайся!']],
+        outro: [['hero', 'Оторвались. Где их база?'], ['leva', 'Автомойка у Центральной. Ночью там машины не моют.']] },
+      { t: 'Автомойка', type: 'arena', arena: [0, -80], ally: { who: 'leva', at: [6, -72], hp: 200, name: 'Лёва' }, survive: 120, every: 6, maxAlive: 7, heavyFrom: 3,
+        surviveObj: 'Лёва взламывает их сервер. Продержись 2:00 и не дай его ранить.',
+        about: 'Лёва взламывает сервер гастролёров прямо на перекрёстке. Продержаться 2 минуты под непрерывными атаками.',
+        intro: [['leva', 'Мне нужно две минуты у их сервера. Две минуты, {name}!'], ['hero', 'Работай. Я считаю.']],
+        outro: [['leva', 'Есть! Барон сегодня угнал бензовоз. Хотят поджечь таксопарк.'], ['hero', 'Таксопарк? Там сорок машин и люди!']] },
+      { t: 'Бензовоз', type: 'stop', start: [80, -5, 'N'], car: [80, -40, 'N'], hp: 600, speed: 24, scale: 1.25, shoot: false, name: 'Бензовоз',
+        route: [[80, -80], [0, -80], [0, -160], [-160, -160], [-160, 0], [-80, 0], [-80, 80], [80, 80], [80, 0], [160, 0], [160, -80], [80, -80]],
+        stopObj: 'Бензовоз встал. Подъезжай.',
+        about: 'Остановить бензовоз, не взорвав его: пробить колёса и двигатель. Если отстать — он доедет до таксопарка.',
+        intro: [['hero', 'Бензовоз! Стрелять по колёсам. Если рванёт — полквартала сгорит.']],
+        outro: [['hero', 'Водитель сбежал. Бензовоз цел.'], ['leva', 'Барон в порту. Ждёт, когда загорится таксопарк.']] },
+      { t: 'Барон', type: 'arena', arena: 'docks', docs: 3, docName: 'Контракт', guards: 6, waves: [4],
+        boss: { look: 'baron', name: 'Барон', hp: 800, scale: 1.25, burst: 4, dmg: 9, speed: 4.8,
+          say: [['baron', 'Таксист! В моём городе таксисты возят пассажиров, а не проблемы.'], ['hero', 'Это не твой город.']] },
+        about: 'Порт: найти 3 контракта Барона с Верой, отбиться и победить самого Барона.',
+        intro: [['hero', 'Порт. Контракты с Верой где-то здесь.']],
+        outro: [['baron', 'Хватит! Я уезжаю, слышишь? Это всё Вера. Обещала мне город, если я уберу тебя.'], ['hero', 'Передай своим: следующий поезд из города — утренний.'], ['mark', 'На каждом контракте подпись Веры. Но смотри: деньги шли через наш таксопарк.']] },
+    ],
+  },
+  5: {
+    title: 'Красный свет', faction: 'park',
+    logline: 'За голову героя назначена награда, и платёж прошёл через счёт его же таксопарка. Хозяин парка, Пётр Семёныч, когда-то учил героя водить. Теперь он в доле с Верой.',
+    endTitle: 'Хозяин заговорил', endLead: 'Пётр Семёныч признался во всём. Осталось добраться до главного пульта Веры на старом пароме.',
+    teaser: 'Эпизод 6. Последний пассажир',
+    chapters: [
+      { t: 'Охота', type: 'escape', start: [80, 40, 'N'], secs: 120, chase: 5, goal: [-160, -40], goalName: 'Старый тоннель',
+        about: 'Награда за голову героя: на него охотится весь город. Продержаться 2 минуты и уйти в старый тоннель.',
+        intro: [['mark', 'Кто-то назначил награду за твою голову. Каждая машина в городе ищет жёлтое такси.'], ['hero', 'Кто платит?'], ['mark', 'Платёж прошёл через счёт нашего таксопарка.']],
+        outro: [['hero', 'Тоннель. Здесь не ловит ни одна рация.'], ['leva', 'Хозяин таксопарка, Пётр Семёныч, хранит путевые листы в конторе. Ночью там только охрана.']] },
+      { t: 'Таксопарк', type: 'arena', arena: [80, 80], docs: 4, docName: 'Путевой лист', guards: 6, waves: [5], exit: true,
+        about: 'Пешком в таксопарке: собрать 4 путевых листа, отбиться от охраны и вернуться к машине.',
+        intro: [['hero', 'Родной таксопарк. Никогда не думал{g:|а}, что буду лезть сюда тайком.']],
+        outro: [['leva', 'Путевые листы... Каждую ночь наши такси возили груз Веры. Хозяин в доле.'], ['hero', 'Пётр Семёныч сам учил меня водить.']] },
+      { t: 'Диспетчерская', type: 'arena', arena: [0, 0], ally: { who: 'leva', at: [6, 8], hp: 220, name: 'Лёва' }, survive: 130, every: 6, maxAlive: 8, heavyFrom: 3,
+        surviveObj: 'Лёва подключается к пульту диспетчерской. Продержись 2:10.',
+        about: 'Лёва подключается к городскому пульту диспетчеров, чтобы найти машину Хозяина. Держать перекрёсток 2:10.',
+        intro: [['leva', 'Пульт диспетчерской видит каждое такси города. Две минуты — и я найду Хозяина.']],
+        outro: [['leva', 'Есть! Хозяин в лимузине, едет к реке. Убегает!']] },
+      { t: 'Лимузин', type: 'stop', start: [0, 10, 'N'], car: [0, -30, 'N'], hp: 500, speed: 30, shoot: true, name: 'Лимузин',
+        route: [[0, -80], [-80, -80], [-80, -160], [80, -160], [80, -80], [160, -80], [160, 80], [80, 80], [80, 160], [-80, 160], [-80, 80], [-160, 80], [-160, -80], [-80, -80], [0, -80]],
+        stopObj: 'Лимузин встал. Подъезжай к Хозяину.',
+        about: 'Остановить лимузин Хозяина: он нужен живым. Охрана в лимузине отстреливается.',
+        intro: [['hero', 'Пётр Семёныч, остановитесь! Я только поговорить.']],
+        outro: [['host', 'Не стреляй! Я всё скажу!'], ['host', 'Вера держит меня за горло десять лет. Я возил её груз, она молчала про мои долги.'], ['host', 'Награду за тебя назначила она. Через мой счёт, чтобы подставить и меня.']] },
+      { t: 'Красный свет', type: 'deliver', start: [0, 100, 'N'], chase: 4, fragile: 35, fragileTitle: 'Хозяин ранен', fragileText: 'Машину слишком сильно побили, Хозяин ранен. Объезжай засады.',
+        pts: [
+          { p: [160, -40], name: 'Мост', t: 45 },
+          { p: [-80, -160], name: 'Объезд', t: 50 },
+          { p: [-160, 120], name: 'Набережная', t: 50 },
+          { p: [-80, -40], name: 'Гараж Марка', t: 45 },
+        ],
+        about: 'Гонка через четыре точки с таймером на каждой. Хозяин в машине: если такси разобьют меньше чем до 35%, он ранен.',
+        intro: [['host', 'Её люди на каждом светофоре. Езжай на красный.'], ['hero', 'Держитесь. Только не за руль.']],
+        outro: [['mark', 'Довез{g:|ла}? Живой?'], ['host', 'Живой. Пока.']] },
+      { t: 'Признание', type: 'arena', arena: 'park', ally: { who: 'host', at: [-40, 48], hp: 220, name: 'Хозяин' }, waves: [5, 6, 6], heavyFrom: 2,
+        boss: { look: 'twin', name: 'Близнец', hp: 650, scale: 1.25, burst: 4, dmg: 8, speed: 5.6,
+          say: [['twin', 'Пётр Семёныч, вам пора. Навсегда.'], ['hero', 'Пётр Семёныч сегодня ездит со мной.']] },
+        about: 'В парке Хозяин даёт показания, а Вера присылает убийц. Три волны и Близнец — её лучший стрелок.',
+        intro: [['host', 'Я всё запишу, {name}. Только не дай им до меня добраться.']],
+        outro: [['host', 'Спасибо, {name}. Слушай: у Веры есть главный пульт. Старый паром у причала. Оттуда она видит все машины города.'], ['hero', 'Значит, туда и поедем.']] },
+    ],
+  },
+  6: {
+    title: 'Последний пассажир', faction: 'night',
+    logline: 'Вера наносит ответный удар: похищает Лёву и Соню, отключает свет в городе и берёт Марка. Герой собирает своих людей по одному.',
+    endTitle: 'Все свои', endLead: 'Лёва, Соня и Марк живы. Вера назначила встречу на рассвете у старого парома.',
+    teaser: 'Эпизод 7. Рассвет',
+    chapters: [
+      { t: 'Звонок', type: 'tail', start: [0, 135, 'N'], car: [0, 100, 'N'], speed: 17, name: 'Чёрная машина', stops: { 2: 4, 6: 5, 10: 4 },
+        route: [[0, 80], [-80, 80], [-80, 0], [-160, 0], [-160, -80], [-80, -80], [-80, -160], [80, -160], [80, -80], [160, -80], [160, 80], [80, 80], [80, 160], [-80, 160], [-120, 160]],
+        about: 'Вера похитила Лёву и Соню. Проследить за чёрной машиной, не спугнув её: иначе пленников уберут.',
+        intro: [['vera2', 'Ты слишком близко {g:подобрался|подобралась} к моему парому. Я забрала у тебя кое-кого.'], ['mark', '{name}, они взяли Лёву и Соню! Чёрная машина, по Северной.'], ['hero', 'Еду. Тихо и без фар.']],
+        outro: [['hero', 'Опять порт. Её любимое место.']] },
+      { t: 'Порт', type: 'arena', arena: 'docks', ally: { who: 'sonya', at: [-120, 140], hp: 180, name: 'Соня', fem: true }, waves: [4, 5, 6], heavyFrom: 3,
+        about: 'Соню удалось отбить сразу, но «Ночные» стягиваются к контейнерам. Три волны, Соня должна выжить.',
+        intro: [['sonya', 'Я цела! Лёву увели к кранам. Не бросай меня тут!'], ['hero', 'Держись за контейнером и не высовывайся.']],
+        outro: [['hero', 'Соня цела. Где Лёва?'], ['sonya', 'Его затолкали в грузовик. Он уехал по набережной.']] },
+      { t: 'Грузовик', type: 'stop', start: [-130, 160, 'E'], car: [-90, 160, 'E'], hp: 550, speed: 27, shoot: true, name: 'Грузовик',
+        route: [[-80, 160], [-80, 80], [0, 80], [0, -80], [80, -80], [80, -160], [160, -160], [160, 0], [80, 0], [80, 160], [-80, 160]],
+        stopObj: 'Грузовик встал. Подъезжай к кузову.',
+        about: 'Догнать грузовик с Лёвой и остановить его, не взрывая.',
+        intro: [['hero', 'Лёва в кузове. Значит, только колёса и мотор.']],
+        outro: [['leva', 'Ты {g:успел|успела}... Они хотели утопить меня вместе с тетрадью.'], ['hero', 'Тетрадь подождёт. Садись.']] },
+      { t: 'Город без света', type: 'deliver', start: [80, 40, 'N'], chase: 4, mood: 'blackout',
+        pts: [
+          { p: [-160, 40], name: 'Больница', t: 55, say: [['sonya', 'Я останусь с Лёвой. Его надо перевязать.'], ['hero', 'Двери на замок. Я вернусь.']] },
+          { p: [80, -120], name: 'Убежище', t: 55 },
+        ],
+        about: 'Вера отключила свет во всём городе. Довезти Лёву и Соню до больницы, затем уйти в убежище — в темноте, с погоней.',
+        intro: [['vera2', 'Посмотрим, как ты водишь в темноте.'], ['leva', 'Она вырубила подстанции. Фары — всё, что у нас есть.']],
+        outro: [['hero', 'Свет дали.'], ['leva', 'Это значит, что Вера готова. Она ждёт тебя у развязки.']] },
+      { t: 'Засада на развязке', type: 'hunt', start: [-160, 40, 'N'], kills: 7, chase: 4,
+        about: 'Развязка превращается в ловушку: «Ночные» со всех сторон. Сбить 7 машин.',
+        intro: [['mark', 'Это ловушка, {name}! «Ночные» со всех сторон!'], ['hero', 'Значит, все они здесь, а не у вас.']],
+        outro: [['vera2', 'Неплохо. Давай закончим это как взрослые. Марк у меня. Склад номер семь. Приезжай {g:один|одна}.']] },
+      { t: 'Марк', type: 'arena', arena: 'yard', ally: { who: 'mark', at: [100, -128], hp: 250, name: 'Марк' }, waves: [5, 6], heavyFrom: 2, exit: true, exitObj: 'Двор чист. Войди на склад.',
+        boss: { look: 'lisa2', name: 'Лиса', hp: 900, scale: 1.2, burst: 6, dmg: 8, speed: 6.2,
+          say: [['lisa', 'Второй раунд, водитель. В этот раз без поблажек.'], ['hero', 'В прошлый раз ты тоже так говорила.']] },
+        about: 'Марк связан во дворе склада №7. Две волны, затем Лиса — сильнее прежнего. Марк должен выжить.',
+        intro: [['mark', '{name}! Я здесь, у ящиков!'], ['hero', 'Пригнись, Марк. Сейчас будет громко.']],
+        outro: [['mark', 'Ты опять {g:пришёл|пришла} за мной. Зачем?'], ['hero', 'Ты мой диспетчер. Других у меня нет.'], ['vera2', 'Трогательно. Рассвет через час. Старый паром, причал номер один. Один на один.']] },
+    ],
+  },
+  7: {
+    title: 'Рассвет', faction: 'night',
+    logline: 'Финал сезона. Последняя ночь Веры: её армия, её последний заказ и встреча на рассвете у старого парома.',
+    endTitle: 'Смена окончена', endLead: 'Над Порт-Северным рассвет. Вера проиграла, а ночной тариф снова просто тариф.',
+    teaser: 'Конец первого сезона. Спасибо, что ездили с нами.',
+    chapters: [
+      { t: 'Последний заказ', type: 'deliver', start: [0, -20, 'N'], chase: 3, ramp: 1,
+        pts: [
+          { p: [160, -120], name: 'Адрес 1', t: 45, say: [['vera2', 'Первый адрес. Неплохо. На втором тебя ждут.']] },
+          { p: [-160, -40], name: 'Адрес 2', t: 60, say: [['vera2', 'Ещё жив{g:|а}? Третий — последний.']] },
+          { p: [40, 160], name: 'Адрес 3', t: 55 },
+        ],
+        about: 'Вера заказывает такси сама: три адреса, на каждом засада. Успеть к каждому вовремя.',
+        intro: [['vera2', 'Последний заказ, водитель. Три адреса. На каждом тебя ждут.'], ['vera2', 'Доберёшься до третьего — скажу, где меня искать.'], ['hero', 'Счётчик включён.']],
+        outro: [['vera2', 'Паром у первого причала. Но сначала тебе придётся пересечь город. Мосты я развела.']] },
+      { t: 'Мосты разведены', type: 'escape', start: [40, 160, 'W'], secs: 120, chase: 6, goal: [160, -120], goalName: 'Последний мост',
+        about: 'Мосты разведены, за героем вся армия Веры. Продержаться 2 минуты и прорваться к последнему мосту.',
+        intro: [['mark', 'Все мосты подняты, кроме одного. Дотяни до него, я держу его открытым.']],
+        outro: [['hero', 'Мост позади.'], ['mark', 'У неё ещё осталось полгорода машин. Разбей их — и ей некого будет звать.']] },
+      { t: 'Ночная армия', type: 'hunt', start: [0, -120, 'N'], kills: 8, chase: 5,
+        about: 'Последний бой на дорогах: сбить 8 машин «Ночных».',
+        intro: [['hero', 'Ну что, «Ночные». Последний круг.']],
+        outro: [['mark', 'Это были все её машины. Она осталась одна. Почти.'], ['leva', 'На складе №7 её последний резерв. Если она там — то ненадолго.']] },
+      { t: 'Склад №7. Снова', type: 'arena', arena: 'yard', waves: [6, 6, 7], heavyFrom: 2, exit: true, exitObj: 'Войди на склад.',
+        about: 'Последний резерв Веры на складе №7: три тяжёлые волны.',
+        intro: [['hero', 'Здесь всё началось. Здесь и закончим.']],
+        outro: [['hero', 'Пусто. Только запах её духов.'], ['mark', 'Вера уезжает! Серебристая машина, к реке!']] },
+      { t: 'Вера', type: 'stop', start: [100, -80, 'E'], car: [140, -80, 'E'], hp: 650, speed: 31, shoot: true, name: 'Машина Веры',
+        route: [[160, -80], [160, 0], [80, 0], [80, 80], [0, 80], [0, 160], [-160, 160], [-160, 0], [-80, 0], [-80, -80], [0, -80], [0, -160], [160, -160], [160, -80]],
+        stopObj: 'Машина Веры встала. Подъезжай.',
+        about: 'Погоня за самой Верой. Её нужно остановить, а не взорвать.',
+        intro: [['vera2', 'Хочешь меня поймать? Сначала догони.']],
+        outro: [['vera2', 'Ладно. Ты {g:хорош|хороша}. Но паром всё ещё мой. Догоняй пешком.'], ['hero', 'Паром — это просто старая лодка, Вера.']] },
+      { t: 'Рассвет', type: 'arena', arena: 'docks', mood: 'dawn', waves: [5, 6], heavyFrom: 1, exit: true, exitObj: 'Всё кончено. Вернись к машине.',
+        boss: { look: 'verab', name: 'Вера', hp: 1000, scale: 1.1, burst: 5, dmg: 9, speed: 5.5,
+          say: [['vera2', 'Ночью этот город мой, водитель.'], ['hero', 'Ночь закончилась, Вера.']] },
+        about: 'Порт на рассвете: две волны и бой с Верой один на один.',
+        intro: [['hero', 'Светает. Последний причал.']],
+        outro: [['vera2', 'Посмотри на небо. Рассвет... Мой тариф закончился.'], ['mark', 'Полиция уже едет. На этот раз — настоящая.'], ['hero', 'Марк, отметь в журнале: смена окончена.'], ['mark', 'Отметил. Езжай домой, {name}.']] },
+    ],
+  },
+};
+
+// ---- chapter engine for episodes 3–7 ----
+const DIRS = { N: PI, S: 0, E: PI / 2, W: -PI / 2 };
+const hdg = (h) => (typeof h === 'string' ? DIRS[h] : h);
+const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const fixLine = ([w, t]) => [w, t.replace(/\{name\}/g, CH.name).replace(/\{g:([^|}]*)\|([^}]*)\}/g, (_, a, b) => gx(a, b))];
+function epMax(ep) { try { return clamp(parseInt(localStorage.getItem('nf-ep' + ep + '-ch'), 10) || 1, 1, 6); } catch (e) { return 1; } }
+function epSave(ep, n) { try { if (n > epMax(ep)) localStorage.setItem('nf-ep' + ep + '-ch', String(Math.min(6, n))); } catch (e) { /* storage unavailable */ } }
+
+const ALLY_LOOKS = {
+  mark: LOOKS.mark, leva: LOOKS.leva,
+  sonya: { model: 'maya', skin: '#e8c0a0', colors: { Shirt: '#2a8a8a', Pants: '#2a2a35', Hair: '#5a3a2a' }, face: { fem: true, brow: '#4a2a1a', iris: '#4a7a5a', mouth: 'neutral', blush: true, freckles: true } },
+  host: { model: 'savva', skin: '#e0b090', colors: { Shirt: '#d8c8a8', Pants: '#3a3a42', Hat: '#3a2a20', Detail: '#6a4a2a' }, face: { brow: '#c8c8c8', iris: '#5a5a5a', mouth: 'grim', stache: '#d0d0d0', wrinkles: true } },
+};
+const BOSS_LOOKS = {
+  kassir: { model: 'savva', skin: '#d8a888', colors: { Shirt: '#2a2a2a', Pants: '#1a1a1a', Detail: '#c8a030', Hat: '#101010', Belt: '#c8a030' }, face: { brow: '#2a2a2a', iris: '#2a1a10', mouth: 'smirk', angry: true, stache: '#2a2a2a' } },
+  lisa: { model: 'vera', skin: '#f0d0b8', colors: { Black: '#6a1010', Shirt: '#1a1a1a', Details: '#ff6a3a', Hair: '#d04a1a', Belt: '#1a1a1a' }, face: { fem: true, brow: '#a03a10', iris: '#c06a10', mouth: 'smirk', angry: true } },
+  lisa2: { model: 'vera', skin: '#f0d0b8', colors: { Black: '#1a1a1a', Shirt: '#6a1010', Details: '#ff3a1a', Hair: '#d04a1a', Belt: '#6a1010' }, face: { fem: true, brow: '#a03a10', iris: '#c06a10', mouth: 'grim', angry: true, scar: true } },
+  baron: { model: 'boss', skin: '#c89a7a', colors: { Black: '#e8e4da', Shirt: '#2a2a2a', Details: '#c8a030', Belt: '#c8a030', Hair: '#2a2018' }, face: { brow: '#2a2018', iris: '#2a1a10', mouth: 'smirk', angry: true, stubble: '#2a2018' } },
+  twin: { model: 'crow', skin: '#e0b494', colors: { Main: '#3a3a40', Grey: '#8a8a90', Black: '#1a1a1e', Helmet: '#3a3a40' }, face: { brow: '#1a1a1e', iris: '#3a5a8a', mouth: 'grim', angry: true } },
+  verab: LOOKS.vera,
+};
+const FACTIONS = {
+  night: { thug1: { Details: '#7a3fd0' }, thug2: { Shirt: '#3a2050', Pants: '#1b1b22', Hair: '#15151a' }, thug3: { Shirt: '#24182e', Pants: '#3a2a50', Hair: '#15151a' }, heavy: { Shirt: '#4a2070', Pants: '#1b1b22' } },
+  tour: { thug1: { Details: '#1aa0a0' }, thug2: { Shirt: '#1a6a6a', Pants: '#1b1b22', Hair: '#15151a' }, thug3: { Shirt: '#14323a', Pants: '#1a4a4a', Hair: '#15151a' }, heavy: { Shirt: '#0a5a5a', Pants: '#14323a' } },
+  park: { thug1: { Details: '#d0b030' }, thug2: { Shirt: '#a08a2a', Pants: '#3a3a42', Hair: '#15151a' }, thug3: { Shirt: '#5a5040', Pants: '#2a2a30', Hair: '#15151a' }, heavy: { Shirt: '#c0a020', Pants: '#2a2a30' } },
+};
+function factionLook(f, heavy) {
+  const F = FACTIONS[f]; if (!F) return undefined;
+  const skin = pick(['#d9a98a', '#c08a6a', '#e8c0a0', '#a87452']), angry = { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true };
+  if (heavy) return { model: 'thug3', skin, colors: F.heavy, face: Object.assign({ stubble: '#15151a' }, angry) };
+  const m = pick(['thug1', 'thug2', 'thug3']);
+  return { model: m, skin, colors: F[m], face: m === 'thug1' ? Object.assign({ mask: true }, angry) : angry };
+}
+// on-foot locations: the warehouse yard, the docks, the park, or any inner crossroads [x, z]
+function arenaDef(a) {
+  if (a === 'yard') return { r: { x0: 90, x1: 150, z0: -133, z1: -90 }, start: [120, -92, PI], car: [GATE.x, GATE.z + 2, PI / 2], gate: true, exit: DOOR,
+    edges: [[95, -131], [110, -131], [130, -131], [146, -131], [120, -119], [100, -100], [145, -100], [92, -112], [148, -112]],
+    inner: [[95, -131], [110, -131], [130, -131], [146, -131], [120, -119], [104, -108]], docs: [[92, -128], [148, -128], [120, -112], [100, -95]], mid: [120, -106], boss: [120, -130] };
+  if (a === 'docks') return { r: { x0: -154, x1: -86, z0: 86, z1: 158 }, start: [-120, 156, PI], car: [-134, 163, PI / 2],
+    edges: [[-150, 92], [-140, 90], [-130, 92], [-90, 150], [-92, 140], [-90, 130], [-150, 150], [-90, 92], [-120, 92]],
+    inner: [[-126, 120], [-114, 104], [-102, 138], [-138, 130], [-150, 112], [-92, 100], [-120, 140]], docs: [[-138, 111], [-102, 126], [-126, 95], [-146, 140]], mid: [-120, 150], boss: [-120, 94] };
+  if (a === 'park') return { r: { x0: -74, x1: -6, z0: 6, z1: 74 }, start: [-14, 40, -PI / 2], car: [0, 46, PI],
+    edges: [[-70, 10], [-70, 70], [-10, 12], [-12, 70], [-40, 9], [-40, 71], [-71, 40]],
+    inner: [[-60, 20], [-20, 64], [-62, 62], [-24, 18], [-50, 40], [-40, 60]], docs: [[-60, 22], [-22, 62], [-62, 60], [-24, 20]], mid: [-30, 40], boss: [-60, 40] };
+  const [x, z] = a;
+  return { r: { x0: x - 30, x1: x + 30, z0: z - 30, z1: z + 30 }, start: [x + 3, z + 22, PI], car: [x + 4, z + 28, PI],
+    edges: [[x - 28, z - 3], [x + 28, z + 3], [x - 3, z - 28], [x - 26, z - 14], [x + 26, z - 14], [x - 14, z - 26], [x + 14, z - 26], [x - 26, z + 12], [x + 26, z + 12]],
+    inner: [[x, z], [x - 12, z - 10], [x + 12, z - 10], [x - 10, z + 6], [x + 10, z + 6], [x, z - 18]], docs: [[x - 14, z - 12], [x + 14, z - 14], [x - 12, z + 14], [x + 16, z + 10]], mid: [x, z + 12], boss: [x, z - 24] };
+}
+function nearestPursuer() { let b = null, bd = 1e9; for (const e of enemyCars) if (!e.dead && !e.script) { const d = e.pos.distanceTo(pc.pos); if (d < bd) { bd = d; b = e; } } return b ? b.pos : null; }
+
+// sky and lighting moods: night (default), dawn (finale), blackout (city without power)
+const MOOD0 = { top: skyMat.uniforms.cTop.value.clone(), mid: skyMat.uniforms.cMid.value.clone(), hor: skyMat.uniforms.cHor.value.clone(), glow: skyMat.uniforms.cGlow.value.clone(), fog: scene.fog.color.clone(), hemi: hemi.intensity, hemiC: hemi.color.clone(), moon: moon.color.clone(), moonI: moon.intensity };
+let BLD0 = null;
+function setMood(m) {
+  if (!BLD0 && KIT.bld) BLD0 = KIT.bld.map((b) => b.emissiveIntensity);
+  const U = skyMat.uniforms;
+  U.cTop.value.copy(MOOD0.top); U.cMid.value.copy(MOOD0.mid); U.cHor.value.copy(MOOD0.hor); U.cGlow.value.copy(MOOD0.glow);
+  scene.fog.color.copy(MOOD0.fog); scene.background.copy(MOOD0.fog); hemi.intensity = MOOD0.hemi; hemi.color.copy(MOOD0.hemiC); moon.color.copy(MOOD0.moon); moon.intensity = MOOD0.moonI;
+  if (KIT.neonMat) KIT.neonMat.color.setScalar(1); if (KIT.poolMat) KIT.poolMat.opacity = 0.55;
+  if (BLD0) KIT.bld.forEach((b, i) => { b.emissiveIntensity = BLD0[i]; });
+  let exp = 1.05;
+  if (m === 'dawn') {
+    U.cTop.value.set(0x2a3a7a); U.cMid.value.set(0x8a6aa0); U.cHor.value.set(0xffa070); U.cGlow.value.set(0xffc080);
+    scene.fog.color.set(0x8a6a88); scene.background.copy(scene.fog.color); hemi.intensity = 1.5; hemi.color.set(0xffc8a0); moon.color.set(0xffc890); moon.intensity = 1.3; exp = 1.3;
+    if (KIT.neonMat) KIT.neonMat.color.setScalar(0.35); if (KIT.poolMat) KIT.poolMat.opacity = 0.12;
+    if (BLD0) KIT.bld.forEach((b, i) => { b.emissiveIntensity = BLD0[i] * 0.4; });
+  } else if (m === 'blackout') {
+    if (BLD0) KIT.bld.forEach((b) => { b.emissiveIntensity = 0.05; });
+    hemi.intensity = MOOD0.hemi * 0.45; moon.intensity = MOOD0.moonI * 0.6; exp = 0.8;
+    if (KIT.neonMat) KIT.neonMat.color.setScalar(0.03); if (KIT.poolMat) KIT.poolMat.opacity = 0;
+  }
+  if (finalPass) finalPass.uniforms.exposure.value = exp; renderer.toneMappingExposure = exp;
+}
+
+function startGen(ep, i, withIntro) {
+  const E = EPS[ep], c = E.chapters[i];
+  clearStage(); setMood(c.mood || 'night');
+  state.ep = ep; state.ch = i + 1; epSave(ep, i + 1); state.fireLock = true;
+  const title = `Глава ${i + 1} · ${c.t}`;
+  let finished = false;
+  const done = () => {
+    if (finished) return; finished = true;
+    epSave(ep, i + 2); addCoins(c.coins || 150);
+    for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; }
+    clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
+    playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
+  };
+  MIS = GEN[c.type](c, title, done, E);
+  const mode0 = state.mode;
+  if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; });
+}
+
+const GEN = {
+  escape(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const goal = new V3(c.goal[0], 0, c.goal[1]), chase = { max: c.chase || 4 };
+    let left = c.secs; state.spawnT = 2;
+    setObjective(`Оторвись от погони: продержись ${fmt(c.secs)}, потом — ${c.goalName}.`);
+    return { title, chase, navName: c.goalName, navGoal: () => goal,
+      update(dt) {
+        if (left > 0) {
+          left -= dt;
+          if (pc.pos.distanceTo(goal) < 12 && toastT <= 0) toast('Сначала оторвись от погони', 1.2);
+          if (left <= 0) { chase.max = 1; setBeam(goal); toast(`Хвост отстал! Теперь — ${c.goalName}`, 2); setObjective(`Доберись: ${c.goalName}.`); }
+        } else if (pc.pos.distanceTo(goal) < 12) done();
+      },
+      hud() { return left > 0 ? { timer: `Продержись: ${fmt(left)}`, bad: left < 10 } : {}; } };
+  },
+  deliver(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.pts.map((q) => Object.assign({}, q, { v: new V3(q.p[0], 0, q.p[1]) })), chase = { max: c.chase || 2 };
+    let leg = 0, left = 0;
+    const startLeg = () => { const q = P_[leg]; left = q.t || 0; setBeam(q.v); setObjective(`Доберись: ${q.name}${q.t ? ` за ${fmt(q.t)}` : ''}.${c.fragile ? ' Береги машину.' : ''}`); };
+    startLeg();
+    return { title, chase, get navName() { return P_[leg].name; }, navGoal: () => P_[leg].v,
+      update(dt) {
+        if (c.fragile && pc.hp < c.fragile) return failChapter(c.fragileTitle || 'Груз повреждён', c.fragileText || 'Машину слишком сильно побили.');
+        if (left > 0) { left -= dt; if (left <= 0) return failChapter('Не успели', `Время вышло: «${P_[leg].name}» не дождались. Попробуй другой путь.`); }
+        if (pc.pos.distanceTo(P_[leg].v) < 11) {
+          const q = P_[leg]; leg++; pc.vel.set(0, 0, 0);
+          if (leg >= P_.length) return done();
+          chase.max = Math.min(5, chase.max + (c.ramp || 0));
+          if (q.say) { left = 0; playDialog(q.say.map(fixLine), () => { state.mode = 'drive'; startLeg(); }); } else { toast(`${q.name} — есть`, 1.4); startLeg(); }
+        }
+      },
+      hud() { return { timer: left > 0 ? fmt(left) : '', bad: left > 0 && left < 12, bars: c.fragile ? [{ label: 'Машина (порог ' + c.fragile + '%)', frac: pc.hp / 100, color: 'var(--taxi)' }] : [] }; } };
+  },
+  hunt(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const k0 = state.carKills, chase = { max: c.chase || 3 }; state.spawnT = 2.5;
+    setObjective(`Сбей ${c.kills} машин противника.`);
+    return { title, chase, navName: 'Погоня', navGoal: () => nearestPursuer() || pc.pos,
+      update() { if (state.carKills - k0 >= c.kills) done(); },
+      hud() { return { timer: `Сбито: ${state.carKills - k0}/${c.kills}` }; } };
+  },
+  tail(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const t = makeScripted('tail', c.route, c.car[0], c.car[1], hdg(c.car[2]), { speed: c.speed || 17, stops: c.stops || {} });
+    let sus = 0, lost = 0;
+    setObjective(`Езжай за целью: ${c.name}. Держись дальше 15 м, но не отставай больше чем на 80 м.`);
+    return { title, noFire: true, chase: null, navName: c.name, navGoal: () => t.pos,
+      update(dt) {
+        setBeam(t.pos);
+        const d = pc.pos.distanceTo(t.pos);
+        if (d < 6) sus = 100; else if (d < 15) sus += 24 * dt; else sus = Math.max(0, sus - 6 * dt);
+        if (d > 80) lost += dt; else lost = Math.max(0, lost - dt * 2);
+        if (sus >= 100) { t.speed = 40; return failChapter('Тебя заметили', 'Цель поняла, что за ней хвост, и ушла переулками. Держись дальше 15 метров.'); }
+        if (lost > 7) return failChapter('Цель потеряна', 'Машина скрылась. Не отставай дальше 80 метров.');
+        if (t.arrived && d < 60) done();
+      },
+      hud() { const d = pc.pos.distanceTo(t.pos); return { bars: [{ label: 'Подозрение', frac: sus / 100 }], timer: lost > 0.3 ? `Теряешь цель: ${Math.ceil(7 - lost)}` : d < 15 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: lost > 0.3 || d < 15 }; } };
+  },
+  stop(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const n = c.convoy || 1, h = hdg(c.car[2]), cars = [];
+    for (let k = 0; k < n; k++) {
+      const e = makeScripted('van', c.route, c.car[0] - Math.sin(h) * 14 * k, c.car[1] - Math.cos(h) * 14 * k, h, { speed: c.speed || 28, loop: true, hp: c.hp, shoot: c.shoot !== false });
+      if (c.scale) e.g.scale.multiplyScalar(c.scale);
+      if (n > 1) e.noExplode = false;
+      cars.push(e);
+    }
+    const chase = { max: c.chase === undefined ? 2 : c.chase }; state.spawnT = 8;
+    let far = 0;
+    const alive = () => cars.filter((e) => !e.dead && !e.disabled);
+    const nearest = () => { const a = alive(); if (!a.length) return cars[0]; return a.reduce((b, e) => (e.pos.distanceTo(pc.pos) < b.pos.distanceTo(pc.pos) ? e : b)); };
+    setObjective(n > 1 ? `Уничтожь колонну: ${n} машины. Не отставай больше чем на 150 м.` : `Останови цель: ${c.name}. Стреляй и тарань, но не дай уйти дальше 150 м.`);
+    return { title, chase, navName: c.name, navGoal: () => nearest().pos,
+      update(dt) {
+        const a = alive();
+        if (a.length) {
+          const tg = nearest(); setBeam(tg.pos);
+          if (pc.pos.distanceTo(tg.pos) > 150) far += dt; else far = Math.max(0, far - dt);
+          if (far > 8) failChapter('Цель ушла', 'Цель скрылась в переулках. Держись ближе 150 метров.');
+        } else if (n > 1) done();
+        else {
+          setBeam(cars[0].pos); chase.max = 0; setObjective(c.stopObj || 'Цель остановлена. Подъезжай.');
+          if (pc.pos.distanceTo(cars[0].pos) < 14) done();
+        }
+      },
+      hud() {
+        const a = alive();
+        if (!a.length) return n > 1 ? {} : { timer: 'Цель остановлена — подъезжай' };
+        return { bars: a.map((e) => ({ label: n > 1 ? `${c.name} ${cars.indexOf(e) + 1}` : c.name, frac: e.hp / e.max, color: '#ff8a3a' })), timer: far > 0.3 ? `Уходит: ${Math.ceil(8 - far)}` : '', bad: far > 0.3 };
+      } };
+  },
+  arena(c, title, done, E) {
+    const A = arenaDef(c.arena), R = A.r, fac = c.faction || E.faction;
+    placeCar(A.car[0], A.car[1], A.car[2]); beginFoot(A.start[0], A.start[1], A.start[2]);
+    if (A.gate) { yardGate.position.y = 0; gateCollider = addBox(120, -88, 16, 1, 2.6); }
+    const ally = c.ally ? spawnAlly(ALLY_LOOKS[c.ally.who], c.ally.at[0], c.ally.at[1], { hp: c.ally.hp, name: c.ally.name, face: PI }) : null;
+    let rot = 0;
+    const cfg = (k, w) => { const heavy = c.heavyFrom && w >= c.heavyFrom && k % 3 === 0; return Object.assign({ look: factionLook(fac, heavy), react: rand(0.6, 1.5), tgt: ally && k % 3 === 1 ? ally : undefined }, heavy ? { hp: 130, scale: 1.12, burst: 2 } : {}); };
+    const group = (n, w) => { const pts = []; for (let k = 0; k < n; k++) pts.push(A.edges[(rot++ * 4 + k) % A.edges.length]); queueWave(pts, 0.5, (k) => cfg(k, w)); };
+    const phases = []; if (c.docs) phases.push('docs'); if (c.waves) phases.push('waves'); if (c.survive) phases.push('survive'); if (c.boss) phases.push('boss'); if (c.exit) phases.push('exit');
+    const st = { ph: -1, found: 0, wave: 0, gap: 0, left: 0, spT: 0, boss: null, exit: null, medkit: false };
+    const next = () => {
+      st.ph++;
+      const P_ = phases[st.ph];
+      if (!P_) return done();
+      if (P_ === 'docs') {
+        for (let k = 0; k < (c.guards || 5); k++) { const q = A.inner[k % A.inner.length]; spawnEnemy(q[0], q[1], false, { look: factionLook(fac, false), react: rand(1.5, 3) }); }
+        A.docs.slice(0, c.docs).forEach(([x, z]) => addPickup('doc', x, z, () => {
+          st.found++; toast(`${c.docName}: ${st.found}/${c.docs}`, 1.6); addCoins(20); group(3, 2);
+          if (st.found === 2) addMedkit(A.mid[0], A.mid[1]);
+          setObjective(st.found < c.docs ? `Найди: ${c.docName.toLowerCase()} — ${st.found}/${c.docs}. На шум бегут враги.` : 'Всё найдено. Отбейся от охраны.');
+        }));
+        setObjective(`Найди: ${c.docName.toLowerCase()} — 0/${c.docs} (жёлтые огоньки на карте).`);
+      } else if (P_ === 'waves') { st.wave = 0; st.gap = 0.8; setObjective(`Отбейся: ${c.waves.length} волны.${ally ? ` Береги: ${ally.name}.` : ''}`); }
+      else if (P_ === 'survive') { st.left = c.survive; st.spT = 1; setObjective(c.surviveObj || `Продержись ${fmt(c.survive)}.`); }
+      else if (P_ === 'boss') {
+        const B = c.boss, go = () => {
+          state.mode = 'foot'; if (A.gate) warehouseDoor.position.y = 6.2;
+          st.boss = spawnEnemy(A.boss[0], A.boss[1], true, { look: BOSS_LOOKS[B.look], hp: B.hp, scale: B.scale, name: B.name, burst: B.burst, dmg: B.dmg, speed: B.speed,
+            onHalf: () => { toast(`${B.name}: подмога!`, 1.6); group(3, 3); addMedkit(A.mid[0], A.mid[1]); } });
+          group(2, 2); setObjective(`Победи: ${B.name}.`);
+        };
+        if (B.say) playDialog(B.say.map(fixLine), go); else go();
+      } else if (P_ === 'exit') {
+        st.exit = A.exit ? A.exit.clone() : new V3(clamp(A.car[0], R.x0 + 1, R.x1 - 1), 0, clamp(A.car[1] - 4, R.z0 + 1, R.z1 - 1)); setBeam(st.exit);
+        if (A.gate) warehouseDoor.position.y = 6.2;
+        setObjective(c.exitObj || (A.exit ? 'Войди внутрь.' : 'Вернись к машине.'));
+      }
+    };
+    next();
+    return { title, arena: { x0: R.x0, x1: R.x1, z0: R.z0, z1: R.z1 },
+      onAllyDown: ally ? () => failChapter(`${ally.name} ${c.ally.fem ? 'ранена' : 'ранен'}`, `Без этого человека дальше никак. Держись рядом и снимай тех, кто идёт к ${c.ally.fem ? 'ней' : 'нему'}.`) : undefined,
+      update(dt) {
+        const P_ = phases[st.ph], clear = aliveFoes() === 0 && !spawnQueue.length;
+        if (P_ === 'docs') { if (st.found >= c.docs && clear) next(); }
+        else if (P_ === 'waves') {
+          if (st.gap > 0) {
+            st.gap -= dt;
+            if (st.gap <= 0) {
+              if (st.wave >= c.waves.length) return next();
+              st.wave++; group(c.waves[st.wave - 1], st.wave); toast(`Волна ${st.wave}/${c.waves.length}`, 1.4);
+              setObjective(`Волна ${st.wave} из ${c.waves.length}.${ally ? ` Береги: ${ally.name}.` : ''}`);
+            }
+          } else if (clear) {
+            if (st.wave === 2 && !st.medkit) { st.medkit = true; addMedkit(A.mid[0], A.mid[1]); }
+            if (st.wave < c.waves.length) toast(`Волна ${st.wave}/${c.waves.length} отбита`, 1.5);
+            st.gap = st.wave >= c.waves.length ? 0.01 : 3.5;
+          }
+        } else if (P_ === 'survive') {
+          st.left -= dt; st.spT -= dt;
+          if (st.left > 0 && st.spT <= 0 && aliveFoes() + spawnQueue.length < (c.maxAlive || 7)) { st.spT = c.every || 6; group(2, 3); }
+          if (st.left <= 0) { if (clear) next(); else if (!st.lastCall) { st.lastCall = true; setObjective('Время! Добей оставшихся.'); } }
+          if (!st.medkit && st.left < c.survive / 2) { st.medkit = true; addMedkit(A.mid[0], A.mid[1]); }
+        } else if (P_ === 'boss') { if (st.boss && st.boss.dead && clear) next(); }
+        else if (P_ === 'exit') { if (hero.pos.distanceTo(st.exit) < 4) { st.ph = 99; done(); } }
+      },
+      hud() {
+        const P_ = phases[st.ph], bars = ally ? [{ label: ally.name, frac: ally.hp / ally.max, color: '#5ad1ff' }] : [];
+        let timer = '';
+        if (P_ === 'docs') timer = `${c.docName}: ${st.found}/${c.docs}`;
+        else if (P_ === 'waves' && st.gap > 0 && st.wave > 0 && st.wave < c.waves.length) timer = `Следующая волна через ${Math.ceil(st.gap)}`;
+        else if (P_ === 'survive' && st.left > 0) timer = `Продержись: ${fmt(st.left)}`;
+        return { bars, timer };
+      } };
+  },
+};
+function showEndGen(ep) {
+  const E = EPS[ep];
+  state.mode = 'end'; setEngine(0, false); $('hud').hidden = true; $('touch').hidden = true;
+  const t = Math.round(state.time);
+  const nextEp = EPS[ep + 1] ? ep + 1 : 0;
+  const render = () => showModal(`
+    <div class="kicker">Эпизод ${ep} пройден</div>
+    <h2 class="h2 good">${E.endTitle}</h2>
+    <p class="lead">${E.endLead} ${E.teaser}</p>
+    <div class="summary">
+      <div><small>Время</small><b>${fmt(t)}</b></div>
+      <div><small>Машин сбито</small><b>${state.carKills}</b></div>
+      <div><small>Противников</small><b>${state.footKills}</b></div>
+      <div><small>Монеты</small><b>${state.coins}</b></div>
+    </div>
+    <div class="btns">
+      <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      ${nextEp ? `<button id="mNext" class="btn primary" type="button">Эпизод ${nextEp} →</button>` : ''}
+      <button id="mAgain" class="btn" type="button">В меню</button>
+    </div>`, {
+    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; state.coins *= 2; render(); }); },
+    mNext: () => { hideModal(); startEpisode(nextEp, 1); },
     mAgain: () => { hideModal(); showSelect(); },
   });
   render();
@@ -2310,7 +2819,7 @@ function updateHud(dt) {
   $('nav').hidden = !(state.act === 1 && state.mode === 'drive');
   if (state.act === 1 && pc) $('speed').textContent = Math.round(Math.abs(pc.vf || 0) * 3.3);
   let bars = [], timer = '', tbad = false;
-  if (state.ep === 2 && MIS && MIS.hud && (state.mode === 'drive' || state.mode === 'foot')) { const hh = MIS.hud(); bars = hh.bars || []; timer = hh.timer || ''; tbad = !!hh.bad; }
+  if (state.ep >= 2 && MIS && MIS.hud && (state.mode === 'drive' || state.mode === 'foot')) { const hh = MIS.hud(); bars = hh.bars || []; timer = hh.timer || ''; tbad = !!hh.bad; }
   const boss = state.act === 2 && enemies.find((e) => e.boss && !e.dead);
   if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
   renderBars(bars, timer, tbad);
@@ -2427,7 +2936,7 @@ function showSelect() {
   $('preview').hidden = true; $('select').hidden = false; $('hud').hidden = true; $('touch').hidden = true;
   pvEnemy.g.visible = false; arrow.visible = false; setBeam(null);
   if (hero) hero.g.visible = false;
-  clearStage(); renderChapters();
+  clearStage(); setMood('night'); renderChapters();
   pc.g.visible = true; pc.pos.set(SHOW.x - 4.6, 0, SHOW.z - 3.2); pc.h = PI * 0.82; pc.vel.set(0, 0, 0);
   pc.g.position.copy(pc.pos); pc.g.rotation.set(0, pc.h, 0);
   showDisc.visible = true;
@@ -2489,7 +2998,7 @@ function startMission() {
   state.coins = 0; state.carKills = 0; state.footKills = 0; state.time = 0; state.reviveUsed = { 1: false, 2: false }; state.doubled = false;
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
   if (medkit) { scene.remove(medkit); medkit = null; }
-  state.ep = 1; MIS = null;
+  state.ep = 1; MIS = null; setMood('night');
   setupAct1();
   state.mode = 'drive';
   playDialog([
@@ -2501,18 +3010,18 @@ function startMission() {
 }
 function showDead() {
   state.mode = 'dead'; setEngine(0, false);
-  const act = state.act, rk = state.ep === 2 ? 'c' + state.ch : act, used = state.reviveUsed[rk];
+  const act = state.act, rk = state.ep >= 2 ? 'c' + state.ch : act, used = state.reviveUsed[rk];
   showModal(`
-    <div class="kicker">${state.ep === 2 && MIS ? 'Эпизод 2 · ' + MIS.title : act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
+    <div class="kicker">${state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ` + MIS.title : act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
     <h2 class="h2 bad">${act === 1 ? 'Машина разбита' : CH.name + ' ' + gx('ранен', 'ранена')}</h2>
     <p class="lead">${act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>
     <div class="btns">
       <button id="mRevive" class="btn primary" type="button" ${used ? 'disabled' : ''}>Продолжить за рекламу</button>
-      <button id="mRetry" class="btn" type="button">${state.ep === 2 ? 'Начать главу заново' : 'Начать акт заново'}</button>
+      <button id="mRetry" class="btn" type="button">${state.ep >= 2 ? 'Начать главу заново' : 'Начать акт заново'}</button>
     </div>
     <div class="note">${used ? 'Продолжение за рекламу — один раз за акт.' : 'Продолжение вернёт 60% прочности на месте.'}</div>`, {
     mRevive: () => { hideModal(); showAd(() => { state.reviveUsed[rk] = true; revive(); }); },
-    mRetry: () => { hideModal(); if (state.ep === 2) startChapter(state.ch); else if (act === 1) { setupAct1(); state.mode = 'drive'; } else { setupAct2(); } state.fireLock = true; },
+    mRetry: () => { hideModal(); if (state.ep >= 2) startChapter(state.ch); else if (act === 1) { setupAct1(); state.mode = 'drive'; } else { setupAct2(); } state.fireLock = true; },
   });
 }
 function revive() {
@@ -2617,7 +3126,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { KIT, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>
