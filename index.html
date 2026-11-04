@@ -106,6 +106,8 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .tbtn.aim { display: none; background: rgba(77,255,166,.18); border-color: rgba(77,255,166,.6); font-size: 12px; }
 .tbtn.aim.held { background: rgba(77,255,166,.5); }
 .touch.on-foot .tbtn.aim { display: grid; } .touch.on-foot .tbtn.drift { display: none; }
+.tbtn.melee { display: none; --c: #ff8a3a; right: calc(128px + var(--sar)); bottom: calc(122px + var(--sab)); width: 62px; height: 62px; }
+.touch.on-foot .tbtn.melee { display: grid; }
 .tbtn.horn { display: none; --c: #ffd23a; right: calc(194px + var(--sar)); bottom: calc(40px + var(--sab)); width: 62px; height: 62px; }
 body.online .tbtn.horn { display: grid; } body.online .tbtn.nitro, body.online .tbtn.shield, body.online .tbtn.fire, body.online:not(.job) #nav, body.online .boosts { display: none; }
 .chat { position: fixed; left: calc(12px + var(--sal)); top: calc(110px + var(--sat)); width: min(380px, calc(100% - 24px - var(--sal) - var(--sar))); max-height: calc(100% - 260px - var(--sat) - var(--sab)); min-height: 160px; display: grid; grid-template-rows: 1fr auto auto; gap: 6px; background: rgba(8,10,24,.88); border: 1px solid var(--line); border-radius: 10px; padding: 10px; z-index: 30; }
@@ -176,6 +178,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   .hud-tr > * { grid-column: 1; justify-self: end; } .hud-tr #minimap { grid-column: 2; grid-row: 1 / span 6; width: 96px; height: 96px; }
   .tbtn.fire { right: calc(22px + var(--sar)); bottom: calc(18px + var(--sab)); width: 84px; height: 84px; }
   .tbtn.drift, .tbtn.aim { right: calc(118px + var(--sar)); bottom: calc(18px + var(--sab)); width: 64px; height: 64px; }
+  .tbtn.melee { right: calc(24px + var(--sar)); bottom: calc(108px + var(--sab)); width: 58px; height: 58px; }
   .tbtn.nitro { right: calc(118px + var(--sar)); bottom: calc(92px + var(--sab)); width: 56px; height: 56px; }
   .tbtn.shield { right: calc(194px + var(--sar)); bottom: calc(18px + var(--sab)); width: 56px; height: 56px; }
   .joy { width: 116px; height: 116px; bottom: calc(16px + var(--sab)); }
@@ -333,6 +336,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   <div id="joy" class="joy"><div id="knob" class="knob"></div></div>
   <button id="btnFire" class="tbtn fire" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/><circle cx="12" cy="12" r="1.4"/></svg><span>Огонь</span></button>
   <button id="btnDrift" class="tbtn drift" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c4 0 5-10 10-10h6"/><path d="m17 4 3 3-3 3"/><path d="M4 21h6"/></svg><span>Занос</span></button>
+  <button id="btnMelee" class="tbtn melee" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v3M11 10V6a2 2 0 0 1 4 0v4M15 10V8a2 2 0 0 1 4 0v6a7 7 0 0 1-7 7h-1a6 6 0 0 1-6-6v-2a2 2 0 0 1 4 0"/></svg><span>Удар</span></button>
   <button id="btnAim" class="tbtn aim" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>Прицел</span></button>
   <button id="btnNitro" class="tbtn nitro" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 14h6l-1 8 8-12h-6z"/></svg><span>Нитро</span><b class="cnt" id="nitroN">0</b></button>
   <button id="btnTalk" class="tbtn talk" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>Говорить</span></button>
@@ -416,7 +420,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v26'; window.__errs = [];
+window.APP_VER = 'v27'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -2778,6 +2782,17 @@ function twistTorso(h, ang) {
     bone.quaternion.premultiply(_tq.setFromAxisAngle(_ax, ang * k));
   }
 }
+// a punch (left/right shoulder) or a kick (right hip): bones rotate about the body's right axis, and the torso turns into the blow
+function strikePose(h, dt) {
+  h.punchT -= dt; const ph = 1 - Math.max(0, h.punchT) / h.punchD, sw = Math.sin(Math.min(1, ph) * PI);
+  if (!h.limbs) h.limbs = { L: h.model.getObjectByName('UpperArm.L'), R: h.model.getObjectByName('UpperArm.R'), K: h.model.getObjectByName('UpperLeg.R') };
+  const bone = h.kick ? h.limbs.K : h.punchSide ? h.limbs.L : h.limbs.R; if (!bone) return;
+  const f = h.face !== undefined ? h.face : h.g.rotation.y;
+  _ax.set(Math.cos(f), 0, -Math.sin(f));   // the body's right axis in the world
+  bone.parent.getWorldQuaternion(_tq2).invert(); _ax.applyQuaternion(_tq2).normalize();
+  bone.quaternion.premultiply(_tq.setFromAxisAngle(_ax, -sw * (h.kick ? 1.5 : 1.7)));
+  twistTorso(h, (h.kick ? 0 : h.punchSide ? 0.45 : -0.45) * sw);
+}
 function updateHumans(dt) {
   for (const h of HUMANS) {
     if (!h.g.parent) { HUMANS.delete(h); continue; }
@@ -2785,6 +2800,7 @@ function updateHumans(dt) {
     if (h.lockT > 0 && h.lockT < 1e8) { h.lockT -= dt; }
     h.mixer.update(dt);
     if (h.twist) twistTorso(h, h.twist);
+    if (h.punchT > 0) strikePose(h, dt);
   }
 }
 
@@ -2996,6 +3012,7 @@ joyEl.addEventListener('pointerup', joyEnd); joyEl.addEventListener('pointercanc
 function holdBtn(el, set) { el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); set(true); }); ['pointerup', 'pointercancel'].forEach((ev) => el.addEventListener(ev, () => set(false))); }
 holdBtn($('btnFire'), (v) => { touchFire = v; if (v && state.mode === 'dialog') advanceDialog(); });
 holdBtn($('btnDrift'), (v) => { touchDrift = v; });
+holdBtn($('btnMelee'), (v) => { touchMelee = v; });
 // the fire button doubles as a look pad: hold it and slide the thumb to turn the view while shooting (first/third person)
 const fireLook = { id: null, x: 0, y: 0 };
 $('btnFire').addEventListener('pointerdown', (e) => { fireLook.id = e.pointerId; fireLook.x = e.clientX; fireLook.y = e.clientY; });
@@ -3006,6 +3023,23 @@ $('btnFire').addEventListener('pointermove', (e) => {
 });
 ['pointerup', 'pointercancel'].forEach((ev) => $('btnFire').addEventListener(ev, (e) => { if (e.pointerId === fireLook.id) fireLook.id = null; }));
 const fireHeld = () => mouse.down || keys.Space || keys.KeyF || touchFire;
+let touchMelee = false;
+const meleeHeld = () => keys.KeyE || touchMelee;
+function doMelee() {
+  const now = state.t, combo = now - (hero.lastMelee || -9) < 1.0 ? ((hero.combo || 0) + 1) % 3 : 0, kick = combo === 2;
+  hero.lastMelee = now; hero.combo = combo; hero.meleeCd = kick ? 0.6 : 0.36;
+  hero.punchD = hero.punchT = kick ? 0.34 : 0.26; hero.punchSide = combo === 1 ? 1 : 0; hero.kick = kick;
+  const dir = new V3(Math.sin(hero.aimAng || hero.face), 0, Math.cos(hero.aimAng || hero.face));
+  hero.pos.addScaledVector(dir, 0.5); collideCircle(hero.pos, new V3(), 0.6);
+  let best = null, bd = kick ? 3.1 : 2.6;
+  for (const e of enemies) { if (e.dead) continue; const to = e.pos.clone().sub(hero.pos).setY(0), d = to.length(); if (d < bd && to.normalize().dot(dir) > 0.45) { bd = d; best = e; } }
+  if (!best) { noise(0.12, 1600, 0.06); return; }
+  damageEnemy(best, (kick ? 55 : 30) * P.dmg); hitMarker(best.dead);
+  noise(0.09, 260, 0.45, 'lowpass'); sparks(best.pos.clone().add(new V3(0, 1.3, 0)), 0xffe0a0);
+  const kb = dir.clone().multiplyScalar(kick ? 3.0 : 1.2); best.pos.add(kb); collideCircle(best.pos, kb, best.boss ? 0.8 : 0.6);
+  if (!best.dead) best.react = Math.max(best.react, best.boss ? (kick ? 0.5 : 0.2) : (kick ? 1.2 : 0.6));
+  shake = Math.max(shake, kick ? 0.35 : 0.18);
+}
 
 // ---------------- game state ----------------
 const state = { mode: 'boot', ep: 1, ch: 0, t: 0, act: 1, coins: 0, carKills: 0, footKills: 0, time: 0, reviveUsed: { 1: false, 2: false }, fireLock: false, wave: 0, dyingT: 0, doubled: false, after: null, beatenWave: 0, invuln: 0, spawnT: 0, firstChase: false };
@@ -3495,7 +3529,8 @@ function updateFoot(dt) {
   heroLight.position.set(hero.pos.x + 1.2, 4.5, hero.pos.z + 2.5); heroLight.intensity = 1.6;
   hero.walk += mv.length() * dt * 9.5;
   poseHuman(hero, { walk: hero.walk, move: Math.min(1, mv.length() * 1.5), aim: true, back, t: state.t });
-  hero.fireCd -= dt;
+  hero.fireCd -= dt; hero.meleeCd = (hero.meleeCd || 0) - dt;
+  if (meleeHeld() && hero.meleeCd <= 0 && !hero.dead) doMelee();
   if (!fireHeld()) state.fireLock = false;
   if (fireHeld() && !state.fireLock && hero.fireCd <= 0) {
     hero.fireCd = 0.15 * P.fireMult;
@@ -5245,6 +5280,7 @@ function updateCamera(dt) {
     const fpsNow = state.mode === 'foot' && curView() === 'fps';
     hero.g.visible = !fpsNow || hero.dead;   // in first person the body is hidden (it would block the view)
     ensureViewGun().visible = fpsNow && !hero.dead;
+    if (viewGun) { const sw = hero.punchT > 0 ? Math.sin((1 - hero.punchT / hero.punchD) * PI) : 0; viewGun.position.set(0.2 - sw * 0.1, -0.2 + sw * 0.06, -0.45 - sw * 0.35); viewGun.rotation.x = -sw * 0.4; }
   }
   if (viewGun && (state.act !== 2 || state.mode !== 'foot')) viewGun.visible = false;
   if (COCKPIT.g && !(state.act === 1 && state.mode === 'drive' && carView === 'cab')) COCKPIT.g.visible = false;
@@ -5376,7 +5412,7 @@ function updateHud(dt) {
   if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
   if (HELI && !HELI.crash && !HELI.invuln && (state.mode === 'drive' || state.mode === 'foot')) bars = bars.concat([{ label: HELI.name, frac: HELI.hp / HELI.max, color: '#c0ff6a' }]);
   renderBars(bars, timer, tbad);
-  $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : (footView === 'top' ? 'W A S D — бег · мышь — прицел · клик — огонь' : 'W A S D — бег · мышь — обзор · клик — огонь') + ' · правая кнопка — прицел · V — камера · B — щит · Esc — пауза';
+  $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : (footView === 'top' ? 'W A S D — бег · мышь — прицел · клик — огонь' : 'W A S D — бег · мышь — обзор · клик — огонь') + ' · E — удар (серия: левой, правой, ногой) · правая кнопка — прицел · V — камера · B — щит · Esc — пауза';
   updateBoostsHud();
   updateSight(dt);
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
@@ -6657,7 +6693,7 @@ function showSelect() {
   pc.g.position.copy(pc.pos); pc.g.rotation.set(0, pc.h, 0);
   showDisc.visible = true;
   selectChar(curIdx);
-  $('ctrlNote').textContent = isTouch ? 'Джойстик — руль и бег · «Огонь» — стрельба (держи и веди пальцем — поворот) · «Прицел» — держи, чтобы целиться от первого лица · «Занос» — резкий поворот' : 'W A S D — руль и бег · Shift — занос · мышь или пробел — стрельба · стрелки и Enter — выбор';
+  $('ctrlNote').textContent = isTouch ? 'Джойстик — руль и бег · «Огонь» — стрельба (держи и веди пальцем — поворот) · «Прицел» — держи, чтобы целиться от первого лица · «Удар» — рукопашная (третий удар — ногой) · «Занос» — резкий поворот' : 'W A S D — руль и бег · Shift — занос · мышь или пробел — стрельба · стрелки и Enter — выбор';
   snapCam = true;
   const on = document.querySelector('.pc-card.on'); if (on && !isTouch) on.focus();
 }
