@@ -15,4 +15,4 @@
   у всех моделей один скелет, поэтому клипы подходят каждому. Цвета кожи и одежды задаются в игре.
 - Соответствие персонажей игры исходным моделям: Глеб — Casual_Bald, Тимур — Casual2_Male, Артём — Soldier_Male,
   Савва — OldClassy_Male, Рустам — Casual3_Male, Кира — Casual2_Female, Майя — Casual_Female, Зоя — Soldier_Female,
-  Ольга — BlueSoldier_Female, Ника — Ninja_Female; бандиты — Ninja_Male, Casual_Male, Casual3_Male; бригадир — Suit_Male.
+  Ольга — BlueSoldier_Female, Ника — Ninja_Female; бандиты — Ninja_Male, Casual_Male, Casual3_Male; бригадир — Suit_Male; Вера — Suit_Female; Марк — Doctor_Male_Young; Ворон — BlueSoldier_Male; Крюк — Soldier_Male; Лёва — Casual_Male (перекрашены).

@@ -47,8 +47,14 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .speedo b { font-family: var(--font-display); font-weight: 400; font-size: 54px; line-height: 1; color: var(--text); }
 .speedo small { display: block; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; font-size: 11px; }
 .boss { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(340px, 44vw); background: var(--panel); padding: 6px 10px; border-radius: 6px; text-align: center; font-size: 12px; }
+.bars { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(340px, 44vw); display: grid; gap: 6px; }
+.bars.low { top: calc(78px + env(safe-area-inset-top, 0px)); }
+.bars .boss { position: static; transform: none; width: auto; }
+.bars .tmr { text-align: center; font-family: var(--font-display); font-size: 20px; color: var(--taxi); text-shadow: 0 2px 8px #000; }
+.bars .tmr.bad { color: var(--neon); }
+@media (max-width: 560px) { .bars, .bars.low { top: calc(172px + env(safe-area-inset-top, 0px)); width: calc(100% - 24px); } }
 .boss .bar-track { margin-top: 5px; }
-.boss .bar-fill { background: var(--neon); }
+.boss .bar-fill { background: var(--bc, var(--neon)); }
 .toast { position: absolute; top: 28%; left: 50%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(18px, 3.4vw, 30px); color: var(--taxi); text-shadow: 0 0 18px rgba(255,196,61,.55), 0 2px 4px #000; white-space: nowrap; animation: pop .25s ease-out; }
 @keyframes pop { from { transform: translateX(-50%) scale(1.4); opacity: 0; } }
 .hint { position: absolute; left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); font-size: 12px; color: var(--muted); background: var(--panel); padding: 6px 10px; border-radius: 6px; }
@@ -200,7 +206,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
     <div class="stats"><b id="coins">0</b> монет · <b id="kills">0</b> сбито</div>
     <button id="mute" class="mute" type="button">Звук: вкл</button>
   </div>
-  <div id="bossBar" class="boss" hidden>Бригадир «Шакалов»<div class="bar-track"><div id="bossFill" class="bar-fill"></div></div></div>
+  <div id="bars" class="bars" hidden></div>
   <div id="nav" class="nav" hidden><svg id="navArrow" viewBox="-50 -50 100 100" aria-hidden="true"><path d="M0 -42 L32 0 L13 0 L13 40 L-13 40 L-13 0 L-32 0 Z" fill="#4dffa6" stroke="#0b0d1f" stroke-width="5" stroke-linejoin="round"/></svg><div><b id="navTurn">Прямо</b><span id="navDist"></span></div></div>
   <div id="speedo" class="speedo"><b id="speed">0</b><small>км/ч</small></div>
   <div id="toast" class="toast" hidden></div>
@@ -231,9 +237,10 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
     <div class="sel-top">
       <h2 class="sel-title">Выбери водителя</h2>
       <div class="episodes" aria-label="Эпизод">
-        <button class="chip active" type="button">Эпизод 1 · Кейс</button>
-        <button class="chip" type="button" disabled>Эпизод 2 · скоро</button>
+        <button id="epBtn1" class="chip active" type="button">Эпизод 1 · Кейс</button>
+        <button id="epBtn2" class="chip" type="button">Эпизод 2 · Двойной тариф</button>
       </div>
+      <div id="chapters" class="episodes" aria-label="Глава" hidden></div>
     </div>
     <div class="group-label">Мужчины</div>
     <div id="rosterM" class="roster"></div>
@@ -561,7 +568,7 @@ const col = (hex, k) => new THREE.Color(hex).multiplyScalar(k || 1);
 // CC0 models: KayKit City Builder Bits (Kay Lousberg), Quaternius Ultimate Animated Character Pack.
 const ASSET_DIR = 'assets/';
 const ASSETS = { kit: {}, chars: {}, clips: [] };
-const CHAR_FILES = ['gleb', 'timur', 'artem', 'savva', 'rustam', 'kira', 'maya', 'zoya', 'olga', 'nika', 'thug1', 'thug2', 'thug3', 'boss'];
+const CHAR_FILES = ['gleb', 'timur', 'artem', 'savva', 'rustam', 'kira', 'maya', 'zoya', 'olga', 'nika', 'thug1', 'thug2', 'thug3', 'boss', 'vera', 'mark', 'crow'];
 function assetUrl(name) { const emb = window.NF_ASSETS && window.NF_ASSETS[name]; return emb ? 'data:model/gltf-binary;base64,' + emb : ASSET_DIR + name; }
 async function loadAssets(progress) {
   const loader = new THREE.GLTFLoader();
@@ -933,7 +940,7 @@ const CAR_S = 4.7;
 function makeCar(color, kind) {
   const g = new THREE.Group();
   const wreck = kind === 'wreck', player = kind === true || kind === 'player';
-  const name = player ? 'car_taxi' : wreck ? 'car_sedan' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon']);
+  const name = player ? 'car_taxi' : wreck ? 'car_sedan' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon']);
   const m = ASSETS.kit[name].clone(true);
   const mat = wreck ? KIT.carWreck : player ? KIT.taxi : KIT.carDark;
   const wheels = [];
@@ -1203,7 +1210,7 @@ holdBtn($('btnDrift'), (v) => { touchDrift = v; });
 const fireHeld = () => mouse.down || keys.Space || keys.KeyF || touchFire;
 
 // ---------------- game state ----------------
-const state = { mode: 'boot', t: 0, act: 1, coins: 0, carKills: 0, footKills: 0, time: 0, reviveUsed: { 1: false, 2: false }, fireLock: false, wave: 0, dyingT: 0, doubled: false, after: null, beatenWave: 0, invuln: 0, spawnT: 0, firstChase: false };
+const state = { mode: 'boot', ep: 1, ch: 0, t: 0, act: 1, coins: 0, carKills: 0, footKills: 0, time: 0, reviveUsed: { 1: false, 2: false }, fireLock: false, wave: 0, dyingT: 0, doubled: false, after: null, beatenWave: 0, invuln: 0, spawnT: 0, firstChase: false };
 const trail = [];
 const enemyCars = [];
 const enemies = [];
@@ -1223,16 +1230,28 @@ const arrowGlow = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 5.5), new THREE.Me
 arrowGlow.rotation.x = -PI / 2; arrowGlow.position.y = -0.05;
 arrow.add(arrowCore, arrowGlow); arrow.scale.setScalar(0.85); scene.add(arrow);
 
-// road-grid navigation to the yard gate: intersections every 80 units, goal on road z = -80 between x 80 and 160
+// road-grid navigation: intersections every 80 units; the goal lies on a road segment between intersections A and B
 const NAV = { pts: [], target: null, dist: 0, turn: 0, turnDist: 0, atGoal: false };
-const GOAL = new V3(120, 0, -80), GA = [80, -80], GB = [160, -80];
-const gridD = (x, z) => Math.min(Math.abs(x - GA[0]) + Math.abs(z - GA[1]), Math.abs(x - GB[0]) + Math.abs(z - GB[1])) + 40;
+const GOAL = new V3(120, 0, -80);
+let GA = [80, -80], GB = [160, -80], NG = GOAL.clone();
 const snapLo = (v) => ROADS.filter((r) => r <= v + 0.01).pop() ?? ROADS[0];
 const snapHi = (v) => ROADS.find((r) => r >= v - 0.01) ?? ROADS[ROADS.length - 1];
-function updateNav(pos) {
+const gridD = (x, z) => Math.min(Math.abs(x - GA[0]) + Math.abs(z - GA[1]) + Math.hypot(NG.x - GA[0], NG.z - GA[1]), Math.abs(x - GB[0]) + Math.abs(z - GB[1]) + Math.hypot(NG.x - GB[0], NG.z - GB[1]));
+function setNavGoal(v) {
+  NG = new V3(v.x, 0, v.z);
+  const hr = ROADS.find((r) => Math.abs(NG.z - r) < 9), vr = ROADS.find((r) => Math.abs(NG.x - r) < 9);
+  if (hr !== undefined) { NG.z = hr; GA = [snapLo(NG.x), hr]; GB = [snapHi(NG.x), hr]; }
+  else if (vr !== undefined) { NG.x = vr; GA = [vr, snapLo(NG.z)]; GB = [vr, snapHi(NG.z)]; }
+  else { GA = [snapLo(NG.x), snapLo(NG.z)]; GB = GA; }
+}
+function updateNav(pos, goal) {
+  setNavGoal(goal || GOAL);
   NAV.pts.length = 0;
-  const onGoalRoad = Math.abs(pos.z - GOAL.z) < 9 && pos.x >= GA[0] - 2 && pos.x <= GB[0] + 2;
-  if (onGoalRoad) NAV.pts.push(GOAL.clone());
+  const horiz = GA[1] === GB[1] && GA[0] !== GB[0], vert = GA[0] === GB[0] && GA[1] !== GB[1];
+  const onGoalRoad = (horiz && Math.abs(pos.z - GA[1]) < 9 && pos.x >= Math.min(GA[0], GB[0]) - 2 && pos.x <= Math.max(GA[0], GB[0]) + 2)
+    || (vert && Math.abs(pos.x - GA[0]) < 9 && pos.z >= Math.min(GA[1], GB[1]) - 2 && pos.z <= Math.max(GA[1], GB[1]) + 2)
+    || Math.hypot(pos.x - NG.x, pos.z - NG.z) < 12;
+  if (onGoalRoad) NAV.pts.push(NG.clone());
   else {
     const cand = [];
     const vr = ROADS.find((r) => Math.abs(pos.x - r) < 9), hr = ROADS.find((r) => Math.abs(pos.z - r) < 9);
@@ -1244,12 +1263,12 @@ function updateNav(pos) {
     let n = best.slice();
     NAV.pts.push(new V3(n[0], 0, n[1]));
     for (let guard = 0; guard < 12; guard++) {
-      if ((n[0] === GA[0] || n[0] === GB[0]) && n[1] === GA[1]) break;
+      if ((n[0] === GA[0] && n[1] === GA[1]) || (n[0] === GB[0] && n[1] === GB[1])) break;
       let nb = null, nd = Infinity;
       for (const [dx, dz] of [[80, 0], [-80, 0], [0, 80], [0, -80]]) { const x = n[0] + dx, z = n[1] + dz; if (x < -160 || x > 160 || z < -160 || z > 160) continue; const d = gridD(x, z); if (d < nd) { nd = d; nb = [x, z]; } }
       n = nb; NAV.pts.push(new V3(n[0], 0, n[1]));
     }
-    NAV.pts.push(GOAL.clone());
+    NAV.pts.push(NG.clone());
   }
   // drop the first point once the car is inside that intersection
   while (NAV.pts.length > 1 && Math.hypot(NAV.pts[0].x - pos.x, NAV.pts[0].z - pos.z) < 9) NAV.pts.shift();
@@ -1345,12 +1364,13 @@ function updateBullets(dt) {
       if (b.team === 'p') {
         const list = state.act === 1 ? enemyCars : enemies;
         for (const t of list) {
-          if (t.dead) continue; const r = state.act === 1 ? 2.5 : (t.boss ? 1.05 : 0.8);
+          if (t.dead || t.noTarget) continue; const r = state.act === 1 ? 2.5 : (t.boss ? 1.05 : 0.8);
           if (segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos); sfx.hit(); if (state.act === 1) damageEnemyCar(t, b.dmg); else damageEnemy(t, b.dmg); break; }
         }
       } else {
         const t = state.act === 1 ? pc : hero, r = state.act === 1 ? 2.4 : 0.85;
         if (t && !t.dead && segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos, 0xff6a6a); damagePlayer(b.dmg); }
+        else if (state.act === 2) for (const a of allies) { if (!a.dead && a.hp < 1e6 && segDist2(prevP, b.pos, a.pos) < 0.8) { hit = true; sparks(b.pos, 0xff6a6a); damageAlly(a, b.dmg); break; } }
       }
     }
     if (hit) { scene.remove(b.m); bullets.splice(i, 1); } else b.m.position.copy(b.pos);
@@ -1371,11 +1391,14 @@ function checkPlayerDeath() {
   if (state.act === 2 && hero.hp <= 0 && !hero.dead) { hero.hp = 0; hero.dead = true; killHuman(hero); state.mode = 'dying'; state.dyingT = 1.6; }
 }
 function damageEnemyCar(e, d) {
+  if (e.invuln || e.disabled) return;
   e.hp -= d;
+  if (e.noExplode) { if (e.hp <= 0) { e.hp = 0; e.disabled = true; e.noTarget = true; toast(e.kind === 'van' ? 'Фургон заглох!' : 'Машина встала', 2); sfx.crash(12); shake = Math.min(1.2, shake + 0.4); } return; }
   if (e.hp <= 0 && !e.dead) { e.dead = true; explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; addCoins(25); }
 }
 function damageEnemy(e, d) {
   e.hp -= d; e.hitT = 0.12; if (e.hp > 0) hitHuman(e);
+  if (e.onHalf && e.hp > 0 && e.hp < e.max / 2) { const f = e.onHalf; e.onHalf = null; f(e); }
   if (e.hp <= 0 && !e.dead) {
     e.dead = true; e.deadT = 0; killHuman(e); state.footKills++; addCoins(e.boss ? 60 : 12);
     for (let i = 0; i < 6; i++) spawnP(e.pos.clone().add(new V3(0, 1.2, 0)), { color: 0xffd060, size: 0.15, vel: rv().multiplyScalar(5), life: 0.4, add: true });
@@ -1404,6 +1427,9 @@ const WHO = {
   hero: { name: 'Кира', color: '#ffc43d', init: 'К' },
   boss: { name: 'Бригадир «Шакалов»', color: '#ff4d6d', init: 'Б' },
   vera: { name: 'Вера, заказчица', color: '#c08bff', init: 'В' },
+  leva: { name: 'Лёва, бухгалтер', color: '#7fd4a8', init: 'Л' },
+  hook: { name: 'Крюк, бригадир порта', color: '#ff8a3a', init: 'К' },
+  crow: { name: 'Ворон', color: '#9aa0b8', init: 'В' },
 };
 const dlg = { lines: [], i: 0, shown: 0, done: null, prev: null };
 function playDialog(lines, done) {
@@ -1471,10 +1497,12 @@ function updateDrive(dt) {
   // player gun: auto-aims at the nearest pursuer
   pc.fireCd -= dt;
   if (!fireHeld()) state.fireLock = false;
-  if (fireHeld() && !state.fireLock && pc.fireCd <= 0) {
+  const noFire = state.ep === 2 && MIS && MIS.noFire;
+  if (noFire && fireHeld() && toastT <= 0) toast('Слежка: стрелять нельзя', 1.2);
+  if (!noFire && fireHeld() && !state.fireLock && pc.fireCd <= 0) {
     pc.fireCd = 0.11 * P.fireMult;
     let best = null, bd = 60 * P.aim;
-    for (const e of enemyCars) { const d = e.pos.distanceTo(pc.pos); if (!e.dead && d < bd && los(pc.pos, e.pos)) { bd = d; best = e; } }
+    for (const e of enemyCars) { const d = e.pos.distanceTo(pc.pos); if (!e.dead && !e.noTarget && d < bd && los(pc.pos, e.pos)) { bd = d; best = e; } }
     const from = pc.pos.clone().add(new V3(0, 1.5, 0));
     const dir = best ? best.pos.clone().addScaledVector(best.vel, bd / 140).sub(pc.pos).setY(0).normalize() : new V3(Math.sin(pc.h), 0, Math.cos(pc.h));
     dir.x += rand(-0.03, 0.03); dir.z += rand(-0.03, 0.03); dir.normalize();
@@ -1483,12 +1511,13 @@ function updateDrive(dt) {
 
   // pursuers
   state.spawnT -= dt;
-  const alive = enemyCars.filter((e) => !e.dead).length;
+  const alive = enemyCars.filter((e) => !e.dead && !e.script).length;
   const progress = 1 - clamp(pc.pos.distanceTo(GATE) / 480, 0, 1);
-  const maxAlive = progress > 0.55 ? 4 : progress > 0.25 ? 3 : 2;
+  const maxAlive = state.ep === 1 ? (progress > 0.55 ? 4 : progress > 0.25 ? 3 : 2) : (MIS && MIS.chase ? MIS.chase.max : 0);
   if (state.spawnT <= 0 && alive < maxAlive) { spawnEnemyCar(); state.spawnT = rand(3.5, 6); }
   for (const e of enemyCars) {
     if (e.dead) continue;
+    if (e.script) { driveScripted(e, dt); continue; }
     const dist = e.pos.distanceTo(pc.pos), see = dist < 34 && los(e.pos, pc.pos);
     let tx, tz;
     if (see) { tx = pc.pos.x + pc.vel.x * 0.35; tz = pc.pos.z + pc.vel.z * 0.35; }
@@ -1534,7 +1563,7 @@ function updateDrive(dt) {
   for (let i = enemyCars.length - 1; i >= 0; i--) if (enemyCars[i].dead) enemyCars.splice(i, 1);
 
   // route arrow over the taxi + navigator panel
-  updateNav(pc.pos);
+  updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal());
   const bearing = Math.atan2(NAV.target.x - pc.pos.x, NAV.target.z - pc.pos.z);
   arrow.position.set(pc.pos.x, 3.6 + Math.sin(state.t * 4) * 0.12, pc.pos.z);
   arrow.rotation.y += wrapA(bearing - arrow.rotation.y) * Math.min(1, dt * 10);
@@ -1542,9 +1571,11 @@ function updateDrive(dt) {
   const rel = wrapA(bearing - pc.h);
   $('navArrow').style.transform = `rotate(${(-rel).toFixed(3)}rad)`;
   const m = Math.round(NAV.turnDist / 5) * 5;
-  $('navTurn').textContent = Math.abs(rel) > 2.2 ? 'Развернись' : NAV.pts.length === 1 ? 'Склад №7' : NAV.turn ? `${NAV.turn > 0 ? 'Направо' : 'Налево'} через ${m} м` : `Прямо ${m} м`;
-  $('navDist').textContent = `до склада ${Math.round(NAV.dist / 10) * 10} м`;
-  if (pc.pos.distanceTo(GATE) < 11) arriveAtYard();
+  const navName = state.ep === 1 ? 'Склад №7' : MIS.navName;
+  $('navTurn').textContent = Math.abs(rel) > 2.2 ? 'Развернись' : NAV.pts.length === 1 ? navName : NAV.turn ? `${NAV.turn > 0 ? 'Направо' : 'Налево'} через ${m} м` : `Прямо ${m} м`;
+  $('navDist').textContent = `${state.ep === 1 ? 'до склада' : navName.toLowerCase() + ':'} ${Math.round(NAV.dist / 10) * 10} м`;
+  if (state.ep === 1) { if (pc.pos.distanceTo(GATE) < 11) arriveAtYard(); }
+  else if (MIS) MIS.update(dt);
   setEngine(pc.vf, true);
 }
 
@@ -1575,10 +1606,12 @@ function setupAct2() {
   $('hpLabel').textContent = 'Здоровье';
   state.mode = 'foot'; state.invuln = 1; snapCam = true;
 }
-function spawnEnemy(x, z, boss) {
+function spawnEnemy(x, z, boss, cfg) {
+  cfg = cfg || {};
   const skin = pick(['#d9a98a', '#c08a6a', '#e8c0a0', '#a87452']);
-  const m = makeHuman(boss ? { model: 'boss', skin: '#c89a7a', colors: { Details: '#7a1426', Belt: '#7a1426' }, face: { brow: '#5a4228', iris: '#2a1a10', mouth: 'smirk', angry: true, scar: true } } : pick([{ model: 'thug1', skin, colors: { Details: '#b01e34' }, face: { brow: '#15151a', iris: '#3a2a1a', angry: true, mask: true } }, { model: 'thug2', skin, colors: { Shirt: '#8c1c2b', Pants: '#1b1b22', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true } }, { model: 'thug3', skin, colors: { Shirt: '#2a2a30', Pants: '#3a1418', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true, stubble: '#15151a' } }]), boss ? 1.18 : 1);
-  const e = Object.assign(m, { pos: new V3(x, 0, z), face: 0, hp: boss ? 280 : 60, max: boss ? 280 : 60, fireCd: rand(0.9, 1.6), strafe: Math.random() < 0.5 ? 1 : -1, strafeT: rand(1, 2.5), boss, prefer: boss ? 9 : rand(8, 13), react: rand(0.5, 1.0), walk: 0, dead: false, hitT: 0 });
+  const m = makeHuman(cfg.look ? cfg.look : boss ? { model: 'boss', skin: '#c89a7a', colors: { Details: '#7a1426', Belt: '#7a1426' }, face: { brow: '#5a4228', iris: '#2a1a10', mouth: 'smirk', angry: true, scar: true } } : pick([{ model: 'thug1', skin, colors: { Details: '#b01e34' }, face: { brow: '#15151a', iris: '#3a2a1a', angry: true, mask: true } }, { model: 'thug2', skin, colors: { Shirt: '#8c1c2b', Pants: '#1b1b22', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true } }, { model: 'thug3', skin, colors: { Shirt: '#2a2a30', Pants: '#3a1418', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true, stubble: '#15151a' } }]), cfg.scale || (boss ? 1.18 : 1));
+  const hp0 = cfg.hp || (boss ? 280 : 60);
+  const e = Object.assign(m, { pos: freeSpot(x, z, 0.7), face: 0, hp: hp0, max: hp0, name: cfg.name, burst: cfg.burst, dmg: cfg.dmg, speed: cfg.speed, tgt: cfg.tgt, onHalf: cfg.onHalf, fireCd: rand(0.9, 1.6), strafe: Math.random() < 0.5 ? 1 : -1, strafeT: rand(1, 2.5), boss, prefer: boss ? 9 : rand(8, 13), react: cfg.react !== undefined ? cfg.react : rand(0.5, 1.0), walk: 0, dead: false, hitT: 0 });
   e.g.position.copy(e.pos); enemies.push(e);
   return e;
 }
@@ -1589,6 +1622,7 @@ function updateFoot(dt) {
   const mv = new V3(mx, 0, mz); if (mv.length() > 1) mv.normalize();
   const vel = mv.clone().multiplyScalar(9);
   hero.pos.addScaledVector(vel, dt); collideCircle(hero.pos, vel, 0.6);
+  if (state.ep === 2 && MIS && MIS.arena) { const A = MIS.arena; hero.pos.x = clamp(hero.pos.x, A.x0, A.x1); hero.pos.z = clamp(hero.pos.z, A.z0, A.z1); }
   // aim
   let aim = null;
   if (mouse.has && !isTouch) { ndc.set(mouse.x / window.innerWidth * 2 - 1, -(mouse.y / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera); if (ray.ray.intersectPlane(aimPlane, aimPt)) aim = aimPt.clone(); }
@@ -1626,40 +1660,42 @@ function updateFoot(dt) {
     }
     if (e.hitT > 0) e.hitT -= dt;
     e.react -= dt;
-    const to = hero.pos.clone().sub(e.pos).setY(0), dist = to.length(); to.normalize();
+    const T = e.tgt && !e.tgt.dead ? e.tgt : hero;
+    const to = T.pos.clone().sub(e.pos).setY(0), dist = to.length(); to.normalize();
     const perp = new V3(-to.z, 0, to.x).multiplyScalar(e.strafe);
     let m;
     if (dist > e.prefer + 2) m = to.clone().multiplyScalar(0.85).addScaledVector(perp, 0.35);
     else if (dist < e.prefer - 3) m = to.clone().multiplyScalar(-0.6).addScaledVector(perp, 0.5);
     else m = perp.clone().multiplyScalar(0.75);
     if (e.react > 0) m.multiplyScalar(0.3);
-    const ev = m.multiplyScalar(e.boss ? 4.6 : 5.6);
+    const ev = m.multiplyScalar(e.speed || (e.boss ? 4.6 : 5.6));
     e.pos.addScaledVector(ev, dt); collideCircle(e.pos, ev, e.boss ? 0.8 : 0.6);
     e.strafeT -= dt; if (e.strafeT <= 0) { e.strafe *= -1; e.strafeT = rand(1, 2.5); }
-    e.face = Math.atan2(hero.pos.x - e.pos.x, hero.pos.z - e.pos.z);
+    e.face = Math.atan2(T.pos.x - e.pos.x, T.pos.z - e.pos.z);
     e.g.position.set(e.pos.x, 0, e.pos.z); e.g.rotation.y = e.face;
     e.walk += ev.length() * dt * 1.8;
     poseHuman(e, { walk: e.walk, move: Math.min(1, ev.length() / 4), aim: e.react <= 0, t: state.t + e.max });
-    if (e.react <= 0 && dist < 32 && !hero.dead && los(e.pos, hero.pos)) {
+    if (e.react <= 0 && dist < 32 && !T.dead && los(e.pos, T.pos)) {
       e.fireCd -= dt;
       if (e.fireCd <= 0) {
-        const shots = e.boss ? 3 : 1;
+        const shots = e.burst || (e.boss ? 3 : 1);
         for (let k = 0; k < shots; k++) {
-          const dir = to.clone(); const sp = e.boss ? (k - 1) * 0.12 : rand(-0.09, 0.09);
+          const dir = to.clone(); const sp = shots > 1 ? (k - (shots - 1) / 2) * 0.12 : rand(-0.09, 0.09);
           dir.applyAxisAngle(new V3(0, 1, 0), sp + rand(-0.04, 0.04));
-          fire(e.pos.clone().add(new V3(0, 1.02 * (e.boss ? 1.18 : 1), 0)).addScaledVector(dir, 0.9), dir, 48, e.boss ? 9 : 7, 'e');
+          fire(e.pos.clone().add(new V3(0, 1.02 * (e.boss ? 1.18 : 1), 0)).addScaledVector(dir, 0.9), dir, 48, e.dmg || (e.boss ? 9 : 7), 'e');
         }
         e.fireCd = e.boss ? rand(1.0, 1.4) : rand(1.0, 1.7);
       }
     }
   }
   // spawn queue (wave 2 arrives through the door)
-  for (let i = spawnQueue.length - 1; i >= 0; i--) { spawnQueue[i].t -= dt; if (spawnQueue[i].t <= 0) { const s = spawnQueue[i]; spawnEnemy(s.x, s.z, s.boss); spawnQueue.splice(i, 1); } }
+  for (let i = spawnQueue.length - 1; i >= 0; i--) { spawnQueue[i].t -= dt; if (spawnQueue[i].t <= 0) { const s = spawnQueue[i]; spawnEnemy(s.x, s.z, s.boss, s.cfg); spawnQueue.splice(i, 1); } }
   // medkit
   if (medkit) {
     medkit.rotation.y += dt * 2; medkit.position.y = 0.7 + Math.sin(state.t * 3) * 0.15;
     if (medkit.position.distanceTo(new V3(hero.pos.x, medkit.position.y, hero.pos.z)) < 1.6) { hero.hp = Math.min(P.footMax, hero.hp + 50); scene.remove(medkit); medkit = null; toast('Аптечка: +50 здоровья'); }
   }
+  if (state.ep === 2) { updateAllies(dt); updatePickups(dt); if (MIS) MIS.update(dt); return; }
   const alive = enemies.filter((e) => !e.dead).length;
   if (alive === 0 && spawnQueue.length === 0) {
     if (state.wave === 1) {
@@ -1692,6 +1728,496 @@ function updateFoot(dt) {
       ], showEnd);
     }
   }
+}
+
+// ---------------- episode 2: «Двойной тариф» ----------------
+// Six chapters; each is a checkpoint. MIS holds the current chapter: update(dt), hud(), navGoal(), and flags.
+let MIS = null;
+const allies = [], pickups = [];
+const EP2_TITLES = ['Хвост', 'Накладные', 'Пассажир', 'Засада в парке', 'Фургон', 'Конечная'];
+let selEp = 1, ep2Pick = 1;
+function ep2Max() { try { return clamp(parseInt(localStorage.getItem('nf-ep2-ch'), 10) || 1, 1, 6); } catch (e) { return 1; } }
+function ep2Save(n) { try { if (n > ep2Max()) localStorage.setItem('nf-ep2-ch', String(Math.min(6, n))); } catch (e) { /* storage unavailable */ } }
+
+const LOOKS = {
+  hook: { model: 'artem', skin: '#c89070', colors: { Main: '#c0632a', DarkGreen: '#3a2a20', Helmet: '#e0a020', Black: '#2a2a2a' }, face: { brow: '#2a1a10', iris: '#2a1a10', mouth: 'grim', angry: true, stubble: '#2a1a10' } },
+  crow: { model: 'crow', skin: '#d8b090', colors: { Main: '#1a1a22', Grey: '#30303c', Black: '#101014', Helmet: '#14141a' }, face: { brow: '#101014', iris: '#a01a1a', mouth: 'grim', angry: true, scar: true } },
+  leva: { model: 'thug2', skin: '#e8c4a8', colors: { Shirt: '#c8b89a', Pants: '#4a4a52', Hair: '#7a6a5a', Belt: '#3a2a20' }, face: { brow: '#5a4a3a', iris: '#4a6a8a', mouth: 'grim' } },
+  mark: { model: 'mark', skin: '#e0b494', colors: { Main: '#3a4256', Black: '#2a2a30', Brown: '#4a3a2a', Hair: '#5a4a3a' }, face: { brow: '#4a3a2a', iris: '#5a7a5a', mouth: 'grim' } },
+  vera: { model: 'vera', skin: '#f0d0b8', colors: { Black: '#2a1840', Shirt: '#e8e0f0', Details: '#c08bff', Hair: '#1a1020' }, face: { fem: true, brow: '#1a1020', iris: '#8a50c0', mouth: 'smirk', blush: true } },
+  heavy: { model: 'thug3', skin: '#a87452', colors: { Shirt: '#3a1418', Pants: '#1b1b22', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true, stubble: '#15151a' } },
+};
+
+// ---- stage helpers ----
+function clearStage() {
+  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
+  for (const e of enemies) scene.remove(e.g); enemies.length = 0;
+  for (const a of allies) scene.remove(a.g); allies.length = 0;
+  for (const k of pickups) scene.remove(k.m); pickups.length = 0;
+  if (medkit) { scene.remove(medkit); medkit = null; }
+  clearBullets(); trail.length = 0; spawnQueue = [];
+  setBeam(null); arrow.visible = false; heroLight.intensity = 0;
+  if (hero) hero.g.visible = false;
+  yardGate.position.y = -3; if (gateCollider) { colliders.splice(colliders.indexOf(gateCollider), 1); gateCollider = null; }
+  warehouseDoor.position.y = 0;
+}
+function freeSpot(x, z, r) {
+  r = r === undefined ? 1 : r;
+  const p = new V3(x, 0, z);
+  for (let k = 0; k < 60; k++) {
+    let ok = true;
+    for (const c of colliders) if (p.x > c.minX - r && p.x < c.maxX + r && p.z > c.minZ - r && p.z < c.maxZ + r) { ok = false; break; }
+    if (ok) return p;
+    const a = k * 2.4, d = 1.5 + k * 0.5; p.set(x + Math.cos(a) * d, 0, z + Math.sin(a) * d);
+  }
+  return p;
+}
+function placeCar(x, z, h) {
+  pc.pos.set(x, 0, z); pc.vel.set(0, 0, 0); pc.h = h; pc.hp = 100; pc.dead = false; pc.fireCd = 0; pc.vf = 0; pc.vr = 0;
+  pc.g.visible = true; pc.g.position.copy(pc.pos); pc.g.rotation.set(0, h, 0);
+}
+function beginDrive(x, z, h) {
+  state.act = 1; placeCar(x, z, h); trail.length = 0; trail.push(pc.pos.clone());
+  if (hero) hero.g.visible = false; heroLight.intensity = 0;
+  arrow.visible = true; $('hpLabel').textContent = 'Машина';
+  camYaw = h; snapCam = true; state.spawnT = 6; state.firstChase = false; state.mode = 'drive';
+}
+function beginFoot(x, z, face) {
+  state.act = 2;
+  if (!hero) hero = Object.assign(makeHuman(CH.look, 1), { pos: new V3(), face });
+  hero.pos.set(x, 0, z); hero.face = face; hero.hp = P.footMax; hero.dead = false; hero.fireCd = 0; hero.walk = 0; hero.twist = 0;
+  hero.g.visible = true; hero.g.position.copy(hero.pos); hero.g.rotation.set(0, face, 0); reviveHuman(hero);
+  arrow.visible = false; $('hpLabel').textContent = 'Здоровье';
+  state.mode = 'foot'; state.invuln = 1.5; snapCam = true;
+}
+// friendly NPCs: Vera in the prologue, Лёва in the park
+function spawnAlly(look, x, z, o) {
+  const h = makeHuman(look, 1), hp = o.hp || 100;
+  const a = Object.assign(h, { pos: freeSpot(x, z, 0.8), face: o.face || 0, hp, max: hp, name: o.name, dead: false });
+  a.g.position.copy(a.pos); a.g.rotation.y = a.face; allies.push(a); return a;
+}
+function updateAllies(dt) {
+  for (const a of allies) {
+    if (a.dead) continue;
+    let near = null, nd = 40; for (const e of enemies) if (!e.dead) { const d = e.pos.distanceTo(a.pos); if (d < nd) { nd = d; near = e; } }
+    const want = near ? Math.atan2(near.pos.x - a.pos.x, near.pos.z - a.pos.z) : a.face;
+    a.face = wrapA(a.face + wrapA(want - a.face) * Math.min(1, dt * 5));
+    a.g.rotation.y = a.face; a.g.position.set(a.pos.x, 0, a.pos.z);
+    poseHuman(a, { idle: true, t: state.t });
+  }
+}
+function damageAlly(a, d) {
+  a.hp -= d; hitHuman(a);
+  if (a.hp <= 0 && !a.dead) { a.hp = 0; a.dead = true; killHuman(a); if (MIS && MIS.onAllyDown) MIS.onAllyDown(a); }
+}
+// pickups: shipping papers and medkits
+const docGeo = new THREE.BoxGeometry(0.9, 0.14, 1.2);
+function addPickup(kind, x, z, onTake) {
+  const g = new THREE.Group();
+  if (kind === 'doc') {
+    g.add(new THREE.Mesh(docGeo, new THREE.MeshStandardMaterial({ color: 0xf4e6b0, emissive: 0x806a20, emissiveIntensity: 1 })));
+    const st = new THREE.Mesh(box1, basic(new THREE.Color(2.4, 0.4, 0.4))); st.scale.set(0.5, 0.16, 0.16); st.position.set(0, 0.02, 0.3); g.add(st);
+  } else {
+    const mk = new THREE.Mesh(box1, std(0x2fbf6a)); mk.scale.set(1, 0.7, 0.7); g.add(mk);
+    const c1 = new THREE.Mesh(box1, basic(0xffffff)); c1.scale.set(0.6, 0.18, 0.72); g.add(c1);
+    const c2 = new THREE.Mesh(box1, basic(0xffffff)); c2.scale.set(0.18, 0.6, 0.72); g.add(c2);
+  }
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), new THREE.MeshBasicMaterial({ map: glowTex, color: kind === 'doc' ? new THREE.Color(1.8, 1.4, 0.4) : new THREE.Color(0.3, 1.5, 0.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.rotation.x = -PI / 2; glow.position.y = -0.6; g.add(glow);
+  const p = freeSpot(x, z, 1); g.position.set(p.x, 0.8, p.z); scene.add(g);
+  const k = { m: g, pos: p, kind, onTake }; pickups.push(k); return k;
+}
+function addMedkit(x, z) { return addPickup('med', x, z, () => { hero.hp = Math.min(P.footMax, hero.hp + 50); toast('Аптечка: +50 здоровья'); }); }
+function updatePickups(dt) {
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const k = pickups[i]; k.m.rotation.y += dt * 2; k.m.position.y = 0.8 + Math.sin(state.t * 3 + i) * 0.15;
+    if (Math.hypot(hero.pos.x - k.pos.x, hero.pos.z - k.pos.z) < 1.8) { scene.remove(k.m); pickups.splice(i, 1); if (k.onTake) k.onTake(k); }
+  }
+}
+// queue a group of enemies; cfg can add a target (ally), look, hp, etc.
+function queueWave(points, delay, cfgFn) {
+  points.forEach(([x, z], i) => spawnQueue.push({ x, z, t: delay + i * 0.6, cfg: cfgFn ? cfgFn(i) : undefined }));
+}
+const aliveFoes = () => enemies.filter((e) => !e.dead).length;
+
+// cars that follow a scripted route (the courier to tail, Mark's van)
+function makeScripted(kind, path, x, z, h, o) {
+  const m = makeCar(0x555a66, kind === 'van' ? 'van' : false);
+  if (kind === 'van') m.g.scale.set(1.12, 1.2, 1.12);
+  const e = Object.assign(m, {
+    pos: new V3(x, 0, z), vel: new V3(), h, hp: o.hp || 1, max: o.hp || 1, script: true, kind,
+    path: path.map(([a, b]) => new V3(a, 0, b)), pi: 0, speed: o.speed, stops: Object.assign({}, o.stops || {}), loop: !!o.loop,
+    wait: 0, fireCd: 2.5, shoot: !!o.shoot, invuln: !o.hp, noTarget: !o.hp, noExplode: true, dead: false, stuck: 0, rev: 0, vf: 0,
+  });
+  e.g.position.copy(e.pos); e.g.rotation.y = h; enemyCars.push(e); return e;
+}
+function driveScripted(e, dt) {
+  if (e.disabled || e.arrived) {
+    carPhysics(e, dt, Math.abs(e.vf || 0) > 0.6 ? -1 : 0, 0, false, 10);
+    if (e.disabled && Math.random() < dt * 8) spawnP(e.pos.clone().add(new V3(rand(-0.6, 0.6), 1.6, 0)).addScaledVector(tmpF.set(Math.sin(e.h), 0, Math.cos(e.h)), 1.8), { color: 0x2a2a30, size: rand(0.5, 0.9), vel: new V3(0, 3, 0), life: 1.6, grow: 2, opacity: 0.7 });
+    return;
+  }
+  let T = e.path[e.pi];
+  if (Math.hypot(T.x - e.pos.x, T.z - e.pos.z) < 6) {
+    if (e.stops[e.pi]) { e.wait = e.stops[e.pi]; delete e.stops[e.pi]; }
+    e.pi++;
+    if (e.pi >= e.path.length) { if (e.loop) e.pi = 0; else { e.pi = e.path.length - 1; e.arrived = true; return; } }
+    T = e.path[e.pi];
+  }
+  const diff = wrapA(Math.atan2(T.x - e.pos.x, T.z - e.pos.z) - e.h);
+  const dT = Math.hypot(T.x - e.pos.x, T.z - e.pos.z);
+  let want = e.wait > 0 ? 0 : e.speed * (Math.abs(diff) > 0.5 ? 0.45 : 1);
+  if (dT < 22) want = Math.min(want, 12);
+  e.wait -= dt;
+  const vf = e.vf || 0, thr = vf < want - 1 ? 1 : vf > want + 1.5 ? -0.8 : 0;
+  carPhysics(e, dt, thr, clamp(-diff * 2.6, -1, 1), false, e.speed + 3);
+  if (e.shoot) {
+    const d = e.pos.distanceTo(pc.pos); e.fireCd -= dt;
+    if (e.fireCd <= 0 && d < 42 && los(e.pos, pc.pos)) {
+      e.fireCd = rand(0.8, 1.4);
+      const dir = pc.pos.clone().sub(e.pos).setY(0).normalize(); dir.x += rand(-0.1, 0.1); dir.z += rand(-0.1, 0.1); dir.normalize();
+      fire(e.pos.clone().add(new V3(0, 1.6, 0)).addScaledVector(dir, 2.8), dir, 80, 5, 'e');
+    }
+  }
+}
+function finishChapter(n, coins, lines, next) {
+  ep2Save(n + 1); addCoins(coins);
+  for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; }
+  clearBullets(); setEngine(0, false); pc.vel.set(0, 0, 0);
+  playDialog(lines, next);
+}
+function failChapter(title, text) {
+  state.mode = 'dead'; setEngine(0, false);
+  showModal(`
+    <div class="kicker">Эпизод 2 · ${MIS.title}</div>
+    <h2 class="h2 bad">${title}</h2>
+    <p class="lead">${text}</p>
+    <div class="btns"><button id="mRetry" class="btn primary" type="button">Начать главу заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>`, {
+    mRetry: () => { hideModal(); startChapter(state.ch); },
+    mMenu: () => { hideModal(); showSelect(); },
+  });
+}
+function startChapter(n) { state.fireLock = true; [null, ch1, ch2, ch3, ch4, ch5, ch6][n](false); }
+
+// ---- prologue + chapter 1: tail the courier ----
+function ch1(intro) {
+  clearStage(); state.ch = 1; ep2Save(1);
+  const go = () => {
+    for (const a of allies) scene.remove(a.g); allies.length = 0;
+    beginDrive(140, -80, -PI / 2);
+    const route = [[80, -80], [80, 0], [160, 0], [160, 80], [80, 80], [80, 160], [0, 160], [0, 80], [-80, 80], [-80, 0], [-80, -80], [-160, -80], [-160, 80], [-160, 160], [-120, 160]];
+    const t = makeScripted('tail', route, 104, -80, -PI / 2, { speed: 17, stops: { 2: 4, 5: 5, 8: 4, 11: 5 } });
+    MIS = {
+      title: 'Глава 1 · Хвост', noFire: true, chase: null, sus: 0, lost: 0, target: t, navName: 'Серая машина',
+      navGoal: () => t.pos,
+      update(dt) {
+        setBeam(t.pos);
+        const d = pc.pos.distanceTo(t.pos);
+        if (d < 6) this.sus = 100;
+        else if (d < 15) this.sus += 24 * dt; else this.sus = Math.max(0, this.sus - 6 * dt);
+        if (d > 80) this.lost += dt; else this.lost = Math.max(0, this.lost - dt * 2);
+        if (this.sus >= 100) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 15 метров.'); }
+        if (this.lost > 7) return failChapter('Цель потеряна', 'Серая машина скрылась. Не отставай дальше 80 метров.');
+        if (t.arrived && d < 60) {
+          finishChapter(1, 100, [
+            ['hero', 'Порт. Контейнеры, тишина и ни одной камеры. Идеальное логово.'],
+            ['vera', 'Где-то там их накладные: бумаги с маршрутами Диспетчера. Найди их.'],
+            ['hero', 'Пешком так пешком.'],
+          ], () => ch2());
+        }
+      },
+      hud() {
+        const d = pc.pos.distanceTo(t.pos);
+        return { bars: [{ label: 'Подозрение', frac: this.sus / 100, color: 'var(--neon)' }], timer: this.lost > 0.3 ? `Теряешь цель: ${Math.ceil(7 - this.lost)}` : d < 15 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: this.lost > 0.3 || d < 15 };
+      },
+    };
+    setObjective('Езжай за серой машиной «Шакалов». Держись дальше 15 м, но не отставай больше чем на 80 м.');
+  };
+  if (!intro) return go();
+  // prologue at warehouse 7: Vera explains the deal
+  beginFoot(120, -100, PI);
+  placeCar(GATE.x, GATE.z + 2, PI / 2);
+  spawnAlly(LOOKS.vera, 120, -106, { hp: 1e9, name: 'Вера', face: 0 });
+  MIS = { title: 'Пролог', update() {}, hud() { return {}; } };
+  setObjective('Выслушай Веру.');
+  playDialog([
+    ['vera', 'Опусти руки. Я не из «Шакалов». Я охочусь на них.'],
+    ['hero', 'Странный способ знакомиться: заманить меня на склад под пули.'],
+    ['vera', `Мне нужно было увидеть, как ты водишь. И ты ${gx('доехал', 'доехала')}. «Шакалы» — только руки. Голова у них — человек по кличке Диспетчер.`],
+    ['vera', 'Диспетчер держит все ночные маршруты города. Марк задолжал ему, поэтому и сдал тебя.'],
+    ['hero', 'И что ты предлагаешь?'],
+    ['vera', 'Двойной тариф. Ты помогаешь мне добраться до Диспетчера, я нахожу тебе Марка. Живым.'],
+    ['hero', 'С чего начнём?'],
+    ['vera', 'Видишь серую машину у ворот? Это их курьер. Езжай за ним. И не прижимайся: спугнёшь.'],
+  ], go);
+}
+
+// ---- chapter 2: the docks, three shipping papers, boss Крюк ----
+function ch2() {
+  clearStage(); state.ch = 2; ep2Save(2);
+  placeCar(-134, 163, PI / 2);
+  beginFoot(-120, 156, PI);
+  const thug = () => ({ react: rand(1.5, 3) });
+  [[-126, 120], [-114, 104], [-102, 138], [-138, 130], [-150, 112], [-92, 100]].forEach(([x, z]) => spawnEnemy(x, z, false, thug()));
+  const alarm = [[[-150, 92], [-140, 90], [-130, 92]], [[-90, 150], [-92, 140], [-90, 130]], [[-150, 150], [-146, 140], [-90, 92]]];
+  MIS = {
+    title: 'Глава 2 · Накладные', arena: { x0: -154, x1: -86, z0: 86, z1: 158 }, found: 0, phase: 'docs', boss: null,
+    update(dt) {
+      if (this.phase === 'docs' && this.found >= 3 && aliveFoes() === 0 && !spawnQueue.length) {
+        this.phase = 'boss';
+        playDialog([
+          ['hook', `Бумажки нашёл? Положи, где ${gx('взял', 'взяла')}, и уйдёшь на своих ногах.`],
+          ['hero', 'Ноги у меня крепкие. А вот у тебя, Крюк, проблемы.'],
+        ], () => {
+          state.mode = 'foot';
+          this.boss = spawnEnemy(-120, 94, true, { look: LOOKS.hook, hp: 520, scale: 1.25, name: 'Крюк, бригадир порта', burst: 4, dmg: 8, speed: 4.4,
+            onHalf: () => { toast('Крюк зовёт подмогу!', 1.6); queueWave([[-150, 94], [-90, 94]], 0.5); } });
+          queueWave([[-134, 96], [-106, 96]], 1);
+          setObjective('Останови Крюка.');
+        });
+      }
+      if (this.phase === 'boss' && this.boss && this.boss.dead && aliveFoes() === 0 && !spawnQueue.length) {
+        this.phase = 'done';
+        finishChapter(2, 150, [
+          ['hook', 'Ладно, ладно! Хватит! Всё равно ты опоздал... Лёва-бухгалтер решил сдать нас всех. За ним уже выехали.'],
+          ['vera', 'Лёва — бухгалтер «Шакалов». У него тетрадь со всеми маршрутами Диспетчера.'],
+          ['vera', 'Он прячется в кафе на Восточной. Забери его, пока не забрали другие.'],
+        ], () => ch3());
+      }
+    },
+    hud() { return { timer: this.phase === 'docs' ? `Накладные: ${this.found}/3` : '' }; },
+  };
+  [[-138, 111], [-102, 126], [-126, 95]].forEach(([x, z], i) => addPickup('doc', x, z, () => {
+    MIS.found++; toast(`Накладная ${MIS.found}/3`, 1.6); addCoins(20);
+    queueWave(alarm[i], 1);
+    if (MIS.found === 2) addMedkit(-120, 150);
+    setObjective(MIS.found < 3 ? `Найди накладные среди контейнеров: ${MIS.found}/3. На шум бегут «Шакалы».` : 'Все накладные у тебя. Отбейся от охраны порта.');
+  }));
+  setObjective('Найди 3 накладные среди контейнеров (жёлтые огоньки на карте).');
+}
+
+// ---- chapter 3: pick up Лёва, shake off the pursuit, reach the park in time ----
+function ch3() {
+  clearStage(); state.ch = 3; ep2Save(3);
+  beginDrive(-130, 160, PI / 2);
+  const CAFE = new V3(160, 0, -120), PARK = new V3(0, 0, 40);
+  setBeam(CAFE);
+  MIS = {
+    title: 'Глава 3 · Пассажир', leg: 1, chase: { max: 2 }, kills0: 0, need: 4, timer: 0, navName: 'Кафе на Восточной',
+    navGoal() {
+      if (this.leg === 3) return PARK;
+      if (this.leg === 2) { let b = null, bd = 1e9; for (const e of enemyCars) if (!e.dead && !e.script) { const d = e.pos.distanceTo(pc.pos); if (d < bd) { bd = d; b = e; } } return b ? b.pos : pc.pos; }
+      return CAFE;
+    },
+    update(dt) {
+      if (this.leg === 1 && pc.pos.distanceTo(CAFE) < 11) {
+        this.leg = 2; this.kills0 = state.carKills; this.chase.max = 3; this.navName = 'Кафе на Восточной';
+        pc.vel.set(0, 0, 0); setBeam(null); state.spawnT = 2;
+        playDialog([
+          ['leva', 'Гони! Они на соседней улице, три машины!'],
+          ['hero', 'Пристегнись. И держи свою тетрадь крепче.'],
+          ['leva', 'Вера ждёт у фонтана в парке. Но с хвостом туда нельзя: сбрось их!'],
+        ], () => { state.mode = 'drive'; setObjective(`Отбейся от погони: сбей ${this.need} машины «Шакалов».`); });
+      } else if (this.leg === 2) {
+        this.navName = 'Погоня';
+        if (state.carKills - this.kills0 >= this.need) {
+          this.leg = 3; this.timer = 70; this.chase.max = 2; this.navName = 'Парк'; setBeam(PARK);
+          toast('Хвост сброшен! Гони в парк', 2);
+          setObjective('Довези Лёву до парка, пока Вера ждёт.');
+        }
+      } else if (this.leg === 3) {
+        this.timer -= dt;
+        if (this.timer <= 0) return failChapter('Вера не дождалась', 'Время вышло: Вера ушла с места встречи, а Лёву перехватили. Попробуй срезать путь.');
+        if (pc.pos.distanceTo(PARK) < 11) {
+          this.leg = 4;
+          finishChapter(3, 150, [
+            ['hero', 'Парк. Тихо... даже слишком тихо.'],
+            ['leva', 'Веры нет. Она никогда не опаздывает. Это засада!'],
+            ['hero', 'Из машины. Держись за мной и не высовывайся.'],
+          ], () => ch4());
+        }
+      }
+    },
+    hud() {
+      if (this.leg === 2) return { timer: `Сбито: ${state.carKills - this.kills0}/${this.need}` };
+      if (this.leg === 3) { const s = Math.max(0, Math.ceil(this.timer)); return { timer: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, bad: s <= 15 }; }
+      return {};
+    },
+  };
+  setObjective('Забери Лёву у кафе на Восточной улице.');
+}
+
+// ---- chapter 4: protect Лёва in the park, 4 waves ----
+function ch4() {
+  clearStage(); state.ch = 4; ep2Save(4);
+  placeCar(0, 46, PI);
+  beginFoot(-14, 40, -PI / 2);
+  const leva = spawnAlly(LOOKS.leva, -40, 48, { hp: 180, name: 'Лёва', face: PI });
+  const edge = [[-70, 10], [-70, 70], [-10, 12], [-12, 70], [-40, 9], [-40, 71], [-71, 40]];
+  const waves = [4, 5, 6, 6];
+  const spawnW = (w) => {
+    const n = waves[w - 1], pts = [];
+    for (let i = 0; i < n; i++) pts.push(edge[(i * 3 + w) % edge.length]);
+    queueWave(pts, 0.5, (i) => {
+      const heavy = w >= 3 && i < (w - 1);
+      return Object.assign({ react: rand(0.6, 1.4), tgt: i % 3 === 1 ? leva : undefined }, heavy ? { look: LOOKS.heavy, hp: 130, scale: 1.12, burst: 2 } : {});
+    });
+  };
+  spawnW(1);
+  MIS = {
+    title: 'Глава 4 · Засада в парке', arena: { x0: -74, x1: -6, z0: 6, z1: 74 }, wave: 1, gap: 0,
+    onAllyDown: () => failChapter('Лёва ранен', 'Без Лёвы не найти Марка. Держись ближе к фонтану и снимай тех, кто идёт к Лёве.'),
+    update(dt) {
+      if (this.wave > 4 || aliveFoes() > 0 || spawnQueue.length) return;
+      if (this.wave === 4) {
+        this.wave = 5;
+        return finishChapter(4, 150, [
+          ['vera', 'Простите, пробки. Лёва цел?'],
+          ['hero', 'Цел. В отличие от твоего плана.'],
+          ['leva', 'Слушайте... Марк жив. Его всю ночь возят по городу в сером фургоне, чтобы никто не нашёл.'],
+          ['leva', 'Фургон только что прошёл по Центральной, на север.'],
+          ['vera', 'Догони фургон. И не взрывай его: Марк внутри.'],
+        ], () => ch5());
+      }
+      if (this.gap <= 0) { this.gap = 3.5; toast(`Волна ${this.wave}/4 отбита`, 1.6); if (this.wave === 2) addMedkit(-30, 40); }
+      this.gap -= dt;
+      if (this.gap <= 0) { this.wave++; spawnW(this.wave); toast(`Волна ${this.wave}/4`, 1.6); setObjective(`Защити Лёву: волна ${this.wave} из 4.`); }
+    },
+    hud() { return { bars: [{ label: 'Лёва', frac: leva.hp / leva.max, color: '#5ad1ff' }], timer: this.gap > 0 && this.wave <= 4 ? `Следующая волна через ${Math.ceil(this.gap)}` : '' }; },
+  };
+  setObjective('Защити Лёву: волна 1 из 4. Часть «Шакалов» идёт прямо к нему.');
+}
+
+// ---- chapter 5: stop the van without blowing it up ----
+function ch5() {
+  clearStage(); state.ch = 5; ep2Save(5);
+  beginDrive(0, 56, PI);
+  const loopR = [[0, 0], [0, -80], [80, -80], [80, -160], [-80, -160], [-80, -80], [-160, -80], [-160, 80], [-80, 80], [-80, 160], [80, 160], [80, 80], [160, 80], [160, 0], [80, 0]];
+  const van = makeScripted('van', loopR, 0, 24, PI, { speed: 29, loop: true, hp: 420, shoot: true });
+  state.spawnT = 8;
+  MIS = {
+    title: 'Глава 5 · Фургон', chase: { max: 2 }, far: 0, van, navName: 'Фургон', done: false,
+    navGoal: () => van.pos,
+    update(dt) {
+      setBeam(van.pos);
+      const d = pc.pos.distanceTo(van.pos);
+      if (!van.disabled) {
+        if (d > 150) this.far += dt; else this.far = Math.max(0, this.far - dt);
+        if (this.far > 8) return failChapter('Фургон ушёл', 'Фургон с Марком скрылся в переулках. Держись ближе и стреляй по колёсам.');
+        setObjective('Останови фургон: стреляй и тарань. Не дай ему уйти дальше 150 м.');
+      } else {
+        setObjective('Фургон заглох. Подъезжай к нему.');
+        this.chase.max = 0;
+        if (!this.done && d < 14) {
+          this.done = true;
+          finishChapter(5, 200, [
+            ['hero', 'Марк!'],
+            ['mark', `${CH.name}... ты всё-таки ${gx('приехал', 'приехала')}.`],
+            ['mark', 'Прости. Я думал, отдам долг одним заказом и всё. А Диспетчер... он не тот, кем кажется. Он всё время был рядом.'],
+            ['hero', 'Где он?'],
+            ['mark', 'Ждёт тебя на складе номер семь. Там, где всё началось. С ним Ворон, его телохранитель.'],
+            ['hero', 'Сиди в машине и не высовывайся. Это ненадолго.'],
+          ], () => ch6());
+        }
+      }
+    },
+    hud() {
+      return { bars: van.disabled ? [] : [{ label: 'Фургон', frac: van.hp / van.max, color: '#ff8a3a' }], timer: van.disabled ? 'Фургон заглох — подъезжай' : this.far > 0.3 ? `Фургон уходит: ${Math.ceil(8 - this.far)}` : '', bad: this.far > 0.3 };
+    },
+  };
+  setObjective('Догони серый фургон на Центральной.');
+}
+
+// ---- chapter 6: warehouse 7, the bodyguard Ворон, and the reveal ----
+function ch6() {
+  clearStage(); state.ch = 6; ep2Save(6);
+  placeCar(GATE.x, GATE.z + 2, PI / 2);
+  beginFoot(120, -92, PI);
+  yardGate.position.y = 0; gateCollider = addBox(120, -88, 16, 1, 2.6);
+  [[95, -131], [110, -131], [130, -131], [146, -131], [120, -119]].forEach(([x, z]) => spawnEnemy(x, z, false, { react: rand(0.8, 1.6) }));
+  MIS = {
+    title: 'Глава 6 · Конечная', stage: 1, boss: null,
+    update() {
+      if (this.stage === 1 && aliveFoes() === 0 && !spawnQueue.length) {
+        this.stage = 2; addMedkit(120, -106); warehouseDoor.position.y = 6.2;
+        toast('Двор чист. Ворота склада открываются', 2);
+        queueWave([[116, -130], [124, -130], [112, -128], [128, -128]], 1.5, () => ({ react: 1 }));
+        setObjective('Из склада выходят люди Диспетчера. Держись.');
+      } else if (this.stage === 2 && aliveFoes() === 0 && !spawnQueue.length) {
+        this.stage = 3;
+        playDialog([
+          ['crow', 'Диспетчер велел передать: поездка окончена.'],
+          ['hero', `Я сам${gx('', 'а')} решаю, где конечная.`],
+        ], () => {
+          state.mode = 'foot';
+          this.boss = spawnEnemy(120, -130, true, { look: LOOKS.crow, hp: 700, scale: 1.3, name: 'Ворон', burst: 5, dmg: 8, speed: 5.4,
+            onHalf: () => { toast('Ворон зовёт подмогу!', 1.6); queueWave([[100, -130], [140, -130], [120, -128]], 0.5); addMedkit(100, -100); } });
+          setObjective('Победи Ворона.');
+        });
+      } else if (this.stage === 3 && this.boss && this.boss.dead && aliveFoes() === 0 && !spawnQueue.length) {
+        this.stage = 4; setBeam(DOOR); toast('Ворон повержен', 2); setObjective('Войди на склад. Диспетчер внутри.');
+      } else if (this.stage === 4 && hero.pos.distanceTo(DOOR) < 4) {
+        this.stage = 5; setBeam(null); addCoins(300);
+        playDialog([
+          ['hero', 'Склад пустой. Только рация на столе.'],
+          ['vera', `Браво. Ты снова ${gx('сделал', 'сделала')} всё ровно так, как я рассчитала.`],
+          ['hero', 'Вера?..'],
+          ['vera', '«Шакалы» разбиты, тетрадь Лёвы у меня, а Ворон слишком много знал. Все ночные маршруты города теперь мои.'],
+          ['hero', 'Ты и есть Диспетчер.'],
+          ['vera', 'Я та, кто платит за ночь. Двойной тариф уже на твоём счёте. Не трать всё сразу.'],
+          ['mark', `${CH.name}... что дальше?`],
+          ['hero', 'Дальше — конечная.'],
+        ], showEnd2);
+      }
+    },
+    hud() { return {}; },
+  };
+  setObjective('Склад №7. Зачисти двор.');
+}
+
+function startEpisode2(ch) {
+  initAudio(); hideModal();
+  $('select').hidden = true; $('preview').hidden = true; $('hud').hidden = false; $('touch').hidden = !isTouch;
+  document.body.classList.toggle('touch-on', isTouch);
+  applyChar();
+  if (showFig) showFig.g.visible = false; showDisc.visible = false; pvEnemy.g.visible = false;
+  if (hero) { scene.remove(hero.g); hero = null; }
+  state.ep = 2; state.coins = 0; state.carKills = 0; state.footKills = 0; state.time = 0; state.reviveUsed = {}; state.doubled = false;
+  if (ch === 1) ch1(true); else startChapter(ch);
+}
+function startSelected() { if (selEp === 2) startEpisode2(ep2Pick); else startMission(); }
+function renderChapters() {
+  $('epBtn1').classList.toggle('active', selEp === 1); $('epBtn2').classList.toggle('active', selEp === 2);
+  const box = $('chapters'), max = ep2Max(); box.hidden = selEp !== 2;
+  if (ep2Pick > max) ep2Pick = max;
+  box.innerHTML = EP2_TITLES.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1}. ${t}</button>`).join('');
+  box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { ep2Pick = +b.dataset.ch; renderChapters(); }));
+  $('btnGo').textContent = selEp === 2 ? (ep2Pick === 1 ? 'Начать эпизод 2' : `Глава ${ep2Pick}`) : 'В путь';
+}
+$('epBtn1').addEventListener('click', () => { selEp = 1; renderChapters(); });
+$('epBtn2').addEventListener('click', () => { selEp = 2; ep2Pick = ep2Max(); renderChapters(); });
+function showEnd2() {
+  state.mode = 'end'; setEngine(0, false);
+  $('hud').hidden = true; $('touch').hidden = true;
+  const t = Math.round(state.time), mm2 = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
+  const render = () => showModal(`
+    <div class="kicker">Эпизод 2 пройден</div>
+    <h2 class="h2 good">Диспетчер — это Вера</h2>
+    <p class="lead">Всю ночь ты ${gx('расчищал', 'расчищала')} город для неё. Марк жив, двойной тариф получен. Продолжение — «Эпизод 3. Конечная остановка».</p>
+    <div class="summary">
+      <div><small>Время</small><b>${mm2}:${ss}</b></div>
+      <div><small>Машин сбито</small><b>${state.carKills}</b></div>
+      <div><small>Противников</small><b>${state.footKills}</b></div>
+      <div><small>Монеты</small><b>${state.coins}</b></div>
+    </div>
+    <div class="btns">
+      <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mAgain" class="btn" type="button">В меню</button>
+    </div>`, {
+    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; state.coins *= 2; render(); }); },
+    mAgain: () => { hideModal(); showSelect(); },
+  });
+  render();
 }
 
 // ---------------- camera ----------------
@@ -1752,6 +2278,10 @@ function drawMinimap() {
   }
   const tgt = beam.visible ? beam.position : null;
   if (tgt) { mctx.fillStyle = '#4dffa6'; mctx.beginPath(); mctx.arc(P(tgt.x), P(tgt.z), 7 + Math.sin(state.t * 5) * 2, 0, PI * 2); mctx.fill(); }
+  if (state.act === 2) {
+    mctx.fillStyle = '#ffd23a'; for (const k of pickups) { mctx.beginPath(); mctx.arc(P(k.pos.x), P(k.pos.z), 5, 0, PI * 2); mctx.fill(); }
+    mctx.fillStyle = '#5ad1ff'; for (const a of allies) if (!a.dead) { mctx.beginPath(); mctx.arc(P(a.pos.x), P(a.pos.z), 5, 0, PI * 2); mctx.fill(); }
+  }
   mctx.fillStyle = '#ff3d8b';
   const list = state.act === 1 ? enemyCars : enemies;
   for (const e of list) if (!e.dead) { mctx.beginPath(); mctx.arc(P(e.pos.x), P(e.pos.z), 5, 0, PI * 2); mctx.fill(); }
@@ -1760,7 +2290,17 @@ function drawMinimap() {
   mctx.save(); mctx.translate(P(me.pos.x), P(me.pos.z)); mctx.rotate(-h);
   mctx.fillStyle = '#ffc43d'; mctx.beginPath(); mctx.moveTo(0, 11); mctx.lineTo(7, -7); mctx.lineTo(-7, -7); mctx.closePath(); mctx.fill(); mctx.restore();
 }
-let lastHp = -1;
+let lastHp = -1, barsSig = '';
+function renderBars(list, timer, bad) {
+  const el = $('bars'), sig = list.map((b) => b.label).join('|') + (timer ? '#t' : '');
+  el.hidden = !list.length && !timer; el.classList.toggle('low', !$('nav').hidden);
+  if (sig !== barsSig) {
+    barsSig = sig;
+    el.innerHTML = list.map((b, i) => `<div class="boss" style="--bc:${b.color || 'var(--neon)'}">${b.label}<div class="bar-track"><div class="bar-fill" id="barF${i}"></div></div></div>`).join('') + (timer ? '<div class="tmr" id="barT"></div>' : '');
+  }
+  list.forEach((b, i) => { $('barF' + i).style.width = clamp(b.frac, 0, 1) * 100 + '%'; });
+  if (timer) { $('barT').textContent = timer; $('barT').classList.toggle('bad', bad); }
+}
 function updateHud(dt) {
   const hp = state.act === 1 ? (pc ? pc.hp : 100) : (hero ? hero.hp : P.footMax);
   const r = Math.max(0, Math.round(hp / (state.act === 1 ? 100 : P.footMax) * 100));
@@ -1769,8 +2309,11 @@ function updateHud(dt) {
   $('speedo').hidden = state.act !== 1;
   $('nav').hidden = !(state.act === 1 && state.mode === 'drive');
   if (state.act === 1 && pc) $('speed').textContent = Math.round(Math.abs(pc.vf || 0) * 3.3);
+  let bars = [], timer = '', tbad = false;
+  if (state.ep === 2 && MIS && MIS.hud && (state.mode === 'drive' || state.mode === 'foot')) { const hh = MIS.hud(); bars = hh.bars || []; timer = hh.timer || ''; tbad = !!hh.bad; }
   const boss = state.act === 2 && enemies.find((e) => e.boss && !e.dead);
-  $('bossBar').hidden = !boss; if (boss) $('bossFill').style.width = (boss.hp / boss.max * 100) + '%';
+  if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
+  renderBars(bars, timer, tbad);
   $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · мышь или пробел — стрельба' : 'W A S D — бег · мышь — прицел · клик — огонь';
   const ch = $('crosshair'); const showCh = state.mode === 'foot' && mouse.has && !isTouch;
   ch.hidden = !showCh; if (showCh) { ch.style.left = mouse.x + 'px'; ch.style.top = mouse.y + 'px'; }
@@ -1849,7 +2392,7 @@ function buildRoster() {
     const c = document.createElement('canvas'); c.width = 200; c.height = 240; drawPortrait(c, ch); b.appendChild(c);
     const s = document.createElement('span'); s.textContent = ch.name; b.appendChild(s);
     b.addEventListener('click', () => selectChar(i));
-    b.addEventListener('dblclick', () => { selectChar(i); startMission(); });
+    b.addEventListener('dblclick', () => { selectChar(i); startSelected(); });
     $(ch.sex === 'm' ? 'rosterM' : 'rosterF').appendChild(b);
   });
 }
@@ -1884,7 +2427,7 @@ function showSelect() {
   $('preview').hidden = true; $('select').hidden = false; $('hud').hidden = true; $('touch').hidden = true;
   pvEnemy.g.visible = false; arrow.visible = false; setBeam(null);
   if (hero) hero.g.visible = false;
-  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0; clearBullets();
+  clearStage(); renderChapters();
   pc.g.visible = true; pc.pos.set(SHOW.x - 4.6, 0, SHOW.z - 3.2); pc.h = PI * 0.82; pc.vel.set(0, 0, 0);
   pc.g.position.copy(pc.pos); pc.g.rotation.set(0, pc.h, 0);
   showDisc.visible = true;
@@ -1946,6 +2489,7 @@ function startMission() {
   state.coins = 0; state.carKills = 0; state.footKills = 0; state.time = 0; state.reviveUsed = { 1: false, 2: false }; state.doubled = false;
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
   if (medkit) { scene.remove(medkit); medkit = null; }
+  state.ep = 1; MIS = null;
   setupAct1();
   state.mode = 'drive';
   playDialog([
@@ -1957,24 +2501,24 @@ function startMission() {
 }
 function showDead() {
   state.mode = 'dead'; setEngine(0, false);
-  const act = state.act, used = state.reviveUsed[act];
+  const act = state.act, rk = state.ep === 2 ? 'c' + state.ch : act, used = state.reviveUsed[rk];
   showModal(`
-    <div class="kicker">${act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
+    <div class="kicker">${state.ep === 2 && MIS ? 'Эпизод 2 · ' + MIS.title : act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
     <h2 class="h2 bad">${act === 1 ? 'Машина разбита' : CH.name + ' ' + gx('ранен', 'ранена')}</h2>
     <p class="lead">${act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>
     <div class="btns">
       <button id="mRevive" class="btn primary" type="button" ${used ? 'disabled' : ''}>Продолжить за рекламу</button>
-      <button id="mRetry" class="btn" type="button">Начать акт заново</button>
+      <button id="mRetry" class="btn" type="button">${state.ep === 2 ? 'Начать главу заново' : 'Начать акт заново'}</button>
     </div>
     <div class="note">${used ? 'Продолжение за рекламу — один раз за акт.' : 'Продолжение вернёт 60% прочности на месте.'}</div>`, {
-    mRevive: () => { hideModal(); showAd(() => { state.reviveUsed[act] = true; revive(); }); },
-    mRetry: () => { hideModal(); if (act === 1) { setupAct1(); state.mode = 'drive'; } else { setupAct2(); } state.fireLock = true; },
+    mRevive: () => { hideModal(); showAd(() => { state.reviveUsed[rk] = true; revive(); }); },
+    mRetry: () => { hideModal(); if (state.ep === 2) startChapter(state.ch); else if (act === 1) { setupAct1(); state.mode = 'drive'; } else { setupAct2(); } state.fireLock = true; },
   });
 }
 function revive() {
   state.invuln = 2; state.fireLock = true;
   if (state.act === 1) {
-    for (const e of enemyCars) if (e.pos.distanceTo(pc.pos) < 45) { explode(e.pos, 0.6); scene.remove(e.g); e.dead = true; }
+    for (const e of enemyCars) if (!e.script && e.pos.distanceTo(pc.pos) < 45) { explode(e.pos, 0.6); scene.remove(e.g); e.dead = true; }
     pc.hp = 60; pc.dead = false; pc.g.visible = true; pc.vel.set(0, 0, 0); state.spawnT = 5; state.mode = 'drive';
   } else {
     hero.hp = Math.round(P.footMax * 0.6); hero.dead = false; reviveHuman(hero);
@@ -1998,6 +2542,7 @@ function showEnd() {
     </div>
     <div class="btns">
       <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mEp2" class="btn primary" type="button">Эпизод 2 →</button>
       <button id="mAgain" class="btn" type="button">Сменить водителя</button>
     </div>
     <div class="kicker" style="color:var(--muted)">Гараж · витрина прототипа</div>
@@ -2009,20 +2554,21 @@ function showEnd() {
     <div class="note">Покупки в прототипе не работают: витрина показывает, что можно продавать.</div>`, {
     mDouble: () => { hideModal(); showAd(() => { state.doubled = true; state.coins *= 2; render(); }); },
     mAgain: () => { hideModal(); showSelect(); },
+    mEp2: () => { hideModal(); startEpisode2(1); },
   });
   render();
 }
 
 $('btnPlay').addEventListener('click', showSelect);
 $('btnBack').addEventListener('click', showPreview);
-$('btnGo').addEventListener('click', startMission);
+$('btnGo').addEventListener('click', startSelected);
 window.addEventListener('keydown', (e) => {
   if (state.mode === 'preview' && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); showSelect(); return; }
   if (state.mode !== 'select') return;
   let i = curIdx;
   if (e.code === 'ArrowRight') i = (i + 1) % 10; else if (e.code === 'ArrowLeft') i = (i + 9) % 10;
   else if (e.code === 'ArrowDown' || e.code === 'ArrowUp') i = (i + 5) % 10;
-  else if (e.code === 'Enter') { e.preventDefault(); startMission(); return; }
+  else if (e.code === 'Enter') { e.preventDefault(); startSelected(); return; }
   else if (e.code === 'Escape') { showPreview(); return; }
   else return;
   e.preventDefault(); selectChar(i); const on = document.querySelector('.pc-card.on'); if (on) on.focus();
@@ -2071,7 +2617,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
+window.__nightFare = { sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR };
 })();
 </script>
 </body>
