@@ -137,7 +137,10 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .pcode { font: 700 20px var(--font-body); letter-spacing: .12em; color: var(--taxi); } .btn.danger { border-color: #b8233a; color: #ff8a9a; }
 .age-badge { position: fixed; top: calc(10px + var(--sat)); left: calc(10px + var(--sal)); z-index: 60; border: 2px solid #fff; border-radius: 6px; padding: 2px 6px; font: 700 13px var(--font-body); color: #fff; background: rgba(0,0,0,.4); pointer-events: none; }
 .pmsg { min-height: 1em; font-size: 13px; color: var(--taxi); } .prow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
-.touch-on .speedo { bottom: calc(220px + var(--sab)); }
+.touch-on .speedo { bottom: calc(286px + var(--sab)); }
+/* while a dialog is on screen the stick and buttons step aside (the dialog takes the taps) */
+body:has(#dialog:not([hidden])) .touch { display: none; }
+@media (max-width: 560px) { .vname { display: none; } }
 /* short landscape phones: the speedometer sits between the stick and the buttons */
 @media (orientation: landscape) and (max-height: 480px) {
   .hud-tr { grid-template-columns: auto auto; align-items: start; gap: 4px 6px; }
@@ -164,6 +167,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 .btns { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn { appearance: none; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); font: 500 15px var(--font-body); padding: 12px 18px; border-radius: 8px; cursor: pointer; }
 .btn.tg { background: #2aabee; border-color: #2aabee; color: #fff; font-weight: 700; }
+.pver { font-weight: 400; opacity: .55; margin-left: 6px; letter-spacing: 0; }
 .gate-or { text-align: center; font-size: 12px; color: var(--muted); }
 .btn.primary { background: var(--taxi); color: #1a1405; border-color: var(--taxi); font-weight: 700; }
 .btn:disabled { opacity: .4; cursor: default; }
@@ -376,7 +380,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 </div>
 
 <script>
-window.APP_VER = 'v14'; window.__errs = [];
+window.APP_VER = 'v15'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -4675,7 +4679,7 @@ function renderProfile() {
     </div>
     <div class="pstats">${[['Глав пройдено', S.chapters], ['Эпизодов', S.eps.length + ' из 10'], ['Машин сбито', S.carKills], ['Противников', S.footKills], ['Боссов', S.bosses], ['Достижений', Object.keys(PROF.ach).length + ' из ' + ACH.length], ['В игре', Math.round(S.time / 60) + ' мин']].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div>
     <div class="plabel">Костюм героя</div><div class="pitems"><div class="pitem${!PROF.outfit ? ' on' : ''}"><b>Свой</b><span>как на портрете</span><button class="btn sm" data-act="outfit" data-id="" type="button">${!PROF.outfit ? 'Надет' : 'Надеть'}</button></div>${outfits}</div>
-    <div class="plabel">Вход</div>
+    <div class="plabel">Вход <small class="pver">версия ${APP_VER}</small></div>
     ${PROF.cloud ? `<div class="prow"><span>Профиль <b>${esc(PROF.login)}</b> на сервере.</span>${inMiniApp ? '' : '<button class="btn sm" data-act="logout" type="button">Выйти</button>'}</div>` : ''}
     ${inMiniApp ? (PROF.cloud ? '' : `<div class="prow"><span>Вход через ${PLATFORM === 'vk' ? 'ВКонтакте' : PLATFORM === 'tg' ? 'Telegram' : 'MAX'}.</span><button class="btn sm primary" data-act="pflogin" type="button">Войти</button></div>`)
       : `<div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
@@ -4986,7 +4990,7 @@ let viewYaw = PI, viewPitch = -0.04, viewGun = null;
 function setView(v) {
   footView = v; try { localStorage.setItem('nf-view', JSON.stringify(v)); } catch (e) { /* storage unavailable */ }
   if (v === 'top' && document.pointerLockElement) document.exitPointerLock();
-  snapCam = true; if ($('btnView')) $('btnView').textContent = 'Вид: ' + VIEW_NAMES[v];
+  snapCam = true; if ($('btnView')) $('btnView').innerHTML = 'Вид<span class="vname">: ' + VIEW_NAMES[v] + '</span>';
   if (state.mode === 'foot') toast('Вид ' + VIEW_NAMES[v] + (v !== 'top' && !isTouch ? ' · кликни, чтобы управлять мышью' : ''), 1.6);
 }
 const cycleView = () => setView(VIEWS[(VIEWS.indexOf(footView) + 1) % VIEWS.length]);
@@ -5352,7 +5356,7 @@ $('btnPlay').addEventListener('click', showSelect);
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
 $('btnProfile').addEventListener('click', () => openProfile('me'));
-$('btnView').addEventListener('click', cycleView); $('btnPause').addEventListener('click', pauseGame); $('btnView').textContent = 'Вид: ' + VIEW_NAMES[footView];
+$('btnView').addEventListener('click', cycleView); $('btnPause').addEventListener('click', pauseGame); $('btnView').innerHTML = 'Вид<span class="vname">: ' + VIEW_NAMES[footView] + '</span>';
 $('selProfile').addEventListener('click', () => openProfile('me'));
 $('profClose').addEventListener('click', closeProfile);
 $('prof').addEventListener('click', (e) => { if (e.target.id === 'prof') closeProfile(); });
