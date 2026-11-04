@@ -1170,6 +1170,67 @@ function updateLife(dt) {
   }
 }
 
+// ---------------- police: patrol cars with light bars and a siren; they ram and box in, but never shoot ----------------
+const POLICE = { red: null, blue: null, glowR: null, glowB: null, siren: null, sirenOn: false };
+function policeMats() {
+  if (POLICE.red) return;
+  POLICE.red = basic(new THREE.Color(5, 0.2, 0.25)); POLICE.blue = basic(new THREE.Color(0.25, 0.6, 5));
+  POLICE.glowR = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(2.6, 0.1, 0.15), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  POLICE.glowB = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(0.15, 0.4, 2.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+}
+function addPoliceLights(g) {
+  policeMats();
+  for (const [sx, m, gm] of [[-0.35, POLICE.red, POLICE.glowR], [0.35, POLICE.blue, POLICE.glowB]]) {
+    const b = new THREE.Mesh(box1, m); b.scale.set(0.5, 0.16, 0.28); b.position.set(sx, 1.66, -0.15); g.add(b);
+    const gl = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), gm); gl.rotation.x = -PI / 2; gl.position.set(sx * 4, 0.07, 0); g.add(gl);
+  }
+}
+function updatePoliceLights() {
+  if (!POLICE.red) return;
+  const ph = Math.floor(state.t * 7) % 2;
+  POLICE.red.color.setRGB(ph ? 5 : 0.4, 0.2, 0.25); POLICE.blue.color.setRGB(0.25, 0.6, ph ? 0.5 : 5);
+  POLICE.glowR.opacity = ph ? 0.9 : 0.1; POLICE.glowB.opacity = ph ? 0.1 : 0.9;
+  // the siren: a two-tone wail while patrol cars are near
+  const near = state.mode === 'drive' && enemyCars.some((e) => e.police && !e.dead && e.pos.distanceTo(pc.pos) < 70);
+  if (audio.ctx) {
+    if (!POLICE.siren) {
+      const o = audio.ctx.createOscillator(), g = audio.ctx.createGain(); o.type = 'sawtooth'; g.gain.value = 0;
+      const f = audio.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1800;
+      o.connect(f); f.connect(g); g.connect(audio.master); o.start(); POLICE.siren = { o, g };
+    }
+    const t = audio.ctx.currentTime;
+    POLICE.siren.g.gain.setTargetAtTime(near && !muted ? 0.035 : 0, t, 0.2);
+    POLICE.siren.o.frequency.setTargetAtTime(Math.floor(state.t * 1.6) % 2 ? 960 : 720, t, 0.05);
+  }
+}
+// arrest and losing the police; wraps a chapter's update and HUD when c.police is set
+function withPolice(mis, c) {
+  const st = { arrest: 0, tunnelT: 0, lostT: 0 }, u = mis.update, hh = mis.hud, chase = mis.chase;
+  mis.update = (dt) => {
+    if (state.mode === 'drive' && pc) {
+      const near = enemyCars.filter((e) => e.police && !e.dead && e.pos.distanceTo(pc.pos) < 8.5).length;
+      if (near >= 2 && Math.abs(pc.vf || 0) < 5) st.arrest += dt; else st.arrest = Math.max(0, st.arrest - dt * 0.8);
+      if (st.arrest > 2.5) return failChapter('Задержан', 'Полиция зажала такси. Не давай окружить себя: держи скорость, уходи в переулки и тоннель.');
+      // a tunnel breaks the line of sight: the police lose the trail for a while
+      if (inTunnel(pc.pos.x, pc.pos.z) && Math.abs(pc.pos.z - TUNNEL.z) < 8.5) st.tunnelT += dt; else st.tunnelT = 0;
+      if (st.tunnelT > 1.5 && st.lostT <= 0 && chase) {
+        st.lostT = 14; st.saved = chase.max; chase.max = 0;
+        for (const e of enemyCars) if (e.police && !e.dead) { e.dead = true; scene.remove(e.g); }
+        toast('Полиция потеряла след', 2);
+      }
+      if (st.lostT > 0) { st.lostT -= dt; if (st.lostT <= 0 && chase) chase.max = st.saved; }
+    }
+    return u.call(mis, dt);
+  };
+  mis.hud = () => {
+    const r = hh.call(mis) || {}; r.bars = (r.bars || []).slice();
+    if (st.arrest > 0.05) { r.bars.push({ label: 'Задержание — газуй!', frac: st.arrest / 2.5, color: '#5a8aff' }); r.bad = true; }
+    else if (st.lostT > 0) r.bars.push({ label: 'Полиция потеряла след', frac: st.lostT / 14, color: '#4dffa6' });
+    return r;
+  };
+  return mis;
+}
+
 // ---------------- helicopter «Сокол-1»: hunts with a searchlight, fires bursts, can be shot down ----------------
 let HELI = null;
 function makeHeliModel() {
@@ -1195,7 +1256,7 @@ function makeHeliModel() {
   const spot = new THREE.SpotLight(0xf4f0ff, 9, 70, 0.22, 0.5, 1.2); spot.position.set(0, -1.4, 2.2); g.add(spot); scene.add(spot.target);
   const beamTex = canvasTex(4, 128, (x, w, h) => { const gr = x.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0.05)'); x.fillStyle = gr; x.fillRect(0, 0, w, h); });
   const beamGeo = new THREE.CylinderGeometry(0.3, 3.2, 1, 16, 1, true); beamGeo.translate(0, -0.5, 0);
-  const beamM = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ map: beamTex, color: new THREE.Color(0.35, 0.36, 0.42), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  const beamM = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ map: beamTex, color: new THREE.Color(0.16, 0.16, 0.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   scene.add(beamM);
   const spotDisc = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.6, 1.6, 1.8), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   spotDisc.rotation.x = -PI / 2; scene.add(spotDisc);
@@ -1208,7 +1269,7 @@ function spawnHeli(o) {
   const m = makeHeliModel(), T = state.act === 1 && pc ? pc.pos : hero ? hero.pos : new V3();
   const start = o.from ? new V3(o.from[0], 26, o.from[1]) : new V3(T.x + 60, 30, T.z - 60);
   HELI = Object.assign(m, { pos: start, vel: new V3(), h: 0, hp: o.hp || 900, max: o.hp || 900, invuln: !!o.invuln, mode: o.mode || 'hunt', name: o.name || 'Вертолёт «Сокол-1»',
-    fireCd: o.delay || 4, every: o.every || [2.8, 4.2], dmg: o.dmg || 6, burst: null, tracers: [], lost: false, lostT: 0, dead: false, crash: 0, spotPt: T.clone(), alt: o.alt || 13,
+    fireCd: o.delay || 4, every: o.every || [2.8, 4.2], dmg: o.dmg || 6, burst: null, tracers: [], lost: false, lostT: 0, dead: false, crash: 0, spotPt: T.clone(), alt: o.alt || 11,
     route: o.route ? o.route.map(([x, z]) => new V3(x, 0, z)) : null, ri: 0, speed: o.speed || 24, center: o.center ? new V3(o.center[0], 0, o.center[1]) : null, orbit: 0, fireFrom: o.fireFrom || 0 });
   m.g.position.copy(start);
   return HELI;
@@ -1250,7 +1311,7 @@ function updateHeli(dt) {
     // hunt: hang ahead of the target so the camera keeps it in view
     const f = state.act === 1 ? new V3(Math.sin(pc.h), 0, Math.cos(pc.h)) : new V3(0, 0, -1);
     H.orbit += dt * 0.5;
-    want.set(T.x + f.x * 15 + Math.cos(H.orbit) * 6, H.alt, T.z + f.z * 15 + Math.sin(H.orbit) * 6);
+    const ahead = state.act === 1 ? 22 : 15; want.set(T.x + f.x * ahead + Math.cos(H.orbit) * 6, H.alt, T.z + f.z * ahead + Math.sin(H.orbit) * 6);
   }
   const to = want.clone().sub(H.pos), dist = to.length();
   const maxV = H.mode === 'route' ? H.speed : 34;
@@ -1676,10 +1737,10 @@ const HEADBEAM = {};
 function makeCar(color, kind) {
   const g = new THREE.Group();
   const wreck = kind === 'wreck', player = kind === true || kind === 'player';
-  const civ = kind === 'civ';
-  const name = player ? PLAYER_CAR.model : wreck ? 'car_sedan' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon']);
+  const civ = kind === 'civ' || kind === 'police', pol = kind === 'police';
+  const name = player ? PLAYER_CAR.model : wreck ? 'car_sedan' : pol ? 'car_police' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon']);
   const m = ASSETS.kit[name].clone(true);
-  const mat = wreck ? KIT.carWreck : player ? (PLAYER_CAR.mat || KIT.taxi) : civ ? civMat(color) : KIT.carDark;
+  const mat = wreck ? KIT.carWreck : player ? (PLAYER_CAR.mat || KIT.taxi) : pol ? KIT.car : civ ? civMat(color) : KIT.carDark;
   const wheels = [];
   m.traverse((o) => { if (o.isMesh) { o.material = mat; o.castShadow = true; } if (/wheel/.test(o.name)) wheels.push(o); });
   m.scale.setScalar(CAR_S); g.add(m);
@@ -1710,6 +1771,7 @@ function makeCar(color, kind) {
     glow.rotation.x = -PI / 2; glow.position.y = 0.06; g.add(glow);
     box(basic(new THREE.Color(4, 0.2, 0.9)), -0.99, 0.5, 0, 0.03, 0.06, 3.4); box(basic(new THREE.Color(4, 0.2, 0.9)), 0.99, 0.5, 0, 0.03, 0.06, 3.4);
   }
+  if (pol) addPoliceLights(g);
   scene.add(g);
   return { g, wheels };
 }
@@ -2199,6 +2261,10 @@ const WHO = {
   radio: { name: 'Новости по радио', color: '#a0a8b8', init: 'Р' },
   zharov: { name: 'Полковник Жаров, ЧВК «Сокол»', color: '#a8c060', init: 'Ж' },
   pilot: { name: 'Пилот «Сокола»', color: '#8ab070', init: 'П' },
+  mayor: { name: 'Андрей Ветров, мэр', color: '#e8d8b0', init: 'В' },
+  orlova: { name: 'Капитан Орлова, полиция', color: '#6a9aff', init: 'О' },
+  kravets: { name: 'Кравец, заместитель мэра', color: '#b0a0c8', init: 'К' },
+  maska: { name: 'Маска', color: '#e8e8e8', init: 'М' },
 };
 const dlg = { lines: [], i: 0, shown: 0, done: null, prev: null };
 function playDialog(lines, done) {
@@ -2245,9 +2311,10 @@ function spawnEnemyCar() {
   if (trail.length < 26) return;
   const idx = trail.length - 22, p = trail[idx], nx = trail[idx + 1];
   if (p.distanceTo(pc.pos) < 30) return;
-  const m = makeCar(pick([0x2b2b33, 0x3a1f2b, 0x1f2a3a, 0x332a22]), false);
+  const isPol = MIS && MIS.carStyle === 'police';
+  const m = isPol ? makeCar(0, 'police') : makeCar(pick([0x2b2b33, 0x3a1f2b, 0x1f2a3a, 0x332a22]), false);
   if (MIS && MIS.carStyle === 'granit') { const bc = new THREE.Mesh(box1, basic(new THREE.Color(4, 1.5, 0.15))); bc.scale.set(0.9, 0.16, 0.32); bc.position.set(0, 1.62, -0.1); m.g.add(bc); }
-  const e = Object.assign(m, { pos: p.clone(), vel: new V3(), h: Math.atan2(nx.x - p.x, nx.z - p.z), hp: 50, ti: idx + 1, fireCd: rand(1, 2), stuck: 0, rev: 0, dead: false });
+  const e = Object.assign(m, { pos: p.clone(), vel: new V3(), h: Math.atan2(nx.x - p.x, nx.z - p.z), hp: isPol ? 1e6 : 50, ti: idx + 1, fireCd: rand(1, 2), stuck: 0, rev: 0, dead: false, police: isPol, noTarget: isPol });
   e.vel.set(Math.sin(e.h), 0, Math.cos(e.h)).multiplyScalar(20);
   enemyCars.push(e);
   if (!state.firstChase) { state.firstChase = true; toast(MIS && MIS.chaseMsg ? MIS.chaseMsg : 'Хвост! «Шакалы» на хвосте', 2); }
@@ -2300,11 +2367,11 @@ function updateDrive(dt) {
     const diff = wrapA(Math.atan2(tx - e.pos.x, tz - e.pos.z) - e.h);
     let steerE = clamp(-diff * 2.4, -1, 1), thr = Math.abs(diff) > 1.8 && dist < 12 ? 0.4 : 1;
     if (e.rev > 0) { thr = -1; steerE = -steerE; e.rev -= dt; }
-    const im = carPhysics(e, dt, thr, steerE, false, dist > 45 ? 41 : 37);
+    const im = carPhysics(e, dt, thr, steerE, false, (dist > 45 ? 41 : 37) + (e.police ? 3 : 0));
     if (im > 12) damageEnemyCar(e, (im - 12) * 1.5);
     if (Math.abs(e.vf) < 3 && thr > 0) e.stuck += dt; else e.stuck = 0;
     if (e.stuck > 1.1) { e.rev = 0.9; e.stuck = 0; }
-    if (see && dist < 38) {
+    if (see && dist < 38 && !e.police) {
       e.fireCd -= dt;
       if (e.fireCd <= 0) {
         e.fireCd = rand(0.5, 1.0);
@@ -2980,7 +3047,7 @@ function startEpisode(ep, ch) {
   else startGen(ep, ch - 1, true);
 }
 function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else startMission(); }
-const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол' };
+const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол', 12: 'Похищение мэра' };
 function renderChapters() {
   const eb = $('epChips');
   eb.innerHTML = Object.keys(EP_NAMES).map((k) => `<button class="chip${selEp === +k ? ' active' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
@@ -3363,14 +3430,14 @@ const EPS = {
     title: 'Сокол', faction: 'sokol', chaseMsg: 'Хвост! Машины ЧВК «Сокол»',
     logline: 'Завтра суд над Граниным. Его компаньон, полковник Жаров из ЧВК «Сокол», поднимает в воздух вертолёт, чтобы до утра не осталось ни одного свидетеля. Ночь, прожектор с неба и жёлтое такси внизу.',
     endTitle: 'Сокол сбит', endLead: 'Вертолёт догорает у причала, Жаров в наручниках, Лёва даёт показания в суде. Над Порт-Северным снова только чайки.',
-    teaser: 'Продолжение следует.',
+    teaser: 'Эпизод 12. Похищение мэра.',
     chapters: [
       { t: 'Прожектор', type: 'escape', start: [-80, 0, 'E'], secs: 100, chase: 3, goal: [40, -160], goalName: 'Тоннель',
-        heli: { invuln: true, dmg: 5, every: [3, 4.5], alt: 13 },
+        heli: { invuln: true, dmg: 5, every: [3, 4.5], alt: 11 },
         about: 'Вертолёт ЧВК «Сокол» ведёт такси прожектором и бьёт очередями. Продержаться 1:40 и уйти в тоннель — под землёй вертолёт теряет цель.',
         intro: [['radio', '…суд над банкиром Аркадием Граниным начнётся завтра утром в здании мэрии. Главные свидетели находятся под защитой…'], ['mark', 'Под защитой? Лёву никто не охраняет. А над городом кружит вертолёт без опознавательных знаков.'], ['zharov', 'Таксист. Я полковник Жаров, ЧВК «Сокол». Гранин — мой компаньон, и завтра свидетелей не будет. Начнём с тебя.'], ['hero', 'Сначала догони.'], ['mark', 'Уходи в тоннель на южной улице! Под землёй он тебя не увидит.']],
         outro: [['hero', 'Тоннель. Прожектор ушёл.'], ['mark', 'Лёва прячется в старом трамвайном депо на западе. Забери его и вези к мэрии — суд будет там. Охрана суда пустит вас внутрь.']] },
-      { t: 'Свидетель', type: 'deliver', start: [70, -160, 'E'], chase: 2, ramp: 1, heli: { invuln: true, dmg: 6, every: [3, 4.2], alt: 13 },
+      { t: 'Свидетель', type: 'deliver', start: [70, -160, 'E'], chase: 2, ramp: 1, heli: { invuln: true, dmg: 6, every: [3, 4.2], alt: 11 },
         pts: [
           { p: [-160, -80], name: 'Трамвайное депо', t: 80, say: [['leva', 'Я видел вертолёт над депо. Он знает, где я.'], ['hero', 'Пристегнись. Едем в суд.']] },
           { p: [40, 0], name: 'Мэрия', t: 80 },
@@ -3379,7 +3446,7 @@ const EPS = {
         intro: [['hero', 'Депо на другом конце города. Он опять над нами.']],
         outro: [['leva', 'Мэрия! Но двери заперты до утра.'], ['zharov', 'Площадь хорошо видно сверху, бухгалтер. Ни шагу с крыльца.'], ['hero', 'Держись за колонной. Я прикрою.']] },
       { t: 'Площадь', type: 'arena', arena: 'square', ally: { who: 'leva', at: [40, 46], hp: 260, name: 'Лёва' }, waves: [4, 5], survive: 60, heavyFrom: 2,
-        surviveObj: 'Продержись, пока охрана суда открывает двери мэрии.', heli: { invuln: true, dmg: 5, every: [3.5, 5], alt: 13 },
+        surviveObj: 'Продержись, пока охрана суда открывает двери мэрии.', heli: { invuln: true, dmg: 5, every: [3.5, 5], alt: 10 },
         about: 'Центральная площадь ночью: Лёва на ступенях мэрии, бойцы «Сокола» с двух сторон и вертолёт над головой. Продержаться, пока не откроют двери.',
         intro: [['hero', 'Стела, клумбы, фонари — и ни одного укрытия от вертолёта.'], ['leva', 'Я за колонной. Только не дай им подойти к крыльцу!']],
         outro: [['mark', 'Двери открыли, Лёва внутри. Охрана суда держит здание.'], ['zharov', 'Вертолёт заправится и вернётся. До утра у тебя не будет ни минуты.'], ['mark', 'Его площадка — на старой подстанции. Сожги топливо, и он не взлетит надолго.']] },
@@ -3394,12 +3461,54 @@ const EPS = {
         intro: [['pilot', '«Сокол-1» на маршруте. Цель внизу, жёлтое такси.'], ['hero', 'Цель тоже тебя видит.']],
         outro: [['pilot', 'Теряю мощность! Иду на посадку в порту!'], ['zharov', 'Садись у причала. Яхта ждёт.'], ['mark', 'В порту его встречают люди Жарова. Последний бой, {name}.']] },
       { t: 'Последний вылет', type: 'arena', arena: 'docks', mood: 'dawn', waves: [5], heavyFrom: 1, exit: true, exitObj: 'Всё кончено. Вернись к машине.',
-        heliBoss: { hp: 900, dmg: 7, every: [2.6, 3.8], alt: 12, name: 'Вертолёт «Сокол-1»', msg: 'Вертолёт снова в воздухе!', obj: 'Сбей вертолёт: целься в него и стреляй.' },
+        heliBoss: { hp: 900, dmg: 7, every: [2.6, 3.8], alt: 10, name: 'Вертолёт «Сокол-1»', msg: 'Вертолёт снова в воздухе!', obj: 'Сбей вертолёт: целься в него и стреляй.' },
         boss: { look: 'zharov', name: 'Полковник Жаров', hp: 900, scale: 1.15, burst: 4, dmg: 9, speed: 4.6,
           say: [['zharov', 'Я сорок лет летал над чужими городами, таксист.'], ['hero', 'А этот город — мой.']] },
         about: 'Порт на рассвете: бойцы «Сокола», вертолёт снова в воздухе и сам полковник Жаров.',
         intro: [['hero', 'Рассвет, причал, дым над водой. Он успел дозаправиться.']],
         outro: [['zharov', 'Скажи своему бухгалтеру… пусть говорит громче. Мне в камере будет плохо слышно.'], ['mark', 'Суд начался. Лёва даёт показания.'], ['leva', 'Я рассказал всё: про Гранина, про Жарова, про книгу. Судья слушал до последнего слова.'], ['hero', 'Тогда домой. Счётчик выключен.']] },
+    ],
+  },
+  // ---------------- episode 12: the mayor is kidnapped, the police hunt the taxi ----------------
+  12: {
+    title: 'Похищение мэра', faction: 'mask', chaseMsg: 'Хвост! Люди в масках',
+    logline: 'Мэр Андрей Ветров возвращает таксопарк водителям. Прямо на церемонии его похищают люди в масках, а камеры показывают у мэрии жёлтое такси. Теперь героя ищет вся полиция города, а мэра надо найти раньше, чем станет поздно.',
+    endTitle: 'Мэр на месте', endLead: 'Заместитель мэра Кравец арестован, мэр Ветров вернулся в кабинет, а полиция впервые помахала жёлтому такси рукой.',
+    teaser: 'Продолжение следует.',
+    chapters: [
+      { t: 'Церемония', type: 'arena', arena: 'square', waves: [4, 5], heavyFrom: 2, exit: true, exitObj: 'Мэра увозят! К машине!',
+        about: 'Церемония на центральной площади. Люди в масках хватают мэра и уводят к фургону, а площадь заполняют их бойцы. Отбиться и прорваться к машине.',
+        intro: [['mayor', 'Сегодня таксопарк «Ночной тариф» возвращается тем, кто ночами возит этот город.'], ['mark', 'Ну вот. Теперь и меня покажут по телевизору.'], ['hero', 'Для церемонии здесь многовато людей в масках.'], ['mayor', 'Что вы делаете?! Отпустите меня!']],
+        outro: [['mark', 'Мэра затолкали в фургон! Он уходит по Центральной!'], ['orlova', 'Внимание всем постам: похищен мэр. Подозреваемый — жёлтое такси. Повторяю: жёлтое такси.'], ['hero', 'Отлично. Теперь я подозреваемый.']] },
+      { t: 'Фургон', type: 'stop', police: true, start: [0, 0, 'E'], car: [40, 0, 'E'], hp: 600, speed: 27, shoot: false, name: 'Фургон похитителей', chase: 3,
+        route: [[80, 0], [80, -80], [0, -80], [0, -160], [-80, -160], [-80, 0], [0, 0], [0, 80], [80, 80], [80, 0]],
+        stopObj: 'Фургон встал. Подъезжай, пока не подоспела полиция.',
+        about: 'Догнать фургон похитителей и остановить его, не взрывая. Сзади полиция: по ней стрелять нельзя, и нельзя дать себя зажать.',
+        intro: [['hero', 'Белый фургон, впереди. Мигалки сзади. Стрелять — только по фургону.']],
+        outro: [['hero', 'Фургон пустой! Только мешок и телефон.'], ['mark', 'Подмена. Мэра пересадили в другую машину ещё на площади.'], ['orlova', 'Таксист, стоять! Выйти из машины!'], ['mark', 'Уходи! Если тебя возьмут сейчас, мэра уже никто не найдёт.']] },
+      { t: 'В розыске', type: 'escape', police: true, start: [0, -40, 'S'], secs: 110, chase: 4, goal: [-80, -80], goalName: 'Гараж Марка',
+        about: 'Вся полиция города ищет жёлтое такси. Продержаться 1:50, не дать себя окружить и уйти в гараж Марка. Тоннель на южной улице сбивает погоню со следа.',
+        intro: [['orlova', 'Всем экипажам: перекрыть мосты. Такси не уйдёт.'], ['hero', 'Тоннель. Мне нужен тоннель.']],
+        outro: [['mark', 'Ворота закрыл. Номера снимаем, такси под брезент.'], ['leva', 'Я проверил телефон из фургона. Последний звонок — в мэрию. В кабинет заместителя мэра, Кравца.'], ['hero', 'Заместитель похитил собственного мэра?'], ['leva', 'Если мэр исчезнет, город возглавит заместитель. Простая арифметика.']] },
+      { t: 'Машина Кравца', type: 'tail', start: [-20, 0, 'E'], car: [20, 0, 'E'], speed: 18, name: 'Чёрный седан', stops: { 1: 4, 3: 5 },
+        route: [[80, 0], [80, 80], [160, 80], [160, -80], [120, -80]],
+        about: 'Кравец выезжает из мэрии проверить заложника. Проследить за его седаном до укрытия. Стрелять нельзя.',
+        intro: [['leva', 'Кравец только что вышел из мэрии. Чёрный седан. Он едет к заложнику — убедиться, что всё в порядке.'], ['hero', 'Пусть показывает дорогу.']],
+        outro: [['hero', 'Склад №7. Опять.'], ['mark', 'Этот склад давно пора снести.'], ['kravets', 'Таксист? Ты слишком много ездишь по моему городу.']] },
+      { t: 'Заложник', type: 'arena', arena: 'yard', waves: [5, 6], heavyFrom: 2, exit: true, exitObj: 'Мэр внутри склада. Войди за ним.',
+        boss: { look: 'maska', name: 'Маска', hp: 800, scale: 1.2, burst: 3, dmg: 9, speed: 5,
+          say: [['maska', 'Кравец платит за тишину. Тебя это тоже касается.'], ['hero', 'Тихо уже не получится.']] },
+        about: 'Склад №7: две волны людей в масках и их главарь по прозвищу Маска. Мэр заперт внутри склада.',
+        intro: [['hero', 'Охраны много. Значит, мэр точно здесь.']],
+        outro: [['mayor', 'Вы… таксист с камер? Это вы меня спасли?'], ['hero', 'Работа такая. Садитесь, господин мэр. Едем в мэрию.'], ['orlova', 'Внимание, жёлтое такси у склада №7! Всем экипажам!'], ['mayor', 'Пока полиция думает, что похититель — вы, нас будут останавливать на каждом углу.']] },
+      { t: 'Кортеж', type: 'deliver', police: true, start: [110, -80, 'W'], chase: 3, ramp: 1, fragile: 30, fragileTitle: 'Мэр ранен', fragileText: 'Такси слишком сильно побили. Береги машину: уходи от таранов.',
+        pts: [
+          { p: [-120, -80], name: 'Мост через канал', t: 50, say: [['mayor', 'Дайте рацию. Говорит мэр Ветров. Я в такси, меня везут в мэрию. Капитан Орлова, это не похититель.'], ['orlova', '…Принято. Но пока приказ дойдёт до всех экипажей — держитесь.']] },
+          { p: [40, 0], name: 'Мэрия', t: 75 },
+        ],
+        about: 'Довезти мэра до мэрии, пока полиция всё ещё гонится за такси. В машине мэр — береги её.',
+        intro: [['mayor', 'Только не слишком резко. Я мэр, а не каскадёр.'], ['hero', 'Пристегнитесь, господин мэр.']],
+        outro: [['mayor', 'Кравец арестован прямо в кабинете. Город снова мой… то есть наш.'], ['orlova', 'Таксист, приношу извинения от всего управления.'], ['hero', 'Извинения принимаются. А штрафы за превышение?'], ['orlova', '…Не испытывай судьбу.']] },
     ],
   },
 };
@@ -3419,6 +3528,7 @@ const ALLY_LOOKS = {
   host: { model: 'savva', skin: '#e0b090', colors: { Shirt: '#d8c8a8', Pants: '#3a3a42', Hat: '#3a2a20', Detail: '#6a4a2a' }, face: { brow: '#c8c8c8', iris: '#5a5a5a', mouth: 'grim', stache: '#d0d0d0', wrinkles: true } },
 };
 const BOSS_LOOKS = {
+  maska: { model: 'thug1', skin: '#d8a888', colors: { Details: '#e8e8e8' }, face: { brow: '#15151a', iris: '#2a1a10', angry: true, mask: true } },
   zharov: { model: 'crow', skin: '#d8a888', colors: { Main: '#3a4230', Grey: '#6a7450', Black: '#1a1c16', Helmet: '#2a3020' }, face: { brow: '#8a8a8a', iris: '#4a5a3a', mouth: 'grim', angry: true, scar: true, stache: '#9a9a9a' } },
   glyba: { model: 'boss', skin: '#c8987a', colors: { Black: '#1a2238', Shirt: '#2a3a5a', Details: '#c0c8d8', Belt: '#101010', Hair: '#1a1a1a' }, face: { brow: '#1a1a1a', iris: '#2a1a10', mouth: 'grim', angry: true, scar: true, stubble: '#1a1a1a' } },
   ten: { model: 'vera', skin: '#ecc8b0', colors: { Black: '#14141c', Shirt: '#24243a', Details: '#b07ad8', Hair: '#101014', Belt: '#14141c' }, face: { fem: true, brow: '#101014', iris: '#6a4a9a', mouth: 'grim', angry: true } },
@@ -3431,6 +3541,7 @@ const BOSS_LOOKS = {
   verab: LOOKS.vera,
 };
 const FACTIONS = {
+  mask: { thug1: { Details: '#e8e8e8' }, thug2: { Shirt: '#1a1a1e', Pants: '#141418', Hair: '#15151a' }, thug3: { Shirt: '#2a2a2e', Pants: '#101012', Hair: '#15151a' }, heavy: { Shirt: '#101012', Pants: '#101012' } },
   sokol: { thug1: { Details: '#7a8a3a' }, thug2: { Shirt: '#4a5434', Pants: '#2a2e22', Hair: '#15151a' }, thug3: { Shirt: '#3a4230', Pants: '#4a5434', Hair: '#15151a' }, heavy: { Shirt: '#2a3020', Pants: '#2a2e22' } },
   granit: { thug1: { Details: '#3a7ad0' }, thug2: { Shirt: '#1e2c4a', Pants: '#15151c', Hair: '#15151a' }, thug3: { Shirt: '#2a3a58', Pants: '#1a2030', Hair: '#15151a' }, heavy: { Shirt: '#101828', Pants: '#101828' } },
   night: { thug1: { Details: '#7a3fd0' }, thug2: { Shirt: '#3a2050', Pants: '#1b1b22', Hair: '#15151a' }, thug3: { Shirt: '#24182e', Pants: '#3a2a50', Hair: '#15151a' }, heavy: { Shirt: '#4a2070', Pants: '#1b1b22' } },
@@ -3512,7 +3623,8 @@ function startGen(ep, i, withIntro) {
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
   };
   MIS = GEN[c.type](c, title, done, E);
-  if (E.carStyle) MIS.carStyle = E.carStyle; if (E.chaseMsg) MIS.chaseMsg = E.chaseMsg;
+  if (c.carStyle || E.carStyle) MIS.carStyle = c.carStyle || E.carStyle; if (c.chaseMsg || E.chaseMsg) MIS.chaseMsg = c.chaseMsg || E.chaseMsg;
+  if (c.police) { MIS.carStyle = 'police'; MIS.chaseMsg = c.chaseMsg || 'Полиция на хвосте! Стрелять по ней нельзя'; withPolice(MIS, c); }
   if (c.heli) spawnHeli(c.heli);
   const mode0 = state.mode;
   if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; });
@@ -3809,7 +3921,9 @@ function updateCamera(dt) {
     look = pc.pos.clone().addScaledVector(f, 6).add(new V3(0, 1.2, 0)); focus.copy(pc.pos);
     camera.fov += ((window.innerWidth < window.innerHeight ? 75 : 62) + speedK * 8 - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
   } else {
-    desired = hero.pos.clone().add(new V3(0, 9.5, 6.4)); look = hero.pos.clone().add(new V3(0, 0.8, -2.4)); focus.copy(hero.pos);
+    // with a helicopter overhead the camera pulls back and looks further ahead, so the helicopter stays in the frame
+    const air = HELI && !HELI.gone;
+    desired = hero.pos.clone().add(air ? new V3(0, 13, 13) : new V3(0, 9.5, 6.4)); look = hero.pos.clone().add(air ? new V3(0, 1.5, -6) : new V3(0, 0.8, -2.4)); focus.copy(hero.pos);
   }
   if (snapCam) { camPos.copy(desired); camLook.copy(look); snapCam = false; }
   const k = state.mode === 'preview' ? 1 : 1 - Math.exp(-dt * (state.mode === 'select' ? 4 : 7));
@@ -4553,7 +4667,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateRain(dt, focus);
