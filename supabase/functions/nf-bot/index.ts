@@ -9,7 +9,7 @@ import * as XLSX from 'npm:xlsx@0.18.5';
 
 const token = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const SELF = `${Deno.env.get('SUPABASE_URL')}/functions/v1/nf-bot`;
-const SITE = 'https://minionslaba-ux.github.io/night_rate/';
+const SITE = 'https://nightfaregame.com/';
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 const api = async (method: string, body: Record<string, unknown> = {}) => {
