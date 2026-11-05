@@ -426,7 +426,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v32'; window.__errs = [];
+window.APP_VER = 'v33'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1570,7 +1570,7 @@ function buildWorld() {
   for (const [x, z, ry] of parked) { carTypes[srand() < 0.08 ? 'car_police' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon'])].push({ x, y: 0.02, z, ry, sx: CAR_S }); addBox(x, z, ry === 0 || ry === PI ? 2 : 4.4, ry === 0 || ry === PI ? 4.4 : 2, 1.5); }
   Object.entries(carTypes).forEach(([n, list]) => kitInstances(n, list, KIT.car, true));
   kitInstances('streetlight', lamps, KIT.prop, true);
-  kitInstances('trafficlight_A', tlights, KIT.prop, true);
+  buildSignals(tlights); buildRoadSigns();
 
   buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation();
 
@@ -1809,6 +1809,132 @@ function bumpPlayer(m, r) {
   const vn = pc.vel.x * nx + pc.vel.z * nz;
   if (vn < 0) { pc.vel.x -= nx * vn * 1.3; pc.vel.z -= nz * vn * 1.3; pc.vel.multiplyScalar(0.8); if (-vn > 6) { sfx.crash(-vn); sparks(new V3((pc.pos.x + m.pos.x) / 2, 1, (pc.pos.z + m.pos.z) / 2)); if (-vn > 12) damagePlayer((-vn - 12) * 0.5); m.wait = 1.6; } }
 }
+// ---------------- traffic signals and road signs ----------------
+// One cycle for the whole city, counted from the real clock: every player in the open city sees the same lights.
+// 'ns' = traffic along z (the north-south streets), 'ew' = traffic along x.
+const SIG = { heads: [], mats: null, phase: { ns: 'g', ew: 'r' }, noNodes: new Set(['120,-80']) };
+const SIG_CYCLE = 26;
+function sigPhase() {
+  const t = (Date.now() / 1000) % SIG_CYCLE;
+  // 0–10 ns green, 10–12 ns yellow, 12–13 all red, 13–23 ew green, 23–25 ew yellow, 25–26 all red
+  return { ns: t < 10 ? 'g' : t < 12 ? 'y' : 'r', ew: t >= 13 && t < 23 ? 'g' : t >= 23 && t < 25 ? 'y' : 'r' };
+}
+// may a mover with this lane go on, or must it stop before the crossing? Returns the speed cap.
+function sigCap(a, b, s, L, v) {
+  if (Math.abs(b[0]) > 160 || Math.abs(b[1]) > 160 || SIG.noNodes.has(b[0] + ',' + b[1])) return 1e9;
+  const ph = SIG.phase[a[0] === b[0] ? 'ns' : 'ew'];
+  if (ph === 'g') return 1e9;
+  const stopAt = L - 13.5, left = stopAt - s;
+  if (left < -0.5 || left > 28) return 1e9;            // already in the crossing, or still far away
+  if (ph === 'y' && left < Math.max(4, v * v / 20)) return 1e9;   // too close to stop on yellow: go
+  return Math.max(0, left * 0.9);
+}
+function buildSignals(tlights) {
+  const dark = new THREE.MeshStandardMaterial({ color: 0x15161c, roughness: 0.6 });
+  const mk = (c) => new THREE.MeshBasicMaterial({ color: c.clone() });
+  SIG.lit = { r: new THREE.Color(1, 0.02, 0.01), y: new THREE.Color(1, 0.55, 0), g: new THREE.Color(0, 0.62, 0.16) };
+  SIG.dim = { r: new THREE.Color(0.09, 0.015, 0.015), y: new THREE.Color(0.08, 0.06, 0.01), g: new THREE.Color(0.01, 0.07, 0.035) };
+  SIG.mats = { ns: { r: mk(SIG.dim.r), y: mk(SIG.dim.y), g: mk(SIG.dim.g) }, ew: { r: mk(SIG.dim.r), y: mk(SIG.dim.y), g: mk(SIG.dim.g) } };
+  const heads = [], lamps = { ns: [], ew: [] };
+  for (const t of tlights) {
+    const rx = ROADS.reduce((p, q) => (Math.abs(q - t.x) < Math.abs(p - t.x) ? q : p)), rz = ROADS.reduce((p, q) => (Math.abs(q - t.z) < Math.abs(p - t.z) ? q : p));
+    const sx = Math.sign(t.x - rx), sz = Math.sign(t.z - rz);
+    // two heads per pole: one faces the cars coming along z from this side, the other the cars coming along x
+    for (const [ax, fx, fz] of [['ns', 0, sz], ['ew', sx, 0]]) {
+      const hx = t.x + fx * 0.3, hz = t.z + fz * 0.3, ry = Math.atan2(fx, fz);
+      const off = [0, 0];   // the two heads stand at right angles on the pole, each facing its own street
+      heads.push({ x: hx + off[0], y: 3.75, z: hz + off[1], ry });
+      for (const [c, y] of [['r', 4.12], ['y', 3.75], ['g', 3.38]]) lamps[ax].push({ c, x: hx + off[0] + fx * 0.19, y, z: hz + off[1] + fz * 0.19, ry });
+    }
+  }
+  const inst = (geo, mat, list) => {
+    const im = new THREE.InstancedMesh(geo, mat, list.length), o = new THREE.Object3D();
+    list.forEach((p, i) => { o.position.set(p.x, p.y, p.z); o.rotation.set(0, p.ry, 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+    im.frustumCulled = false; scene.add(im); return im;
+  };
+  inst(new THREE.BoxGeometry(0.42, 1.18, 0.3), dark, heads);
+  // our own poles (the kit model is turned diagonally and its heads hid the lamps): a pole, a little cap and a push-button box
+  const pg = new THREE.CylinderGeometry(0.09, 0.11, 4.5, 8); pg.translate(0, 2.25, 0);
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x2a2c34, roughness: 0.5, metalness: 0.5 });
+  const pim = inst(pg, poleMat, tlights.map((t) => ({ x: t.x, y: 0.1, z: t.z, ry: 0 }))); pim.castShadow = true;
+  inst(new THREE.BoxGeometry(0.22, 0.3, 0.16), new THREE.MeshStandardMaterial({ color: 0xd8b020, roughness: 0.6 }), tlights.map((t) => ({ x: t.x, y: 1.2, z: t.z, ry: t.ry })));
+  for (const t of tlights) addBox(t.x, t.z, 0.3, 0.3, 4.5);
+  const lampGeo = new THREE.SphereGeometry(0.15, 12, 8); lampGeo.scale(1, 1, 0.45);
+  for (const ax of ['ns', 'ew']) for (const c of ['r', 'y', 'g']) inst(lampGeo, SIG.mats[ax][c], lamps[ax].filter((q) => q.c === c));
+  // a soft glow under each lit head would cost a lot: the lamps are bright enough for the bloom instead
+}
+function updateSignals() {
+  if (!SIG.mats) return;
+  const ph = sigPhase(); SIG.phase = ph;
+  for (const ax of ['ns', 'ew']) for (const c of ['r', 'y', 'g']) SIG.mats[ax][c].color.copy(ph[ax] === c ? SIG.lit[c] : SIG.dim[c]);
+}
+
+// ---- road signs: generic pictograms (priority road, give way, pedestrian crossing, speed limits, parking, stop) ----
+const SIGN_KINDS = ['main', 'yield', 'walk', 'speed60', 'speed40', 'parking', 'stop', 'bus'];
+function signAtlasTex() {
+  const C = 128, cv = document.createElement('canvas'); cv.width = C * SIGN_KINDS.length; cv.height = C; const g = cv.getContext('2d');
+  const font = (px) => `800 ${px}px Rubik, "Segoe UI", Arial, sans-serif`;
+  SIGN_KINDS.forEach((k, i) => {
+    const x0 = i * C, cx = x0 + C / 2, cy = C / 2; g.save();
+    if (k === 'main') { g.translate(cx, cy); g.rotate(PI / 4); g.fillStyle = '#fff'; g.fillRect(-42, -42, 84, 84); g.fillStyle = '#f2c200'; g.fillRect(-30, -30, 60, 60); g.strokeStyle = '#222'; g.lineWidth = 2; g.strokeRect(-42, -42, 84, 84); }
+    else if (k === 'yield') { g.beginPath(); g.moveTo(x0 + 8, 14); g.lineTo(x0 + C - 8, 14); g.lineTo(cx, C - 8); g.closePath(); g.fillStyle = '#d42020'; g.fill(); g.beginPath(); g.moveTo(x0 + 28, 26); g.lineTo(x0 + C - 28, 26); g.lineTo(cx, C - 32); g.closePath(); g.fillStyle = '#fff'; g.fill(); }
+    else if (k === 'walk' || k === 'parking' || k === 'bus') {
+      g.fillStyle = '#1d5fd1'; g.fillRect(x0 + 10, 10, C - 20, C - 20); g.strokeStyle = '#fff'; g.lineWidth = 4; g.strokeRect(x0 + 14, 14, C - 28, C - 28);
+      if (k === 'walk') { g.beginPath(); g.moveTo(cx, 24); g.lineTo(x0 + C - 22, C - 24); g.lineTo(x0 + 22, C - 24); g.closePath(); g.fillStyle = '#fff'; g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(cx + 2, 52, 6, 0, PI * 2); g.fill(); g.lineWidth = 5; g.strokeStyle = '#111'; g.beginPath(); g.moveTo(cx, 60); g.lineTo(cx - 3, 78); g.lineTo(cx - 12, 92); g.moveTo(cx - 3, 78); g.lineTo(cx + 9, 92); g.moveTo(cx - 12, 66); g.lineTo(cx + 12, 70); g.stroke(); g.fillStyle = '#111'; for (let k2 = 0; k2 < 4; k2++) g.fillRect(x0 + 34 + k2 * 16, 97, 9, 5); }
+      else { g.fillStyle = '#fff'; g.font = font(k === 'bus' ? 30 : 76); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(k === 'bus' ? 'АВТОБУС' : 'P', cx, cy + 3, C - 34); }
+    }
+    else if (k === 'speed60' || k === 'speed40') { g.beginPath(); g.arc(cx, cy, 54, 0, PI * 2); g.fillStyle = '#d42020'; g.fill(); g.beginPath(); g.arc(cx, cy, 41, 0, PI * 2); g.fillStyle = '#fff'; g.fill(); g.fillStyle = '#111'; g.font = font(46); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(k === 'speed60' ? '60' : '40', cx, cy + 3); }
+    else if (k === 'stop') { g.beginPath(); for (let j = 0; j < 8; j++) { const a = PI / 8 + j * PI / 4; g.lineTo(cx + Math.cos(a) * 56, cy + Math.sin(a) * 56); } g.closePath(); g.fillStyle = '#c81818'; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 4; g.stroke(); g.fillStyle = '#fff'; g.font = font(34); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('STOP', cx, cy + 2); }
+    g.restore();
+  });
+  const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t;
+}
+function buildRoadSigns() {
+  const list = {}; SIGN_KINDS.forEach((k) => { list[k] = []; });
+  const posts = [];
+  const skip = (x, z) => inTunnel(x, z, 3) || inCanalBand(x, z, 2) || nearCare(x, z, 12) || (Math.abs(x - 120) < 16 && z < -66 && z > -98) || Math.abs(x) > 168 || Math.abs(z) > 168;
+  const put = (kind, x, z, fx, fz) => { if (skip(x, z)) return; const ry = Math.atan2(-fx, -fz); posts.push({ x, z }); list[kind].push({ x, z, ry }); };
+  // at every approach to a crossing, on the right-hand kerb, ~15 m before the node
+  for (const rx of ROADS) for (const rz of ROADS) for (const [fx, fz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+    const fromX = rx - fx * 80, fromZ = rz - fz * 80; if (Math.abs(fromX) > 160 || Math.abs(fromZ) > 160) continue;
+    const alongZ = fx === 0, road = alongZ ? rx : rz, hw = alongZ ? hwX(rx) : hwZ(rz);
+    const x = rx - fx * 15 - fz * (hw + 0.9), z = rz - fz * 15 + fx * (hw + 0.9);
+    let kind;
+    if (alongZ && rx === AVENUE) kind = 'main';
+    else if (!alongZ && rx === AVENUE) kind = 'yield';
+    else if (alongZ && (rx === -80 || rx === 160)) kind = 'speed40';
+    else kind = hr(rx + fx, rz + fz, 21) < 0.5 ? 'walk' : 'speed60';
+    put(kind, x, z, fx, fz);
+  }
+  // mid-block: parking and bus-stop signs here and there
+  for (const r of ROADS) for (const t of [-120, -40, 40, 120]) {
+    if (hr(r, t, 33) < 0.45) put('parking', r + (hwX(r) + 0.9), t + 6, 0, -1);
+    if (hr(t, r, 34) < 0.25) put('parking', t + 6, r - 8.9, 1, 0);
+  }
+  // the narrow streets meet the outer ring with a stop sign
+  for (const rx of [-80, 160]) put('stop', rx - (hwX(rx) + 0.9), 160 - 15, 0, 1);
+  const tex = signAtlasTex(), N = SIGN_KINDS.length;
+  const front = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, color: new THREE.Color(1.15, 1.15, 1.15), side: THREE.FrontSide });
+  const back = new THREE.MeshStandardMaterial({ color: 0x6a6c74, roughness: 0.6, side: THREE.FrontSide });
+  const pole = new THREE.MeshStandardMaterial({ color: 0x8a8c94, roughness: 0.5, metalness: 0.4 });
+  const o = new THREE.Object3D();
+  const fill = (im, arr, y, dRot) => { arr.forEach((p, i) => { o.position.set(p.x, y, p.z); o.rotation.set(0, (p.ry || 0) + (dRot || 0), 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }); im.frustumCulled = false; scene.add(im); };
+  SIGN_KINDS.forEach((k, i) => {
+    if (!list[k].length) return;
+    const geo = new THREE.PlaneGeometry(0.95, 0.95), uv = geo.attributes.uv;
+    for (let j = 0; j < uv.count; j++) uv.setX(j, (i + uv.getX(j)) / N);
+    geo.translate(0, 0, 0.03);
+    fill(new THREE.InstancedMesh(geo, front, list[k].length), list[k], 2.55);
+  });
+  const all = SIGN_KINDS.flatMap((k) => list[k]);
+  const backGeo = new THREE.PlaneGeometry(0.8, 0.8);
+  fill(new THREE.InstancedMesh(backGeo, back, all.length), all, 2.55, PI);
+  const pg = new THREE.CylinderGeometry(0.045, 0.045, 3.0, 6); pg.translate(0, 1.5, 0);
+  const pim = new THREE.InstancedMesh(pg, pole, posts.length); fill(pim, posts, 0.15); pim.castShadow = true;
+  for (const p of posts) addBox(p.x, p.z, 0.25, 0.25, 3);
+  SIG.signs = all.length;
+}
+
 function updateLife(dt) {
   if (!LIFE.ready) return;
   const active = state.mode === 'drive' || state.mode === 'foot' || state.mode === 'preview' || state.mode === 'dialog';
@@ -1818,7 +1944,7 @@ function updateLife(dt) {
     if (!active) { m.g.visible = false; continue; }
     if (!m.g.visible || !m.a || Math.hypot(m.pos.x - near.x, m.pos.z - near.z) > 170 || inArena(m.pos.x, m.pos.z, 12)) { if (!spawnTraffic(m, near)) continue; }
     if (m.wait > 0) { m.wait -= dt; m.v = 0; }
-    else { const target = obstacleAhead(m, 12) ? 0 : m.turn ? m.vmax * 0.55 : m.vmax; m.v += clamp(target - m.v, -dt * 16, dt * 5); }
+    else { let target = obstacleAhead(m, 12) ? 0 : m.turn ? m.vmax * 0.55 : m.vmax; if (!m.turn) target = Math.min(target, sigCap(m.a, m.b, m.s, laneDir(m.a, m.b).L, m.v)); m.v += clamp(target - m.v, -dt * 16, dt * 5); }
     moverStep(m, dt, (mm) => nodeNext(mm.a, mm.b));
     m.g.position.set(m.pos.x, 0, m.pos.z); m.g.rotation.y = m.h;
     for (const w of m.wheels) w.rotation.x += m.v * dt * 2.2;
@@ -1830,7 +1956,8 @@ function updateLife(dt) {
     if (m.wait > 0) { m.wait -= dt; m.v = 0; }
     else {
       const stop = !m.turn && m.stops.find((q) => q.seg === m.ri && m.s < q.s && q.s - m.s < 14);
-      const target = obstacleAhead(m, 15) ? 0 : stop ? Math.max(1.5, (stop.s - m.s) * 0.7) : m.turn ? m.vmax * 0.55 : m.vmax;
+      let target = obstacleAhead(m, 15) ? 0 : stop ? Math.max(1.5, (stop.s - m.s) * 0.7) : m.turn ? m.vmax * 0.55 : m.vmax;
+      if (!m.turn) target = Math.min(target, sigCap(m.a, m.b, m.s, laneDir(m.a, m.b).L, m.v));
       m.v += clamp(target - m.v, -dt * 10, dt * 3);
       if (stop && stop.s - m.s < 0.8) { m.wait = 3.5; m.s = stop.s + 0.9; }
     }
@@ -6534,7 +6661,7 @@ function botsUpdate(dt) {
     // slow down near the player's car ahead and at corners
     const ahead = pc && Math.hypot(pc.pos.x - b.pos.x, pc.pos.z - b.pos.z) < 9 && Math.cos(Math.atan2(pc.pos.x - b.pos.x, pc.pos.z - b.pos.z) - b.h) > 0.7;
     const corner = Math.min(b.s, L - b.s) < 12;
-    const v = ahead ? 0 : corner ? b.sp * 0.55 : b.sp;
+    const v = Math.min(ahead ? 0 : corner ? b.sp * 0.55 : b.sp, sigCap(b.a, b.b, b.s, L, b.v || b.sp)); b.v = v;
     b.s += v * dt;
     if (b.s >= L) botNext(b);
     const d = botLanePos(b.a, b.b, b.s, tmp);
@@ -7280,7 +7407,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateRain(dt, focus);
@@ -7310,7 +7437,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, scene, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
