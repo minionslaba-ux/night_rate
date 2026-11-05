@@ -149,9 +149,11 @@ body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, bo
 .cam-flash { position: fixed; inset: 0; background: #fff; opacity: .85; pointer-events: none; z-index: 60; animation: camflash .38s ease-out forwards; } @keyframes camflash { to { opacity: 0; } } .chat.svc { min-height: 0; } .svc .btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .care { display: grid; gap: 4px; } .care .bar { grid-template-columns: auto 1fr auto; } .bar-fill.fuel { background: #ff9a3d; } .bar-fill.fuel.low { background: var(--neon); } .fuel-n { font-size: 11px; min-width: 32px; text-align: right; }
 /* открытый город: меньше плашек поверх дороги */
-body.online:not(.task) .hud-tl > .bar, body.online .care-txt:not(.bad), body.online .kills-w { display: none; }
+body.online:not(.task) .hud-tl > .bar, body.online .care-txt:not(.bad), body.online .kills-w, body.online:not(.task) .wpn-stat { display: none; }
 body.online #objective { pointer-events: auto; cursor: pointer; } body.online .hud-tl { max-width: min(40vw, 320px); } .obj.min { padding-top: 7px; padding-bottom: 7px; } .obj.min > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; opacity: .85; }
 .onl-stat { color: #4dffa6; font-weight: 600; }
+.pitem.wpn .wimg { height: 92px; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(255,255,255,.08), transparent 70%); border-radius: 8px; } .pitem.wpn img { max-width: 100%; max-height: 92px; object-fit: contain; }
+.pitem.wpn.locked { opacity: .55; } .wperk { color: var(--taxi); } .wlock { color: var(--muted); } .wpn-stat { font-size: 11.5px; }
 .care-txt { font-size: 11px; color: var(--muted); background: var(--panel); padding: 4px 10px; border-radius: 6px; } .care-txt.bad { color: #ffb08a; } .hud-chip.tow { color: #ffb08a; border-color: rgba(255,154,61,.6); } .ptitle { display: flex; justify-content: space-between; align-items: center; } .pbody { overflow-y: auto; display: grid; gap: 8px; align-content: start; font-size: 14px; }
 .prow2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; } .plist { display: grid; gap: 6px; }
 .tbtn.talk { display: none; --c: #7aff9a; right: calc(266px + var(--sar)); bottom: calc(40px + var(--sab)); width: 72px; height: 72px; }
@@ -476,6 +478,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
   <div class="hud-tr">
     <canvas id="minimap" width="300" height="300"></canvas>
     <div class="stats"><span id="onlStat" class="onl-stat" hidden></span><b id="coins">0</b> монет<span class="kills-w"> · <b id="kills">0</b> сбито</span></div>
+    <div id="wpnStat" class="stats wpn-stat"></div>
     <div id="boosts" class="stats boosts"></div>
     <button id="btnAmmo" class="ammo-buy" type="button" hidden></button>
     <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
@@ -3659,14 +3662,14 @@ function makeHuman(look, scale) {
     const fm = new THREE.Mesh(FACE_GEO, new THREE.MeshStandardMaterial({ map: faceTex(look.face), transparent: true, depthWrite: false, roughness: 0.55, envMapIntensity: 0.4, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
     fm.position.set(0, 0.35, 0.5); fm.renderOrder = 2; headB.add(fm);
   }
-  const fist = model.getObjectByName('FistR');
-  if (fist && !look.noGun) { const gun = new THREE.Group(); const a = new THREE.Mesh(gunGeoA, gunMat); a.position.set(0, 0.06, 0.22); gun.add(a); const b = new THREE.Mesh(gunGeoB, gunMat); b.position.set(0, -0.1, 0.02); b.rotation.x = 0.25; gun.add(b); gun.scale.setScalar(0.9); gun.position.set(0, 0.12, 0.08); gun.rotation.set(-1.57, 0, 0); fist.add(gun); }
+  const fist = model.getObjectByName('FistR'); let gunG = null;
+  if (fist && !look.noGun) { const gun = new THREE.Group(); const a = new THREE.Mesh(gunGeoA, gunMat); a.position.set(0, 0.06, 0.22); gun.add(a); const b = new THREE.Mesh(gunGeoB, gunMat); b.position.set(0, -0.1, 0.02); b.rotation.x = 0.25; gun.add(b); gun.scale.setScalar(0.9); gun.position.set(0, 0.12, 0.08); gun.rotation.set(-1.57, 0, 0); fist.add(gun); gunG = gun; }
   model.scale.setScalar(HUMAN_S);
   const g = new THREE.Group(); g.add(model); g.scale.setScalar(scale || 1); scene.add(g);
   const mixer = new THREE.AnimationMixer(model), acts = {};
   ASSETS.clips.forEach((c) => { acts[c.name] = mixer.clipAction(c); });
   if (acts.Run) acts.Run.timeScale = 1.15;
-  const h = { g, model, mixer, acts, cur: null, lockT: 0, head: model.getObjectByName('Head') || g };
+  const h = { g, model, mixer, acts, cur: null, lockT: 0, head: model.getObjectByName('Head') || g, gunG };
   playAct(h, 'Idle', 0);
   HUMANS.add(h);
   return h;
@@ -4194,13 +4197,14 @@ function carPhysics(c, dt, throttle, steer, drift, maxF, keepSpeed) {
 // ---------------- bullets ----------------
 const bGeo = new THREE.BoxGeometry(0.14, 0.14, 1.6);
 const bMatP = basic(0xffe27a), bMatE = basic(0xff4d6d);
-function fire(from, dir, speed, dmg, team) {
-  LIFE.shotT = 0;
+function fire(from, dir, speed, dmg, team, o) {
+  LIFE.shotT = 0; o = o || {};
   const m = new THREE.Mesh(bGeo, team === 'p' ? bMatP : bMatE);
   m.position.copy(from); m.lookAt(from.clone().add(dir)); scene.add(m);
-  bullets.push({ m, pos: from.clone(), vel: dir.clone().multiplyScalar(speed), dmg, team, life: 1.3 });
-  spawnP(from, { color: team === 'p' ? 0xffe08a : 0xff6a6a, size: 0.35, life: 0.06, add: true });
-  flash.position.copy(from); flash.intensity = Math.max(flash.intensity, 1.1);
+  bullets.push({ m, pos: from.clone(), vel: dir.clone().multiplyScalar(speed), dmg, team, life: o.life || 1.3, pierce: o.pierce, knock: o.knock, blast: o.blast, hits: o.pierce ? [] : null });
+  if (o.quiet) return;
+  spawnP(from, { color: team === 'p' ? 0xffe08a : 0xff6a6a, size: o.blast ? 0.7 : 0.35, life: 0.06, add: true });
+  flash.position.copy(from); flash.intensity = Math.max(flash.intensity, o.blast ? 2.2 : 1.1);
   (team === 'p' ? sfx.shot : sfx.eshot)();
 }
 const prevP = new V3();
@@ -4209,12 +4213,20 @@ function updateBullets(dt) {
     const b = bullets[i]; b.life -= dt; prevP.copy(b.pos); b.pos.addScaledVector(b.vel, dt);
     let hit = b.life <= 0;
     if (!hit && inColliders(b.pos)) { sparks(b.pos); hit = true; }
+    if (hit && b.blast) wpnBlast(b.pos);
     if (!hit) {
       if (b.team === 'p') {
         const list = state.act === 1 ? enemyCars : enemies;
         for (const t of list) {
-          if (t.dead || t.noTarget) continue; const r = t.hitR || (state.act === 1 ? 2.5 : (t.boss ? 1.05 : 0.8));
-          if (segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos); sfx.hit(); if (state.act === 1) damageEnemyCar(t, b.dmg); else damageEnemy(t, b.dmg); hitMarker(t.dead || t.disabled); break; }
+          if (t.dead || t.noTarget || (b.hits && b.hits.indexOf(t) >= 0)) continue; const r = t.hitR || (state.act === 1 ? 2.5 : (t.boss ? 1.05 : 0.8));
+          if (segDist2(prevP, b.pos, t.pos) < r * r) {
+            hit = true; sparks(b.pos); sfx.hit();
+            if (b.blast) { wpnBlast(b.pos); hitMarker(true); break; }
+            if (state.act === 1) damageEnemyCar(t, b.dmg); else { damageEnemy(t, b.dmg); if (b.knock && !t.dead && !t.boss) { const k = b.vel.clone().setY(0).normalize().multiplyScalar(1.6); t.pos.add(k); collideCircle(t.pos, k, 0.6); t.react = Math.max(t.react || 0, 0.5); } }
+            hitMarker(t.dead || t.disabled);
+            if (b.hits) { b.hits.push(t); hit = false; b.dmg *= 0.7; continue; }   // goes on through the target
+            break;
+          }
         }
         if (!hit && HELI && heliHit(prevP, b.pos)) { hit = true; sfx.hit(); damageHeli(b.dmg); hitMarker(HELI && HELI.crash); }
       } else {
@@ -4424,20 +4436,19 @@ function updateDrive(dt) {
   if (trail[trail.length - 1].distanceTo(pc.pos) > 3) trail.push(pc.pos.clone());
 
   // player gun: auto-aims at the nearest pursuer
-  pc.fireCd -= dt;
+  pc.fireCd -= dt; wpnTick(dt);
   if (!fireHeld()) state.fireLock = false;
   const noFire = state.ep >= 2 && MIS && MIS.noFire;
   if (noFire && fireHeld() && toastT <= 0) toast(MIS.noFireMsg || 'Слежка: стрелять нельзя', 1.2);
-  if (!noFire && fireHeld() && !state.fireLock && pc.fireCd <= 0 && useAmmo()) {
-    pc.fireCd = 0.11 * P.fireMult;
+  if (!noFire && fireHeld() && !state.fireLock && pc.fireCd <= 0 && wpnTrigger(true)) {
+    pc.fireCd = wpnCd(0.11);
     let best = null, bd = 60 * P.aim;
     for (const e of enemyCars) { const d = e.pos.distanceTo(pc.pos); if (!e.dead && !e.noTarget && d < bd && los(pc.pos, e.pos)) { bd = d; best = e; } }
     const from = pc.pos.clone().add(new V3(0, 1.5, 0));
     let aimHeli = false;
     if (HELI && !HELI.crash) { const dh = Math.hypot(HELI.pos.x - pc.pos.x, HELI.pos.z - pc.pos.z); if (dh < 60 && (!best || dh < bd)) aimHeli = true; }
     const dir = aimHeli ? HELI.pos.clone().addScaledVector(HELI.vel, 0.12).sub(from).normalize() : best ? best.pos.clone().addScaledVector(best.vel, bd / 140).sub(pc.pos).setY(0).normalize() : new V3(Math.sin(pc.h), 0, Math.cos(pc.h));
-    dir.x += rand(-0.03, 0.03); dir.z += rand(-0.03, 0.03); dir.normalize();
-    fire(from.addScaledVector(dir, 2.6), dir, 140, 7 * P.dmg, 'p');
+    wpnShoot(from.addScaledVector(dir, 2.6), dir, 140, 7 * P.dmg, 0.03, true);
   }
 
   // pursuers
@@ -4587,11 +4598,11 @@ function updateFoot(dt) {
   heroLight.position.set(hero.pos.x + 1.2, 4.5, hero.pos.z + 2.5); heroLight.intensity = 1.6;
   hero.walk += mv.length() * dt * 9.5;
   poseHuman(hero, { walk: hero.walk, move: Math.min(1, mv.length() * 1.5), aim: true, back, t: state.t });
-  hero.fireCd -= dt; hero.meleeCd = (hero.meleeCd || 0) - dt;
+  hero.fireCd -= dt; hero.meleeCd = (hero.meleeCd || 0) - dt; wpnTick(dt); wpnDress(hero);
   if (meleeHeld() && hero.meleeCd <= 0 && !hero.dead) doMelee();
   if (!fireHeld()) state.fireLock = false;
-  if (fireHeld() && !state.fireLock && hero.fireCd <= 0 && useAmmo()) {
-    hero.fireCd = 0.15 * P.fireMult;
+  if (fireHeld() && !state.fireLock && hero.fireCd <= 0 && wpnTrigger()) {
+    hero.fireCd = wpnCd(0.15);
     let dir = new V3(Math.sin(hero.aimAng), 0, Math.cos(hero.aimAng));
     const muzzle = hero.pos.clone().add(new V3(0, 1.02, 0));
     if (HELI && !HELI.crash) {
@@ -4600,8 +4611,7 @@ function updateFoot(dt) {
       const noFoe = !enemies.some((e) => !e.dead && e.pos.distanceTo(hero.pos) < 28);
       if (dh < 50 && (Math.abs(wrapA(hb - hero.aimAng)) < 0.3 || (noFoe && isTouch))) dir = HELI.pos.clone().sub(muzzle).normalize();
     }
-    dir.x += rand(-0.025, 0.025); dir.z += rand(-0.025, 0.025); dir.normalize();
-    fire(muzzle.addScaledVector(dir, 0.9), dir, 95, 20 * P.dmg, 'p'); AIM.spread = Math.min(1, AIM.spread + 0.45);
+    wpnShoot(muzzle.addScaledVector(dir, 0.9), dir, 95, 20 * P.dmg, 0.025, false); AIM.spread = Math.min(1, AIM.spread + 0.45 * (1 - (curW().stable || 0)));
   }
   // enemies
   for (const e of enemies) {
@@ -6591,6 +6601,7 @@ function updateCamera(dt) {
     const fpsNow = state.mode === 'foot' && curView() === 'fps';
     hero.g.visible = !fpsNow || hero.dead;   // in first person the body is hidden (it would block the view)
     ensureViewGun().visible = fpsNow && !hero.dead;
+    if (viewGun) wpnDressView();
     if (viewGun) { const sw = hero.punchT > 0 ? Math.sin((1 - hero.punchT / hero.punchD) * PI) : 0; viewGun.position.set(0.2 - sw * 0.1, -0.2 + sw * 0.06, -0.45 - sw * 0.35); viewGun.rotation.x = -sw * 0.4; }
   }
   if (viewGun && (state.act !== 2 || state.mode !== 'foot')) viewGun.visible = false;
@@ -6915,7 +6926,7 @@ const ACH = [
   ['style', 'Стиляга', 'Купи покраску, неон или костюм', 150, (p) => [p.st.style ? 1 : 0, 1]],
 ];
 function profDefaults(name, login) {
-  return { v: 1, name: name || 'Гость', login: login || null, coins: 300, cars: ['taxi'], car: 'taxi', paints: { taxi: ['yellow'] }, paint: { taxi: 'yellow' }, neons: [], neon: null, outfits: [], outfit: null,
+  return { v: 1, name: name || 'Гость', login: login || null, coins: 300, cars: ['taxi'], car: 'taxi', paints: { taxi: ['yellow'] }, paint: { taxi: 'yellow' }, neons: [], neon: null, outfits: [], outfit: null, weapons: ['shmel'], weapon: 'shmel',
     up: { engine: 0, body: 0, gun: 0, rate: 0, vest: 0 }, inv: { nitro: 2, shield: 1, repair: 1, medkit: 1, revive: 0, x2: 0, ammo: 800 }, ach: {},
     st: { carKills: 0, footKills: 0, bosses: 0, chapters: 0, eps: [], earned: 0, nitro: 0, loot: 0, tunnel: 0, bridge: 0, style: 0, time: 0 }, noAds: false, pass: false };
 }
@@ -7143,6 +7154,144 @@ function updateBoosts(dt) {
   PROF.st.time += dt;
 }
 let boostsShown = '';
+const WEAPONS = [
+  {"id": "shmel", "name": "Шмель", "cls": "pistol", "type": "Компактный пистолет", "cal": "9×19", "desc": "Выдают в таксопарке. Лёгкий, прощает промахи и всегда под рукой.", "dmg": 18, "pellets": 1, "rpm": 320, "acc": 72, "range": 25, "mag": 10, "reload": 1.1, "price": 0, "need": 0, "perk": "Лёгкий: самая быстрая перезарядка"},
+  {"id": "kobra", "name": "Кобра", "cls": "pistol", "type": "Тяжёлый пистолет", "cal": ".45 ACP", "desc": "Хромированный затвор, ореховые накладки. Один выстрел — один разговор.", "dmg": 34, "pellets": 1, "rpm": 200, "acc": 80, "range": 35, "mag": 7, "reload": 1.4, "price": 1200, "need": 1, "perk": "Урон по машинам +50%", "carMul": 1.5},
+  {"id": "shershen", "name": "Шершень", "cls": "pistol", "type": "Автоматический пистолет", "cal": "9×18", "desc": "Длинный магазин и флажок автоогня. Жалит быстро, но разлетается веером.", "dmg": 13, "pellets": 1, "rpm": 1100, "acc": 48, "range": 20, "mag": 20, "reload": 1.3, "price": 1800, "need": 2, "perk": "Самый скорострельный пистолет"},
+  {"id": "buldog", "name": "Бульдог", "cls": "pistol", "type": "Магнум-пистолет", "cal": ".50 AE", "desc": "Тяжёлый затвор и патрон, которым останавливают машины. Отдача — как у ружья, точность — как у тира.", "dmg": 58, "pellets": 1, "rpm": 100, "acc": 88, "range": 40, "mag": 6, "reload": 2.4, "price": 2500, "need": 3, "perk": "Пуля прошивает врага насквозь", "pierce": 1},
+  {"id": "pchela", "name": "Пчела", "cls": "smg", "type": "Компактный пистолет-пулемёт", "cal": "9×19", "desc": "Проволочный приклад, рукоять спереди. Влезает в бардачок и стреляет из окна на ходу.", "dmg": 15, "pellets": 1, "rpm": 950, "acc": 55, "range": 30, "mag": 30, "reload": 1.8, "price": 3000, "need": 2, "perk": "Урон по машинам +30%", "carMul": 1.3},
+  {"id": "ten", "name": "Тень", "cls": "smg", "type": "ПП с глушителем", "cal": "9×19", "desc": "Интегрированный глушитель и коллиматор. Для тех, кто не любит лишнего шума.", "dmg": 17, "pellets": 1, "rpm": 780, "acc": 66, "range": 35, "mag": 32, "reload": 2, "price": 4200, "need": 4, "perk": "Отдача не сбивает прицел", "stable": 1},
+  {"id": "vihr", "name": "Вихрь", "cls": "smg", "type": "ПП компоновки булл-пап", "cal": "5.7×28", "desc": "Магазин за рукоятью, короткий и злой. Держит темп, пока другие перезаряжаются.", "dmg": 19, "pellets": 1, "rpm": 850, "acc": 62, "range": 38, "mag": 40, "reload": 2.1, "price": 4800, "need": 5, "perk": "Отдача сбивает прицел вдвое меньше", "stable": 0.5},
+  {"id": "myasnik", "name": "Мясник", "cls": "shotgun", "type": "Помповый дробовик", "cal": "12/76", "desc": "Дерево, сталь и тяжёлое цевьё. Решает вопросы в упор и не задаёт их.", "dmg": 9, "pellets": 8, "rpm": 70, "acc": 35, "range": 12, "mag": 6, "reload": 3, "price": 3500, "need": 3, "perk": "Отбрасывает врага", "knock": 1},
+  {"id": "taran", "name": "Таран", "cls": "shotgun", "type": "Автоматический дробовик", "cal": "12/70", "desc": "Барабан на 12 патронов и коллиматор. В упор валит с ног.", "dmg": 8, "pellets": 7, "rpm": 240, "acc": 32, "range": 14, "mag": 12, "reload": 2.8, "price": 7500, "need": 6, "perk": "Отбрасывает врага · урон по машинам +30%", "knock": 1, "carMul": 1.3},
+  {"id": "voron", "name": "Ворон", "cls": "rifle", "type": "Штурмовая винтовка", "cal": "7.62×39", "desc": "Классика с деревянным прикладом. Грубая, надёжная, бьёт сквозь лёгкую броню.", "dmg": 30, "pellets": 1, "rpm": 620, "acc": 72, "range": 60, "mag": 30, "reload": 2.4, "price": 6000, "need": 4, "perk": "Пуля прошивает врага насквозь", "pierce": 1},
+  {"id": "sokol", "name": "Сокол-К", "cls": "rifle", "type": "Карабин с коллиматором", "cal": "5.56×45", "desc": "Телескопический приклад, планки по всей длине. Точный даже на бегу.", "dmg": 24, "pellets": 1, "rpm": 760, "acc": 84, "range": 65, "mag": 30, "reload": 2.2, "price": 7000, "need": 7, "perk": "Отдача почти не сбивает прицел", "stable": 0.7},
+  {"id": "molot", "name": "Молот", "cls": "rifle", "type": "Боевая винтовка", "cal": "7.62×51", "desc": "Тяжёлый патрон и оптика. Держит перекрёсток с другого конца улицы.", "dmg": 46, "pellets": 1, "rpm": 420, "acc": 86, "range": 90, "mag": 20, "reload": 2.6, "price": 9000, "need": 8, "perk": "Прошивает насквозь · урон по машинам +30%", "pierce": 1, "carMul": 1.3},
+  {"id": "polyarnik", "name": "Полярник", "cls": "heavy", "type": "Снайперская винтовка", "cal": ".338 Lapua", "desc": "Сошки, оптика, щека на прикладе. Бьёт с другого конца улицы.", "dmg": 150, "pellets": 1, "rpm": 40, "acc": 98, "range": 220, "mag": 5, "reload": 3.4, "price": 12000, "need": 9, "perk": "Прошивает насквозь · урон по машинам ×2", "pierce": 1, "carMul": 2},
+  {"id": "beton", "name": "Бетон", "cls": "heavy", "type": "Крупнокалиберная винтовка", "cal": "12.7×108", "desc": "Сошки, дульный тормоз размером с кулак и патрон против брони. Шьёт инкассаторов насквозь.", "dmg": 220, "pellets": 1, "rpm": 30, "acc": 92, "range": 260, "mag": 5, "reload": 4.2, "price": 14000, "need": 10, "perk": "Прошивает насквозь · урон по машинам ×2,5", "pierce": 1, "carMul": 2.5},
+  {"id": "shlagbaum", "name": "Шлагбаум", "cls": "heavy", "type": "Ручной гранатомёт", "cal": "Граната 85 мм", "desc": "Один выстрел — одна машина. Против «Шакалов» и бронированного инкассатора.", "dmg": 400, "pellets": 1, "rpm": 20, "acc": 70, "range": 120, "mag": 1, "reload": 3.2, "price": 18000, "need": 10, "perk": "Взрыв радиусом 6 м", "blast": 1},
+];
+// ---------------- arsenal: guns bought for coins in the shop (models: Flat Guns East/West, CC0, assets/arsenal) ----------------
+// The «Шмель» fires exactly like the old pistol; the rest scale from it by damage, rate, accuracy and range.
+// Every gun takes cartridges from the same supply (PROF.inv.ammo); the magazine only adds a reload pause.
+const WPN_BY = {}; for (const w of WEAPONS) WPN_BY[w.id] = w;
+const WPN = { id: '', left: 0, rel: 0, shown: '' };
+function curW() { const w = WPN_BY[PROF.weapon]; return w && wpnOwned(w.id) ? w : WPN_BY.shmel; }
+function wpnOwned(id) { return id === 'shmel' || PROF.god || (PROF.weapons || []).indexOf(id) >= 0; }
+function wpnOpen(w) { return PROF.god || (PROF.st.eps || []).length >= w.need; }
+function wpnTick(dt) {
+  const w = curW(); if (WPN.id !== w.id) { WPN.id = w.id; WPN.left = w.mag; WPN.rel = 0; }
+  if (WPN.rel > 0) { WPN.rel -= dt; if (WPN.rel <= 0) { WPN.rel = 0; WPN.left = w.mag; sfx.key(); updateAmmoHud(); } }
+}
+// one pull of the trigger: false while reloading or with no cartridges left. From the car the driver fires
+// from the window as before, without magazine changes; on foot the magazine runs out and needs a reload.
+function wpnTrigger(car) {
+  const w = curW(); if (!car && WPN.rel > 0) return false;
+  if (!useAmmo()) return false;
+  if (!car && --WPN.left <= 0) WPN.rel = w.reload;
+  updateAmmoHud();
+  return true;
+}
+const wpnCd = (base) => base * (320 / curW().rpm) * P.fireMult;
+// the shots of one pull: pellets with spread, damage scaled from the old pistol, the gun's perks on the bullet.
+// On foot the reloads take time, so a shot hits harder: with the «Шмель» the damage over a long fight stays
+// what the old pistol did (10 shots of 0.15 s, then 1.1 s of reload: × 2.6 / 1.5).
+const WPN_FOOT_K = 2.6 / 1.5;
+function wpnShoot(from, dir, speed, baseDmg, baseSpread, car) {
+  const w = curW(), sp = baseSpread * (100 - w.acc) / 28, dmg = baseDmg * (w.dmg / 18) * (car ? w.carMul || 1 : WPN_FOOT_K);
+  const life = 1.3 * Math.min(1, w.range / 25);
+  for (let i = 0; i < w.pellets; i++) {
+    const d = dir.clone(); const s = sp + (w.pellets > 1 ? (100 - w.acc) / 400 : 0);
+    d.x += rand(-s, s); d.z += rand(-s, s); if (car || w.pellets > 1) d.y += rand(-s, s) * 0.3; d.normalize();
+    fire(from.clone(), d, speed, dmg, 'p', { life, pierce: w.pierce, knock: w.knock, blast: w.blast, quiet: i > 0 });
+  }
+}
+// the shell of the grenade launcher: a blast hurts everyone within 6 m
+function wpnBlast(pos) {
+  explode(pos, 1.3);
+  const list = state.act === 1 ? enemyCars : enemies;
+  for (const t of list.slice()) {
+    if (t.dead || t.noTarget) continue; const d = Math.hypot(t.pos.x - pos.x, t.pos.z - pos.z); if (d > 6) continue;
+    if (state.act === 1) damageEnemyCar(t, 400 * (1 - d / 9)); else damageEnemy(t, 160 * (1 - d / 9));
+  }
+}
+// ---- the gun in the hand: the model of the active gun replaces the old box pistol ----
+const WPN_TONE = { sokol: 'tan', molot: 'olive', beton: 'olive', taran: 'olive', vihr: 'tan' };
+const WPN_MAT = {};
+function wpnMat(k) {
+  if (WPN_MAT[k]) return WPN_MAT[k];
+  const c = { steel: [0x33353a, 0.85, 0.32], dark: [0x131417, 0.6, 0.45], poly: [0x0e0e10, 0.05, 0.72], tan: [0x8a7856, 0.05, 0.7], olive: [0x4b5236, 0.05, 0.7], wood: [0x6a3d22, 0, 0.55], chrome: [0xc9ccd0, 1, 0.2], brass: [0xb8903e, 1, 0.3], red: [0xc8102e, 0.2, 0.5] }[k] || [0x33353a, 0.85, 0.32];
+  return (WPN_MAT[k] = new THREE.MeshStandardMaterial({ color: c[0], metalness: c[1], roughness: c[2], flatShading: true }));
+}
+const WPN_MODEL = {}, WPN_LEN = { pistol: 1, smg: 1.45, shotgun: 2.1, rifle: 2.2, heavy: 2.6 };
+// a static copy of the model: the rig is dropped (the bind pose is baked in), the barrel looks along +Z, length 1
+function wpnLoad(id) {
+  if (WPN_MODEL[id]) return WPN_MODEL[id];
+  if (id === 'shlagbaum') {
+    const g = new THREE.Group(), tube = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1, 12).rotateX(PI / 2), wpnMat('olive'));
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.05, 0.16, 12).rotateX(PI / 2), wpnMat('dark')); cone.position.z = 0.55;
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.05), wpnMat('poly')); grip.position.set(0, -0.09, -0.05);
+    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.08), wpnMat('dark')); sight.position.set(0.05, 0.07, 0.05);
+    g.add(tube, cone, grip, sight); return (WPN_MODEL[id] = Promise.resolve(g));
+  }
+  if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') return Promise.resolve(null);
+  const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+  return (WPN_MODEL[id] = new Promise((res) => loader.load('assets/arsenal/models/' + id + '.glb', (gl) => {
+    const root = gl.scene, out = new THREE.Group(); root.updateMatrixWorld(true);
+    root.traverse((o) => {
+      if (!o.isMesh) return;
+      const src = o.geometry, geo = new THREE.BufferGeometry();
+      for (const name of ['position', 'normal']) {
+        const a = src.attributes[name]; if (!a) continue; const arr = new Float32Array(a.count * 3);
+        for (let i = 0; i < a.count; i++) { arr[i * 3] = a.getX(i); arr[i * 3 + 1] = a.getY(i); arr[i * 3 + 2] = a.getZ(i); }
+        geo.setAttribute(name, new THREE.BufferAttribute(arr, 3));
+      }
+      if (src.index) geo.setIndex(src.index.clone());
+      for (const gr of src.groups) geo.addGroup(gr.start, gr.count, gr.materialIndex);
+      geo.applyMatrix4(o.matrixWorld); if (!geo.attributes.normal) geo.computeVertexNormals();
+      const mats = [].concat(o.material).map((mt) => {
+        const n = mt.name || ''; let k = 'steel';
+        if (/White/.test(n)) k = 'chrome'; else if (/Brown/.test(n)) k = 'wood'; else if (/Brass|Yellow/.test(n)) k = 'brass';
+        else if (/Red|Orange/.test(n)) k = 'red'; else if (/Flat_Black$/.test(n)) k = 'poly'; else if (/Black_Lighter|Grey_Darker/.test(n)) k = 'dark';
+        if (id === 'kobra' && /Grey_Light|Grey_Dark$/.test(n)) k = 'chrome';
+        if (WPN_TONE[id] && /Flat_Black$/.test(n)) k = WPN_TONE[id];
+        return wpnMat(k);
+      });
+      const m = new THREE.Mesh(geo, mats.length === 1 ? mats[0] : mats); m.castShadow = true; out.add(m);
+    });
+    // fit: longest side along Z, length 1, the grip (the tall end) behind the origin
+    const b = new THREE.Box3().setFromObject(out), sz = b.getSize(new THREE.Vector3());
+    if (sz.x > sz.z) out.rotation.y = PI / 2; out.updateMatrixWorld(true);
+    const b2 = new THREE.Box3().setFromObject(out), len = Math.max(1e-3, b2.max.z - b2.min.z);
+    // which end is the muzzle: the thinner one
+    const tall = (z0, z1) => { let lo = 1e9, hi = -1e9; const v = new THREE.Vector3(); out.traverse((m) => { if (!m.isMesh) return; const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i += 3) { v.fromBufferAttribute(p, i).applyMatrix4(out.matrix); if (v.z >= z0 && v.z <= z1) { lo = Math.min(lo, v.y); hi = Math.max(hi, v.y); } } }); return hi - lo; };
+    const back = tall(b2.min.z, b2.min.z + len * 0.12), front = tall(b2.max.z - len * 0.12, b2.max.z);
+    const wrap = new THREE.Group(); wrap.add(out); if (front > back) wrap.rotation.y = PI;
+    wrap.updateMatrixWorld(true); const b3 = new THREE.Box3().setFromObject(wrap);
+    const fit = new THREE.Group(); fit.add(wrap); wrap.position.set(-(b3.min.x + b3.max.x) / 2, -b3.max.y + (b3.max.y - b3.min.y) * 0.18, -b3.min.z - len * 0.32);
+    fit.scale.setScalar(1 / len); res(fit);
+  }, undefined, () => res(null))));
+}
+// put the active gun into a person's hand (the hero and the first-person view)
+function wpnDress(h) {
+  const w = curW(); if (!h || h.wpnId === w.id) return; h.wpnId = w.id;
+  const holder = h.nr ? h.nr.gun : h.gunG; if (!holder) return;
+  wpnLoad(w.id).then((tpl) => {
+    if (!tpl || h.wpnId !== w.id) return;
+    if (!holder.userData.orig) holder.userData.orig = holder.children.slice();
+    for (const c of holder.children.slice()) holder.remove(c);
+    const m = tpl.clone(); m.scale.multiplyScalar((h.nr ? 0.2 : 0.62) * WPN_LEN[w.cls]); holder.add(m);
+  });
+}
+function wpnDressView() {
+  const w = curW(); if (!viewGun || viewGun.userData.wpnId === w.id) return; viewGun.userData.wpnId = w.id;
+  wpnLoad(w.id).then((tpl) => {
+    if (!tpl || viewGun.userData.wpnId !== w.id) return;
+    if (!viewGun.userData.orig) viewGun.userData.orig = viewGun.children.slice();
+    for (const c of viewGun.children.slice()) viewGun.remove(c);
+    const m = tpl.clone(); m.scale.multiplyScalar(0.42 * Math.min(1.9, WPN_LEN[w.cls])); m.rotation.y = PI; m.position.z = 0.08; viewGun.add(m);
+  });
+}
 // ---------------- ammo: a limited supply; a new set costs coins (the test profile shoots for free) ----------------
 const AMMO = { saveT: 0, warnT: 0, shown: -1 };
 function ammoSave() { if (AMMO.saveT) return; AMMO.saveT = setTimeout(() => { AMMO.saveT = 0; saveProfile(); }, 3000); }
@@ -7162,7 +7311,9 @@ function buyAmmo() {
   updateAmmoHud(); updateProfChip();
 }
 function updateAmmoHud() {
-  const n = PROF.god ? '∞' : PROF.inv.ammo || 0, el = $('ammoN'); if (!el) return;
+  const n = WPN.rel > 0 ? '⟳' : PROF.god ? '∞' : PROF.inv.ammo || 0, el = $('ammoN'); if (!el) return;
+  const w = curW(), ws = `${w.name} · ${WPN.rel > 0 ? 'перезарядка' : (WPN.id === w.id ? WPN.left : w.mag) + '/' + w.mag} · патроны ${PROF.god ? '∞' : PROF.inv.ammo || 0}`;
+  if (ws !== WPN.shown) { WPN.shown = ws; $('wpnStat').textContent = ws; }
   if (n !== AMMO.shown) { AMMO.shown = n; el.textContent = n; el.classList.toggle('low', n !== '∞' && n < 60); }
   const low = !PROF.god && (PROF.inv.ammo || 0) < 60, b = $('btnAmmo');
   if (b.hidden !== !low) b.hidden = !low;
@@ -7197,7 +7348,7 @@ function profLinksHtml() {
     ${row(L.max, 'MAX', inMiniApp ? '<small>получи код на сайте и введи его здесь</small>' : maxLinkHtml('btn sm max', 'Привязать', 'data-maxgo="link"'))}`;
 }
 function renderProfile() {
-  const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения']];
+  const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['arms', 'Оружие'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения']];
   $('profTabs').innerHTML = tabs.map(([k, t]) => `<button class="chip${profTab === k ? ' active' : ''}" data-tab="${k}" type="button">${t}</button>`).join('');
   $('profName').textContent = PROF.name; $('profSub').textContent = PROF.god ? 'тестовый профиль · бессмертие · все покупки бесплатно' : PROF.login ? 'профиль ' + PROF.login : 'гость · прогресс хранится в этом браузере';
   $('profCoins').textContent = coinsText(); $('profAva').textContent = (PROF.name[0] || 'Г').toUpperCase();
@@ -7235,6 +7386,15 @@ function renderProfile() {
         ${own ? `<div class="swatches">${paints}</div>` : ''}${priceBtn('car', id, c.price, own, on ? 'В гараже · выбрано' : 'Выбрать')}</div>`;
     }).join('') + '</div>' +
     `<div class="plabel">Неоновая подсветка (на любую машину)</div><div class="pitems">${[['', { name: 'Без подсветки' }], ...Object.entries(NEONS)].map(([id, n]) => { const own = !id || PROF.neons.includes(id) || (n.pass && PROF.pass); return `<div class="pitem${(PROF.neon || '') === id ? ' on' : ''}"><b>${n.name}</b><span>${n.pass ? 'из сезонного пропуска' : id ? 'неон под днищем' : ''}</span>${n.pass && !own ? '<button class="btn sm" disabled type="button">Пропуск</button>' : priceBtn('neon', id, 500, own)}</div>`; }).join('')}</div>`;
+  } else if (profTab === 'arms') {
+    const cw = curW(), eps = (PROF.st.eps || []).length;
+    h = `<div class="plabel">В руках: ${cw.name} · патроны ${PROF.god ? '∞' : (PROF.inv.ammo || 0).toLocaleString('ru-RU')} (общие для всех стволов, комплект — во вкладке «Магазин»)</div><div class="pitems arms">` + WEAPONS.map((w) => {
+      const own = wpnOwned(w.id), on = cw.id === w.id, open = wpnOpen(w);
+      const act = open ? priceBtn('wpn', w.id, w.price, own, on ? 'В руках' : 'Взять') : `<small class="wlock">Откроется после ${w.need} ${w.need === 1 ? 'пройденного эпизода' : 'пройденных эпизодов'} (сейчас ${eps})</small>`;
+      return `<div class="pitem wpn${on ? ' on' : ''}${open ? '' : ' locked'}"><div class="wimg"><img src="assets/arsenal/img/${w.id}.webp" alt="" loading="lazy" onerror="this.remove()"></div><b>${w.name} <em>${w.cal}</em></b><span>${w.type}. ${w.desc}</span>
+        <div class="cstat"><small>Урон</small>${bar(Math.sqrt(w.dmg * w.pellets), 15)}<small>Темп</small>${bar(w.rpm, 1100)}<small>Точность</small>${bar(w.acc, 100)}<small>Дальность</small>${bar(Math.min(w.range, 120), 120)}</div>
+        <small class="wperk">★ ${w.perk} · магазин ${w.mag} · перезарядка ${String(w.reload).replace('.', ',')} с</small>${act}</div>`;
+    }).join('') + '</div><div class="note">Модели оружия: набор Flat Guns East/West (CC0).</div>';
   } else if (profTab === 'shop') {
     h = `<div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem"><b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button" ${canPay(it.price) ? '' : 'disabled'}>${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
     <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass); return `<div class="pitem prem"><b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
@@ -7267,6 +7427,8 @@ function profAction(act, id) {
   else if (act === 'outfit') { PROF.outfit = id || null; saveProfile(); applyLoadout(); }
   else if (act === 'buy-outfit') { if (pay(OUTFITS[id].price)) { PROF.outfits.push(id); PROF.outfit = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'car') { PROF.car = id; saveProfile(); applyLoadout(); }
+  else if (act === 'wpn') { if (wpnOwned(id)) { PROF.weapon = id; saveProfile(); updateAmmoHud(); } }
+  else if (act === 'buy-wpn') { const w = WPN_BY[id]; if (w && wpnOpen(w) && !wpnOwned(id) && pay(w.price)) { PROF.weapons = (PROF.weapons || ['shmel']).concat([id]); PROF.weapon = id; saveProfile(); updateAmmoHud(); profMsg = `${w.name} теперь в руках.`; } }
   else if (act === 'buy-car') { if (pay(CARS[id].price) && !has(PROF.cars, id)) { PROF.cars.push(id); PROF.paints[id] = [CARS[id].paint]; PROF.paint[id] = CARS[id].paint; PROF.car = id; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'paint') { const [c, p] = id.split(':'); PROF.paint[c] = p; saveProfile(); applyLoadout(); }
   else if (act === 'buy-paint') { const [c, p] = id.split(':'); if (pay(300)) { (PROF.paints[c] = PROF.paints[c] || []).push(p); PROF.paint[c] = p; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
@@ -7755,7 +7917,7 @@ function ensureViewGun() {
   const grip = new THREE.Mesh(box1, w); grip.scale.set(0.075, 0.18, 0.09); grip.position.set(0, -0.12, 0.1); grip.rotation.x = -0.25; g.add(grip);
   const sight = new THREE.Mesh(box1, basic(new THREE.Color(0.2, 2.5, 1.2))); sight.scale.set(0.015, 0.015, 0.015); sight.position.set(0, 0.07, -0.15); g.add(sight);
   g.position.set(0.2, -0.2, -0.45); camera.add(g); if (!camera.parent) scene.add(camera);
-  viewGun = g; return g;
+  viewGun = g; wpnDressView(); return g;
 }
 // movement relative to the view, and the aim direction with a light assist towards enemies near the crosshair
 function viewMove(mx, mz) {
@@ -9630,7 +9792,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { NR, setObjective, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { NR, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
