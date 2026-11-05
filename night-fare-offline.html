@@ -595,6 +595,7 @@ window.APP_VER = 'v55'; window.__errs = [];
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/FXAAShader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/libs/meshopt_decoder.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/SkeletonUtils.js"></script>
 <script>
 (function () {
@@ -2294,7 +2295,7 @@ function initLife() {
     const model = MODELS[i % MODELS.length], fem = ['kira', 'maya', 'zoya', 'olga', 'nika'].includes(model);
     const colors = { Shirt: pick(SHIRTS), Pants: pick(PANTS), Hair: pick(HAIR), Main: pick(SHIRTS), DarkGreen: pick(PANTS), Helmet: pick(HAIR), Hat: pick(PANTS), Detail: pick(SHIRTS), Jacket: pick(SHIRTS) };
     const look = { model, skin: pick(['#e8c0a0', '#d9a98a', '#c08a6a', '#a87452', '#f0d0b8']), colors, noGun: true, face: { fem, brow: colors.Hair, iris: pick(['#3a2a1a', '#3a6a9a', '#4a6a3a']), mouth: pick(['neutral', 'smile']) } };
-    const h = makeHuman(look, rand(0.94, 1.04));
+    look.ped = true; const h = makeHuman(look, rand(0.94, 1.04));
     const p = Object.assign(h, { pos: new V3(), bx: 0, bz: 0, off: 28.6, u: 0, dir: 1, sp: rand(1.2, 1.6), panic: 0, dodge: 0, face: 0, act: '' });
     p.g.visible = false; LIFE.peds.push(p);
   }
@@ -3316,17 +3317,22 @@ function makeCar(color, kind, forceModel) {
   const wreck = kind === 'wreck', player = kind === true || kind === 'player';
   const civ = kind === 'civ' || kind === 'police', pol = kind === 'police';
   const name = forceModel || (player ? PLAYER_CAR.model : wreck ? 'car_sedan' : pol ? 'car_police' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon', 'nine']));
-  const m0 = name === 'nine' ? null : ASSETS.kit[name].clone(true);
+  // the realistic sports car for the taxi, the gangs, traffic and wrecks; the police, vans and garage cars keep their own
+  // detailed model: the player's taxi always; the gang cars on computers (on phones they would cost too much speed); traffic and wrecks stay light
+  const real = NR.ready && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' : kind === false && !isTouch && perf.level === 0);
+  const m0 = real || name === 'nine' ? null : ASSETS.kit[name].clone(true);
   const mat = wreck ? KIT.carWreck : player ? (PLAYER_CAR.mat || KIT.taxi) : pol ? KIT.car : civ ? civMat(color) : KIT.carDark;
-  const wheels = [];
-  const m = name === 'nine' ? buildNine(mat) : m0;
-  m.traverse((o) => { if (o.isMesh && !o.userData.keep) { o.material = mat; o.castShadow = true; } if (/wheel/.test(o.name)) wheels.push(o); });
-  m.scale.setScalar(CAR_S); g.add(m);
+  let wheels = [], m, rc = null;
+  if (real) { rc = nrCar({ wreck, color: player ? 0xffb703 : civ ? color : pick([0x1a1a20, 0x2a1418, 0x14161e]) }); m = rc.inner; wheels = rc.wheels; g.add(m); g.userData.real = rc; }
+  else {
+    m = name === 'nine' ? buildNine(mat) : m0;
+    m.traverse((o) => { if (o.isMesh && !o.userData.keep) { o.material = mat; o.castShadow = true; } if (/wheel/.test(o.name)) wheels.push(o); });
+    m.scale.setScalar(CAR_S); g.add(m);
+  }
   const box = (mt, x, y, z, sx, sy, sz) => { const b = new THREE.Mesh(box1, mt); b.position.set(x, y, z); b.scale.set(sx, sy, sz); g.add(b); return b; };
   if (!wreck) {
     const head = basic(new THREE.Color(5, 4.6, 3.8)), tail = basic(new THREE.Color(5, 0.25, 0.3));
-    box(head, -0.6, 0.62, 2.23, 0.36, 0.14, 0.04); box(head, 0.6, 0.62, 2.23, 0.36, 0.14, 0.04);
-    box(tail, -0.7, 0.7, -2.23, 0.32, 0.12, 0.04); box(tail, 0.7, 0.7, -2.23, 0.32, 0.12, 0.04);
+    if (!rc) { box(head, -0.6, 0.62, 2.23, 0.36, 0.14, 0.04); box(head, 0.6, 0.62, 2.23, 0.36, 0.14, 0.04); box(tail, -0.7, 0.7, -2.23, 0.32, 0.12, 0.04); box(tail, 0.7, 0.7, -2.23, 0.32, 0.12, 0.04); }
     // headlight beams in the rain and a warm pool of light on the road ahead
     if (!HEADBEAM.mat) {
       const t = canvasTex(4, 128, (x, w, h) => { const gr = x.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0.85)'); gr.addColorStop(0.4, 'rgba(255,255,255,0.22)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, w, h); });
@@ -3341,8 +3347,8 @@ function makeCar(color, kind, forceModel) {
     const hp = new THREE.Mesh(HEADBEAM.pool, HEADBEAM.poolMat); hp.position.set(0, 0.05, 7.5); g.add(hp); g.userData.beams.push(hp);
   }
   if (player) {
-    if (PLAYER_CAR.model === 'car_taxi') box(basic(new THREE.Color(3, 2.4, 0.7)), 0, 1.98, -0.15, 0.5, 0.12, 0.3);
-    if (PLAYER_CAR.scale) m.scale.multiply(new V3(...PLAYER_CAR.scale));
+    if (PLAYER_CAR.model === 'car_taxi') box(basic(new THREE.Color(3, 2.4, 0.7)), 0, rc ? rc.H + 0.09 : 1.98, rc ? rc.Z : -0.15, rc ? 0.7 : 0.5, rc ? 0.17 : 0.12, rc ? 0.22 : 0.3);
+    if (PLAYER_CAR.scale && !rc) m.scale.multiply(new V3(...PLAYER_CAR.scale));
     if (PLAYER_CAR.neon) { const ng = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 6.4), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(...PLAYER_CAR.neon), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); ng.rotation.x = -PI / 2; ng.position.y = 0.06; g.add(ng); }
     const spot = new THREE.SpotLight(0xfff0d0, 3.2, 60, 0.5, 0.55, 1.2);
     spot.position.set(0, 0.9, 2.1); spot.target.position.set(0, 0, 18); g.add(spot, spot.target);
@@ -3423,7 +3429,214 @@ function smoothNormals(geo) {
   nor.needsUpdate = true;
 }
 function liftDark(c) { const hsl = {}; c.getHSL(hsl); if (hsl.l < 0.06) c.setHSL(hsl.h, Math.max(hsl.s, 0.15), 0.06 + hsl.l * 0.3); return c; }
+// ---------------- realistic 3D models (design v2): people with a shared Mixamo skeleton, the sports car ----------------
+// assets/models/*.glb (meshopt + webp). People: Idle / Walk / Run from anims.glb, blended by speed; the arm with the gun
+// is turned towards the aim; death, a hit and punches are done on the bones in code. If the models fail to load, the old ones stay.
+const NR = { ready: false, G: {}, clips: {}, H: 2.0, carInfo: null };
+const NR_SRC = ['man', 'man2', 'man3', 'woman', 'woman2', 'woman3', 'michelle', 'anims', 'car'];
+const NR_BODY = { gleb: 'man', artem: 'man', timur: 'man3', savva: 'man2', rustam: 'man2', kira: 'woman', maya: 'michelle', zoya: 'woman2', nika: 'woman2', olga: 'woman3', mark: 'man3', vera: 'woman3', thug1: 'man2', thug2: 'man', thug3: 'man2', boss: 'man', crow: 'man2' };
+const NR_FEM = { woman: 1, woman2: 1, woman3: 1, michelle: 1 };
+const NR_CAST = { gleb: { hair: '#2a1c14', broad: true }, timur: { hair: '#15151a' }, artem: { hair: '#c9a35a' }, savva: { glasses: true, bald: true }, rustam: { hair: '#15121a', broad: true },
+  kira: { hair: '#1a1420' }, zoya: { hair: '#2a1a12' }, olga: { hair: '#b03a2e' }, nika: { glasses: true, hair: '#15121a' }, vera: { hair: '#1a1414', jacket: '#1c1c22', pants: '#1c1c22' },
+  mark: { hair: '#4a4038', jacket: '#3b4150', pants: '#22242c' }, crow: { hair: '#15151a', jacket: '#22324a', pants: '#1a2230' }, boss: { jacket: '#141416', pants: '#141416', bald: true, broad: true } };
+const NR_RED = '#c8102e', NR_TX = {};
+function nrCanvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; }
+// the Jackals' gear: a bandana over the face, a red armband, a jackal-head badge on the back; the boss: dark glasses and a gold chain
+function nrGear(f, gear) {
+  const items = [], red = new THREE.MeshStandardMaterial({ color: NR_RED, roughness: 0.8 });
+  if (gear === 'thug') {
+    if (!NR_TX.ba) NR_TX.ba = nrCanvasTex(256, 160, (g, w, h) => { g.fillStyle = NR_RED; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(255,230,220,.5)'; g.lineWidth = 3; for (let y = 18; y < h; y += 26) for (let x = 14 + (y % 52 ? 13 : 0); x < w; x += 26) { g.beginPath(); g.arc(x, y, 6, 0, PI * 1.5); g.stroke(); } g.fillStyle = 'rgba(0,0,0,.25)'; for (let y = 0; y < h; y += 4) g.fillRect(0, y, w, 1); });
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.092, 28, 12, -PI * 0.1, PI * 1.2, PI * 0.5, PI * 0.34), new THREE.MeshStandardMaterial({ map: NR_TX.ba, roughness: 0.85, side: THREE.DoubleSide }));
+    items.push({ o: m, bone: f.bones.head, eye: new V3(0, -0.035, -0.05), scale: new V3(0.98, 1.18, 1.12) });
+    items.push({ o: new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.07, 18, 1, true), red), bone: f.bones.la, child: f.bones.lf, along: 0.42 });
+    if (!NR_TX.em) NR_TX.em = nrCanvasTex(256, 256, (g) => { g.fillStyle = NR_RED; g.beginPath(); g.arc(128, 128, 112, 0, PI * 2); g.fill(); g.lineWidth = 10; g.strokeStyle = '#140a0c'; g.beginPath(); g.arc(128, 128, 96, 0, PI * 2); g.stroke(); g.fillStyle = '#140a0c'; g.beginPath(); g.moveTo(84, 196); g.lineTo(92, 120); g.lineTo(80, 46); g.lineTo(116, 98); g.lineTo(128, 52); g.lineTo(140, 104); g.quadraticCurveTo(170, 112, 204, 140); g.lineTo(196, 152); g.quadraticCurveTo(168, 150, 150, 158); g.lineTo(140, 196); g.closePath(); g.fill(); g.fillStyle = NR_RED; g.beginPath(); g.ellipse(146, 122, 7, 4, 0.3, 0, PI * 2); g.fill(); });
+    items.push({ o: new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), new THREE.MeshStandardMaterial({ map: NR_TX.em, transparent: true, alphaTest: 0.5, roughness: 0.7 })), bone: f.bones.chest, off: new V3(0, 0.04, -0.13), flip: true });
+  }
+  if (gear === 'boss') {
+    const glass = new THREE.MeshStandardMaterial({ color: 0x050506, metalness: 0.9, roughness: 0.08 }), sg = new THREE.Group();
+    for (const sd of [-1, 1]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.021, 0.021, 0.005, 20), glass); l.scale.set(1.15, 1, 0.78); l.rotation.x = PI / 2; l.position.set(sd * 0.031, 0, -0.004); sg.add(l); }
+    sg.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.008), glass));
+    items.push({ o: sg, bone: f.bones.head, eye: new V3(0, -0.004, 0.024) });
+    items.push({ o: new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.009, 6, 28), new THREE.MeshStandardMaterial({ color: 0xd4a640, metalness: 1, roughness: 0.28 })), bone: f.bones.neck, off: new V3(0, -0.04, 0.03), tiltX: PI / 2 + 0.45 });
+  }
+  f.g.updateMatrixWorld(true); const gq = f.g.getWorldQuaternion(new THREE.Quaternion()), le = nrBone(f.model, 'LeftEye'), re = nrBone(f.model, 'RightEye');
+  for (const it of items) {
+    if (!it.bone) continue;
+    it.o.castShadow = true; f.inner.parent.add(it.o);
+    if (!it.child) it.corr = it.bone.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(gq);
+    if (it.eye) { const mid = le && re ? le.getWorldPosition(new V3()).add(re.getWorldPosition(new V3())).multiplyScalar(0.5) : it.bone.getWorldPosition(new V3()).add(new V3(0, 0.09, 0.09).applyQuaternion(gq)); it.off = mid.sub(it.bone.getWorldPosition(new V3())).applyQuaternion(gq.clone().invert()).add(it.eye); }
+  }
+  f.gear = items.filter((it) => it.bone);
+}
+const _ga = new V3(), _gb = new V3(), _gq = new THREE.Quaternion(), _gwq = new THREE.Quaternion(), _gq2 = new THREE.Quaternion(), _gy = new V3(0, 1, 0);
+function nrPlaceGear(f) {
+  f.g.getWorldQuaternion(_gq).invert();
+  for (const it of f.gear) {
+    it.bone.getWorldPosition(_ga); it.bone.getWorldQuaternion(_gwq); if (it.corr) _gwq.multiply(it.corr);
+    if (it.child) { it.child.getWorldPosition(_gb); const base = it.bone.getWorldPosition(new V3()); _ga.lerp(_gb, it.along); _gq2.setFromUnitVectors(_gy, _gb.sub(base).normalize()); _gwq.copy(_gq2); }
+    if (it.off) _ga.add(it.off.clone().applyQuaternion(_gwq));
+    f.g.worldToLocal(it.o.position.copy(_ga)); it.o.quaternion.copy(_gq).multiply(_gwq);
+    if (it.flip) it.o.rotateY(PI); if (it.tiltX) it.o.rotateX(it.tiltX); if (it.scale) it.o.scale.copy(it.scale);
+  }
+}
+function nrLoad(onProgress) {
+  if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') return Promise.resolve(false);
+  const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+  let done = 0;
+  return Promise.all(NR_SRC.map((k) => new Promise((res, rej) => loader.load('assets/models/' + k + '.glb', (g) => { NR.G[k] = g; done++; if (onProgress) onProgress(done / NR_SRC.length); res(); }, undefined, rej))))
+    .then(() => {
+      for (const c of NR.G.anims.animations) if (/Idle|Walk|Run/.test(c.name)) NR.clips[c.name.replace(/.*\|/, '')] = c;
+      // the car keeps only positions in the file: rebuild its normals
+      NR.G.car.scene.traverse((o) => { if (o.isMesh && !o.geometry.attributes.normal) o.geometry.computeVertexNormals(); });
+      // a person as tall as the old characters
+      try { const b = new THREE.Box3().setFromObject(ASSETS.chars.kira.scene); NR.H = (b.max.y - b.min.y) * HUMAN_S * 1.16; } catch (e) { NR.H = 2.0; }
+      NR.ready = !!(NR.clips.Idle && NR.clips.Walk && NR.clips.Run); return NR.ready;
+    }).catch(() => false);
+}
+const nrTint = {};
+function nrTintTex(tex, hex, mix) {
+  if (!tex || !tex.image) return tex;
+  const key = tex.uuid + '|' + hex + '|' + mix; if (nrTint[key]) return nrTint[key];
+  const img = tex.image, w = img.width, h = img.height, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, w, h), p = d.data, col3 = new THREE.Color(hex);
+  const tr = col3.r * 255, tg = col3.g * 255, tb = col3.b * 255;
+  for (let i = 0; i < p.length; i += 4) { const l = (p[i] * 0.3 + p[i + 1] * 0.59 + p[i + 2] * 0.11) / 255, k = 0.3 + l * 1.15; p[i] = p[i] * (1 - mix) + Math.min(255, tr * k) * mix; p[i + 1] = p[i + 1] * (1 - mix) + Math.min(255, tg * k) * mix; p[i + 2] = p[i + 2] * (1 - mix) + Math.min(255, tb * k) * mix; }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.flipY = tex.flipY; t.wrapS = tex.wrapS; t.wrapT = tex.wrapT; t.anisotropy = 4;
+  return (nrTint[key] = t);
+}
+const nrBone = (root, n) => { let b = null; root.traverse((o) => { if (!b && o.isBone && o.name.replace(/^mixamorig:?/, '') === n) b = o; }); return b; };
+const nrClipCache = {};
+function nrClip(name, prefix, base) {
+  const key = name + '|' + base; if (nrClipCache[key]) return nrClipCache[key];
+  const src = NR.clips[name], A = NR.G.anims.scene, T = NR.G[base].scene;
+  A.updateMatrixWorld(true); T.updateMatrixWorld(true);
+  const sh = nrBone(A, 'Hips'), th = nrBone(T, 'Hips'), sq = new THREE.Quaternion(), tq = new THREE.Quaternion();
+  sh.parent.getWorldQuaternion(sq); th.parent.getWorldQuaternion(tq);
+  const C = tq.clone().invert().multiply(sq);
+  const tracks = src.tracks.filter((t) => /\.quaternion$/.test(t.name)).map((t) => {
+    const c = t.clone(), bn = t.name.replace(/^mixamorig:?/, '').replace(/\.quaternion$/, ''); c.name = prefix + bn + '.quaternion';
+    if (bn === 'Hips') { const v = c.values, q = new THREE.Quaternion(); for (let i = 0; i < v.length; i += 4) { q.fromArray(v, i); q.premultiply(C); q.toArray(v, i); } }
+    return c;
+  });
+  return (nrClipCache[key] = new THREE.AnimationClip(name, src.duration, tracks));
+}
+let nrGunParts = null;
+function nrGun() {
+  if (!nrGunParts) { const steel = new THREE.MeshStandardMaterial({ color: 0x1a1b1f, metalness: 0.85, roughness: 0.35 }), grip = new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 0.8 });
+    nrGunParts = [[new THREE.BoxGeometry(0.034, 0.042, 0.2), steel, [0, 0.02, 0.06], 0], [new THREE.CylinderGeometry(0.008, 0.008, 0.04, 8).rotateX(PI / 2), steel, [0, 0.022, 0.175], 0], [new THREE.BoxGeometry(0.03, 0.1, 0.045), grip, [0, -0.035, -0.015], -0.25]]; }
+  const g = new THREE.Group(); for (const [geo, m, p, rx] of nrGunParts) { const o = new THREE.Mesh(geo, m); o.position.set(...p); o.rotation.x = rx; o.castShadow = true; g.add(o); }
+  g.scale.setScalar(1.6); return g;
+}
+// look (the game's): model, colors { Shirt/Main/Jacket, Pants, Hair }, noGun, ped
+function nrPerson(look) {
+  const fem = !!(look.face && look.face.fem) || ['kira', 'maya', 'zoya', 'olga', 'nika', 'vera'].includes(look.model);
+  let base = NR_BODY[look.model] || (fem ? 'woman2' : 'man');
+  if (look.ped) base = fem ? pick(['woman', 'woman2', 'michelle']) : pick(['man', 'man2']);   // passers-by: the light models
+  const gangDark = /^thug/.test(look.model) && !look.fac && !look.ped ? { jacket: pick(['#16161a', '#1d1d22', '#2a1418']), pants: '#141418', hair: '#15151a' } : null;
+  const C = look.colors || {}, cast = look.ped ? {} : gangDark || NR_CAST[look.model] || {}, jacket = cast.jacket || C.Shirt || C.Main || C.Jacket || C.Coat || C.Black, pants = cast.pants || C.Pants || C.Trousers || C.DarkGreen, hair = cast.hair || C.Hair;
+  const model = THREE.SkeletonUtils.clone(NR.G[base].scene), outer = new THREE.Group(), inner = new THREE.Group();
+  inner.add(model); outer.add(inner);
+  let prefix = '';
+  model.traverse((o) => {
+    if (o.isBone && /^mixamorig/.test(o.name)) prefix = 'mixamorig';
+    if (!o.isMesh) return;
+    o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); const m = o.material, id = o.name + ' ' + (m.name || '');
+    if (m.metalness > 0.5) m.metalness = 0.1; m.envMapIntensity = 0.6;
+    if (base === 'michelle') return;
+    if (/Outfit_Top|outfit_top|avaturn_look/i.test(id) && jacket) { if (base === 'man3') { m.map = null; m.color.set(jacket); } else m.map = nrTintTex(m.map, jacket, 0.85); }
+    else if (/Outfit_Bottom|outfit_bottom/i.test(id) && pants) m.map = nrTintTex(m.map, pants, 0.8);
+    else if (/hair/i.test(id)) { if (cast.bald) o.visible = false; else if (hair) m.map = nrTintTex(m.map, hair, 0.85); }
+    else if (/Glasses/i.test(id)) o.visible = !!cast.glasses;
+  });
+  const mixer = new THREE.AnimationMixer(model), act = {};
+  for (const n of ['Idle', 'Walk', 'Run']) { const a = mixer.clipAction(nrClip(n, prefix, base)); a.play(); a.setEffectiveWeight(n === 'Idle' ? 1 : 0); act[n] = a; }
+  mixer.update(0); outer.updateMatrixWorld(true);
+  const top = nrBone(model, 'HeadTop_End') || nrBone(model, 'Head'), feet = ['LeftToeBase', 'RightToeBase', 'LeftFoot', 'RightFoot'].map((n) => nrBone(model, n)).filter(Boolean);
+  const tp = new V3(); top.getWorldPosition(tp); let fy = Infinity; for (const f of feet) { const p = new V3(); f.getWorldPosition(p); fy = Math.min(fy, p.y); } if (!isFinite(fy)) fy = 0;
+  const span = Math.max(0.001, tp.y - fy) * (top.name.indexOf('HeadTop') >= 0 ? 1 : 1.1), s = NR.H * (fem ? 0.95 : 1) * (look.model === 'boss' ? 1.12 : 1) / (span * 1.04);
+  inner.scale.set(s * (cast.broad ? 1.08 : 1), s, s * (cast.broad ? 1.08 : 1)); inner.position.y = -(fy - 0.045 * span) * s;
+  const ls = nrBone(model, 'LeftShoulder'), rs = nrBone(model, 'RightShoulder');
+  if (ls && rs) { const a = new V3(), b = new V3(); ls.getWorldPosition(a); rs.getWorldPosition(b); if (a.x < b.x) inner.rotation.y = PI; }
+  for (const n in act) act[n].time = Math.random() * act[n].getClip().duration;
+  const bones = { ra: nrBone(model, 'RightArm'), rf: nrBone(model, 'RightForeArm'), rh: nrBone(model, 'RightHand'), head: nrBone(model, 'Head'), neck: nrBone(model, 'Neck'), chest: nrBone(model, 'Spine2') || nrBone(model, 'Spine1'), spine: nrBone(model, 'Spine'), spine1: nrBone(model, 'Spine1'), la: nrBone(model, 'LeftArm'), lf: nrBone(model, 'LeftForeArm'), rl: nrBone(model, 'RightUpLeg') };
+  const gun = look.noGun ? null : nrGun(); if (gun) outer.add(gun);
+  const f = { g: outer, inner, model, mixer, act, bones, gun, aiming: false, dead: false, aimW: 0, v: 0, last: null, w: { Idle: 1, Walk: 0, Run: 0 }, fall: 0, gear: [] };
+  const gear = look.model === 'boss' ? 'boss' : /^thug/.test(look.model) && !look.fac && !look.ped ? 'thug' : null; if (gear) nrGear(f, gear);
+  return f;
+}
+const _na = new V3(), _nb = new V3(), _nq = new THREE.Quaternion(), _nwq = new THREE.Quaternion(), _npq = new THREE.Quaternion(), _nfw = new V3();
+function nrAimBone(bone, child, dir, w) {
+  if (!bone || !child || w <= 0.001) return;
+  bone.getWorldPosition(_na); child.getWorldPosition(_nb); const cur = _nb.sub(_na).normalize();
+  _nq.setFromUnitVectors(cur, dir); bone.getWorldQuaternion(_nwq); _nq.multiply(_nwq);
+  bone.parent.getWorldQuaternion(_npq); _npq.invert().multiply(_nq); bone.quaternion.slerp(_npq, w); bone.updateMatrixWorld(true);
+}
+function nrUpdate(f, dt) {
+  const p = f.g.parent ? f.g.getWorldPosition(_na) : f.g.position;
+  if (f.last) { const d = Math.hypot(p.x - f.last.x, p.z - f.last.z) / Math.max(dt, 1e-3); f.v += (Math.min(d, 14) - f.v) * Math.min(1, dt * 10); } else f.last = new V3();
+  f.last.set(p.x, p.y, p.z);
+  if (f.dead) f.mixer.timeScale = Math.max(0, f.mixer.timeScale - dt * 4); else f.mixer.timeScale = 1;
+  const v = f.dead ? 0 : f.v, tw = { Idle: v < 0.5 ? 1 : 0, Walk: v >= 0.5 && v < 4.2 ? 1 : 0, Run: v >= 4.2 ? 1 : 0 };
+  for (const n in f.act) { f.w[n] += (tw[n] - f.w[n]) * Math.min(1, dt * 8); f.act[n].setEffectiveWeight(f.w[n]); }
+  f.act.Walk.timeScale = clamp(v / 1.7, 0.7, 1.8); f.act.Run.timeScale = clamp(v / 5.5, 0.8, 1.5);
+  f.mixer.update(dt);
+  // death: the body falls back stiffly from the feet
+  f.fall = f.dead ? Math.min(1, f.fall + dt / 0.55) : 0; f.inner.rotation.x = -(f.fall * f.fall) * 1.45;
+  f.aimW += ((f.aiming && !f.dead ? 1 : 0) - f.aimW) * Math.min(1, dt * 12);
+  f.g.updateMatrixWorld(true);
+  _nfw.set(0, -0.08, 1).applyQuaternion(f.g.getWorldQuaternion(_nwq)).normalize();
+  nrAimBone(f.bones.ra, f.bones.rf, _nfw, f.aimW); nrAimBone(f.bones.rf, f.bones.rh, _nfw, f.aimW);
+  if (f.gear.length) nrPlaceGear(f);
+  if (f.gun && f.bones.rh) { f.bones.rh.getWorldPosition(_na); f.g.worldToLocal(_na); f.gun.position.copy(_na); f.gun.rotation.set((1 - f.aimW) * 1.35 - f.inner.rotation.x * 0, 0, 0); f.gun.visible = !f.dead; }
+}
+// the car: one sports-car body, repainted; glass, tyres and lamps keep their own materials
+const NR_CARMAT = {};
+function nrCar(o) {
+  const src = NR.G.car.scene, model = src.clone(true), inner = new THREE.Group(); inner.add(model);
+  if (!NR.carInfo) {
+    const b = new THREE.Box3().setFromObject(src), sz = b.getSize(new V3()), alongX = sz.x > sz.z, c = b.getCenter(new V3());
+    // the tail lights must end up at the back (−z in the game): find where they are in the file
+    let tl = 0, n = 0; src.updateMatrixWorld(true); src.traverse((m) => { if (m.isMesh && /Taillight/.test(m.material && m.material.name)) { const bb = new THREE.Box3().setFromObject(m).getCenter(new V3()); tl += alongX ? bb.x - c.x : bb.z - c.z; n++; } });
+    const tailSign = n ? Math.sign(tl) : -1;   // after the turn below the length axis becomes +z; −x maps to +z when alongX
+    NR.carInfo = { sz, alongX, flip: alongX ? tailSign < 0 : tailSign > 0 };
+  }
+  const { sz, alongX } = NR.carInfo, len = alongX ? sz.x : sz.z, s = 4.5 / len;
+  inner.scale.setScalar(s); inner.rotation.y = alongX ? -PI / 2 : 0; if (NR.carInfo.flip) inner.rotation.y += PI;
+  inner.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(inner), cc = bb.getCenter(new V3()); inner.position.set(-cc.x, -bb.min.y, -cc.z);
+  if (!NR_CARMAT.glass) {
+    NR_CARMAT.glass = new THREE.MeshPhysicalMaterial({ color: 0x0a0d14, metalness: 0.3, roughness: 0.05, clearcoat: 1, transparent: true, opacity: 0.86 });
+    NR_CARMAT.tire = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.9 });
+    NR_CARMAT.chrome = new THREE.MeshStandardMaterial({ color: 0xc8ccd4, metalness: 1, roughness: 0.22 });
+    NR_CARMAT.metal = new THREE.MeshStandardMaterial({ color: 0x2a2c32, metalness: 0.6, roughness: 0.5 });
+    NR_CARMAT.plastic = new THREE.MeshStandardMaterial({ color: 0x18191d, roughness: 0.7 });
+    NR_CARMAT.tail = new THREE.MeshStandardMaterial({ color: 0x400008, emissive: new THREE.Color(1, 0.04, 0.06), emissiveIntensity: 1.6, roughness: 0.3 });
+    NR_CARMAT.head = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, emissive: new THREE.Color(1, 0.95, 0.82), emissiveIntensity: 1.4, roughness: 0.2 });
+    NR_CARMAT.wreck = new THREE.MeshStandardMaterial({ color: 0x121214, roughness: 0.95 });
+  }
+  const body = o.wreck ? NR_CARMAT.wreck : o.body || new THREE.MeshPhysicalMaterial({ color: o.color === undefined ? 0xffb703 : o.color, metalness: 0.55, roughness: 0.36, clearcoat: 1, clearcoatRoughness: 0.08 });
+  const wheels = [];
+  model.traverse((m) => {
+    if (/^wheel/i.test(m.name)) wheels.push(m);
+    if (!m.isMesh) return; m.castShadow = true;
+    const n = (m.material && m.material.name) || '';
+    m.material = o.wreck ? (/Glass/.test(n) ? NR_CARMAT.glass : NR_CARMAT.wreck) : n === 'Body_Color' ? body : /Glass_Gray/.test(n) ? NR_CARMAT.glass : /Tires/.test(n) ? NR_CARMAT.tire : /chrome/.test(n) ? NR_CARMAT.chrome : /Taillight/.test(n) ? NR_CARMAT.tail : /Projector|LED/.test(n) ? NR_CARMAT.head : /metal/.test(n) ? NR_CARMAT.metal : NR_CARMAT.plastic;
+  });
+  // the roof: the top of the painted body (the sign sits on it)
+  // the highest point of the painted body near the middle (an open car: the windscreen frame) carries the taxi sign
+  if (!NR.carTop) {
+    let top = -1, tz = 0; inner.updateMatrixWorld(true); const v = new V3();
+    model.traverse((m) => { if (!m.isMesh || m.material !== body) return; const P = m.geometry.attributes.position; for (let i = 0; i < P.count; i += 3) { v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); if (Math.abs(v.x) < 0.35 && v.y > top) { top = v.y; tz = v.z; } } });
+    NR.carTop = top > 0 ? { y: top, z: tz } : { y: sz.y * s, z: -0.3 };
+  }
+  return { inner, wheels, H: NR.carTop.y, Z: NR.carTop.z, W: (alongX ? sz.z : sz.x) * s };
+}
 function makeHuman(look, scale) {
+  if (NR.ready && !look.kit) {
+    const f = nrPerson(look), g = f.g; g.scale.setScalar(scale || 1); scene.add(g);
+    const h = { g, model: f.model, mixer: f.mixer, acts: {}, cur: null, lockT: 0, head: f.bones.head || g, nr: f };
+    HUMANS.add(h); return h;
+  }
   const src = ASSETS.chars[look.model] || ASSETS.chars.kira;
   const model = THREE.SkeletonUtils.clone(src.scene);
   model.traverse((o) => {
@@ -3455,6 +3668,7 @@ function makeHuman(look, scale) {
   return h;
 }
 function playAct(h, name, fade, once) {
+  if (h.nr) { if (name === 'Death') h.nr.dead = true; else if (name === 'Idle') { h.nr.dead = false; h.nr.fall = 0; } else if (name === 'RecieveHit') h.flinchT = 0.3; h.cur = name; return; }
   const a = h.acts[name]; if (!a) return;
   const prev = h.cur ? h.acts[h.cur] : null;
   a.reset(); a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = !!once; a.setEffectiveWeight(1); a.play();
@@ -3463,6 +3677,7 @@ function playAct(h, name, fade, once) {
 }
 // o: { move (0..1), aim, idle } -> picks the clip; the mixer itself runs in updateHumans
 function poseHuman(h, o) {
+  if (h.nr) { h.nr.aiming = !!o.aim && !o.idle && (o.move || 0) < 0.6; return; }
   if (h.lockT > 0) return;
   const want = o.idle ? 'Idle' : o.back && o.move > 0.08 ? 'Walk' : o.move > 0.5 ? 'Run' : o.move > 0.08 ? 'Walk' : (o.aim ? 'Shoot_OneHanded' : 'Idle');
   if (want !== h.cur) playAct(h, want, 0.18);
@@ -3473,7 +3688,7 @@ function killHuman(h) { h.twist = 0; h.lockT = 1e9; playAct(h, 'Death', 0.1, tru
 function reviveHuman(h) { h.lockT = 0; playAct(h, 'Idle', 0.2); }
 const _tq = new THREE.Quaternion(), _tq2 = new THREE.Quaternion(), _ax = new V3();
 function twistTorso(h, ang) {
-  if (!h.spine) h.spine = [[h.model.getObjectByName('Abdomen'), 0.35], [h.model.getObjectByName('Torso'), 0.65]].filter((b) => b[0]);
+  if (!h.spine) h.spine = (h.nr ? [[h.nr.bones.spine, 0.35], [h.nr.bones.spine1, 0.65]] : [[h.model.getObjectByName('Abdomen'), 0.35], [h.model.getObjectByName('Torso'), 0.65]]).filter((b) => b[0]);
   for (const [bone, k] of h.spine) {
     bone.parent.getWorldQuaternion(_tq2).invert();
     _ax.set(0, 1, 0).applyQuaternion(_tq2).normalize();
@@ -3483,7 +3698,7 @@ function twistTorso(h, ang) {
 // a punch (left/right shoulder) or a kick (right hip): bones rotate about the body's right axis, and the torso turns into the blow
 function strikePose(h, dt) {
   h.punchT -= dt; const ph = 1 - Math.max(0, h.punchT) / h.punchD, sw = Math.sin(Math.min(1, ph) * PI);
-  if (!h.limbs) h.limbs = { L: h.model.getObjectByName('UpperArm.L'), R: h.model.getObjectByName('UpperArm.R'), K: h.model.getObjectByName('UpperLeg.R') };
+  if (!h.limbs) h.limbs = h.nr ? { L: h.nr.bones.la, R: h.nr.bones.ra, K: h.nr.bones.rl } : { L: h.model.getObjectByName('UpperArm.L'), R: h.model.getObjectByName('UpperArm.R'), K: h.model.getObjectByName('UpperLeg.R') };
   const bone = h.kick ? h.limbs.K : h.punchSide ? h.limbs.L : h.limbs.R; if (!bone) return;
   const f = h.face !== undefined ? h.face : h.g.rotation.y;
   _ax.set(Math.cos(f), 0, -Math.sin(f));   // the body's right axis in the world
@@ -3496,7 +3711,8 @@ function updateHumans(dt) {
     if (!h.g.parent) { HUMANS.delete(h); continue; }
     if (!h.g.visible) continue;
     if (h.lockT > 0 && h.lockT < 1e8) { h.lockT -= dt; }
-    h.mixer.update(dt);
+    if (h.nr) { nrUpdate(h.nr, dt); if (h.flinchT > 0) { h.flinchT -= dt; const b = h.nr.bones.spine1; if (b) b.rotation.x -= Math.sin((1 - h.flinchT / 0.3) * PI) * 0.35; } }
+    else h.mixer.update(dt);
     if (h.twist) twistTorso(h, h.twist);
     if (h.punchT > 0) strikePose(h, dt);
   }
@@ -5771,9 +5987,9 @@ const FACTIONS = {
 function factionLook(f, heavy) {
   const F = FACTIONS[f]; if (!F) return undefined;
   const skin = pick(['#d9a98a', '#c08a6a', '#e8c0a0', '#a87452']), angry = { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true };
-  if (heavy) return { model: 'thug3', skin, colors: F.heavy, face: Object.assign({ stubble: '#15151a' }, angry) };
+  if (heavy) return { model: 'thug3', fac: f, skin, colors: F.heavy, face: Object.assign({ stubble: '#15151a' }, angry) };
   const m = pick(['thug1', 'thug2', 'thug3']);
-  return { model: m, skin, colors: F[m], face: m === 'thug1' ? Object.assign({ mask: true }, angry) : angry };
+  return { model: m, fac: f, skin, colors: F[m], face: m === 'thug1' ? Object.assign({ mask: true }, angry) : angry };
 }
 // on-foot locations: the warehouse yard, the docks, the park, or any inner crossroads [x, z]
 function arenaDef(a) {
@@ -9086,6 +9302,10 @@ function renderPortraits() {
     const h = makeHuman(ch.look, 1); scene.remove(h.g); ps.add(h.g);
     HUMANS.delete(h); h.mixer.update(0.6); h.g.rotation.y = -0.18;
     rim.color.set(ch.accent);
+    if (h.nr) {   // the realistic people: frame the head and shoulders from the head bone
+      h.g.updateMatrixWorld(true); const hp = new V3(); h.head.getWorldPosition(hp);
+      pcam.fov = 22; pcam.updateProjectionMatrix(); pcam.position.set(hp.x + 0.12, hp.y + 0.02, hp.z + 1.25); pcam.lookAt(hp.x, hp.y - 0.12, hp.z);
+    } else { pcam.fov = 30; pcam.updateProjectionMatrix(); pcam.position.set(0.32, 1.42, 1.85); pcam.lookAt(0, 1.3, 0); }
     pr.render(ps, pcam);
     const card = document.getElementById('pc-' + ch.id), cv = card && card.querySelector('canvas');
     if (cv) cv.getContext('2d').drawImage(pr.domElement, 0, 0, cv.width, cv.height);
@@ -9382,7 +9602,7 @@ function loop(now) {
 }
 
 $('loading').textContent = 'Загрузка города… 0%';
-loadAssets((k) => { $('loading').textContent = 'Загрузка города… ' + Math.round(k * 100) + '%'; }).then(() => {
+loadAssets((k) => { $('loading').textContent = 'Загрузка города… ' + Math.round(k * 80) + '%'; }).then(() => nrLoad((k) => { $('loading').textContent = 'Загрузка героев… ' + Math.round(80 + k * 20) + '%'; })).then(() => {
   buildWorld();
   loadProfile();   // a guest until the server session (if any) is restored
   initLife();
@@ -9402,7 +9622,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { NR, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
