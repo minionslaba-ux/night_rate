@@ -439,7 +439,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v42'; window.__errs = [];
+window.APP_VER = 'v43'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5876,23 +5876,24 @@ function pay(price) { if (!canPay(price)) return false; if (!PROF.god) PROF.coin
 function profStat(k, n) { PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
-const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: '', maxUrl: '' };
-const joinWhere = () => (PLATFORM === 'vk' || PLATFORM === 'web' ? 'vk' : PLATFORM === 'tg' && COMMUNITY.tgUrl ? 'tg' : PLATFORM === 'max' && COMMUNITY.maxUrl ? 'max' : '');
-async function joinCommunity() {
-  const w = joinWhere(); if (!w) return;
+const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: 'https://t.me/nightfaregame', maxUrl: '' };
+// which communities to offer here: the website shows all, each mini app only its own platform (no ads for other platforms inside them)
+const joinList = () => (PLATFORM === 'web' ? ['vk', 'tg', 'max'] : [PLATFORM]).filter((w) => (w === 'vk' ? COMMUNITY.vkGroup : w === 'tg' ? COMMUNITY.tgUrl : COMMUNITY.maxUrl));
+const JOIN_TXT = { vk: 'Группа ВКонтакте', tg: 'Канал в Telegram', max: 'Канал в MAX' };
+async function joinCommunity(w) {
   if (w === 'vk' && PLATFORM === 'vk') { const r = await vkBridge('VKWebAppJoinGroup', { group_id: COMMUNITY.vkGroup }, 60000); if (r && r.result) { store.set('nf-joined', true); toast('Спасибо, что с нами!', 2); } return; }
   const url = w === 'vk' ? COMMUNITY.vkUrl : w === 'tg' ? COMMUNITY.tgUrl : COMMUNITY.maxUrl;
-  try { if (PLATFORM === 'tg' && window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) Telegram.WebApp.openTelegramLink(url); else window.open(url, '_blank', 'noopener'); } catch (e) { location.href = url; }
+  try { if (PLATFORM === 'tg' && w === 'tg' && window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) Telegram.WebApp.openTelegramLink(url); else window.open(url, '_blank', 'noopener'); } catch (e) { location.href = url; }
   store.set('nf-joined', true);
 }
-const joinLabel = () => ({ vk: 'Вступить в группу ВКонтакте', tg: 'Подписаться на канал', max: 'Подписаться на канал MAX' }[joinWhere()] || '');
+const joinButtons = (attr) => joinList().map((w) => `<button class="btn sm ${w === 'vk' ? 'vk' : 'tg'}" ${attr}="${w}" type="button">${JOIN_TXT[w]}</button>`).join('');
 // once, after the first finished chapter: a small bar with the button, gone by itself in 15 s
 function joinNudge() {
-  if (store.get('nf-joined') || store.get('nf-joinask') || !joinWhere()) return;
+  if (store.get('nf-joined') || store.get('nf-joinask') || !joinList().length) return;
   store.set('nf-joinask', true);
   const bar = document.createElement('div'); bar.className = 'join-bar';
-  bar.innerHTML = `<span>Понравилось? В группе — новости и новые главы первыми.</span><button class="btn sm ${joinWhere() === 'vk' ? 'vk' : 'tg'}" type="button">${joinLabel()}</button><button class="btn sm" type="button" aria-label="Закрыть">✕</button>`;
-  const [go, x] = bar.querySelectorAll('button'); go.onclick = () => { joinCommunity(); bar.remove(); }; x.onclick = () => bar.remove();
+  bar.innerHTML = `<span>Понравилось? Подписывайся — новости и новые главы первыми.</span>${joinButtons('data-join')}<button class="btn sm" data-x type="button" aria-label="Закрыть">✕</button>`;
+  bar.querySelectorAll('[data-join]').forEach((b) => { b.onclick = () => { joinCommunity(b.dataset.join); bar.remove(); }; }); bar.querySelector('[data-x]').onclick = () => bar.remove();
   document.body.appendChild(bar); setTimeout(() => bar.remove(), 15000);
 }
 function profMax(k, v) { if (v > (PROF.st[k] || 0)) { PROF.st[k] = v; saveProfile(); checkAch(); } }
@@ -6019,7 +6020,7 @@ function renderProfile() {
       : `<div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
       <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>${PROF.cloud ? '' : '<div class="prow"><button class="btn sm tg" data-act="tglogin" type="button">Войти через Telegram</button><button class="btn sm vk" data-act="vklogin" type="button">Войти через ВКонтакте</button></div>'}<div class="prow"><small>Игра есть и в Telegram: <a href="https://t.me/night_fare_bot" target="_blank" rel="noopener">@night_fare_bot</a></small></div>`}
     ${PROF.cloud ? profLinksHtml() : ''}
-    ${joinWhere() ? `<div class="plabel">Наши сообщества</div><div class="prow"><span>Новости и новые главы первыми</span><button class="btn sm ${joinWhere() === 'vk' ? 'vk' : 'tg'}" data-act="join" type="button">${joinLabel()}</button></div>` : ''}
+    ${joinList().length ? `<div class="plabel">Наши сообщества</div><div class="prow"><span>Новости и новые главы первыми</span>${joinButtons('data-join')}</div>` : ''}
     <div class="plabel">Один аккаунт на всех устройствах</div>
     <div class="prow">${PROF.cloud ? `<button class="btn sm" data-act="getcode" type="button">Получить код для другого устройства</button>${CLOUD.code ? `<b class="pcode">${CLOUD.code}</b><small>действует 10 минут</small>` : ''}` : '<span>Войди в профиль, чтобы получить код.</span>'}</div>
     <div class="plogin"><input id="pCode" type="text" placeholder="Код с другого устройства" maxlength="9" autocapitalize="characters"><button class="btn sm" data-act="usecode" type="button">${inMiniApp ? 'Привязать по коду' : 'Войти по коду'}</button></div>${inMiniApp ? `<div class="prow"><small>Уже играешь на сайте или в другом приложении? Возьми там код («Получить код для другого устройства») и введи здесь — ${PLATFORM === 'max' ? 'MAX' : PLATFORM === 'vk' ? 'ВКонтакте' : 'Telegram'} привяжется к тому же профилю.</small></div>` : ''}
@@ -6057,7 +6058,6 @@ function profAction(act, id) {
   }
   else if (act === 'pflogin') { platformLogin().then((err) => { profMsg = err || 'Готово: профиль загружен.'; renderProfile(); }); return; }
   else if (act === 'getcode') { getLinkCode().then((j) => { if (j.code) CLOUD.code = j.code.slice(0, 4) + '-' + j.code.slice(4); profMsg = j.error || 'Введи этот код на другом устройстве или в другой площадке в течение 10 минут.'; renderProfile(); }); return; }
-  else if (act === 'join') { joinCommunity(); return; }
   else if (act === 'linkvk' || act === 'linktg') { profMsg = act === 'linkvk' ? 'Открываю ВКонтакте…' : 'Открываю Telegram…'; renderProfile(); linkStart(act === 'linkvk' ? 'vk' : 'tg').then((err) => { if (err) { try { localStorage.removeItem('nf-link'); } catch (e) { /* storage unavailable */ } profMsg = err; renderProfile(); } }); return; }
   else if (act === 'vklogin') { profMsg = 'Открываю ВКонтакте…'; renderProfile(); vkSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
   else if (act === 'tglogin') { profMsg = 'Открываю Telegram…'; renderProfile(); tgSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
@@ -7799,7 +7799,7 @@ $('selProfile').addEventListener('click', () => openProfile('me'));
 $('profClose').addEventListener('click', closeProfile);
 $('prof').addEventListener('click', (e) => { if (e.target.id === 'prof') closeProfile(); });
 $('profTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { profTab = b.dataset.tab; profMsg = ''; renderProfile(); } });
-$('profBody').addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) profAction(b.dataset.act, b.dataset.id); });
+$('profBody').addEventListener('click', (e) => { const j = e.target.closest('[data-join]'); if (j) { joinCommunity(j.dataset.join); return; } const b = e.target.closest('[data-act]'); if (b && !b.disabled) profAction(b.dataset.act, b.dataset.id); });
 for (const [id, k] of [['btnNitro', 'nitro'], ['btnShield', 'shield']]) $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); useBoost(k); });
 window.addEventListener('keydown', (e) => {
   if (!$('gate').hidden) return;
