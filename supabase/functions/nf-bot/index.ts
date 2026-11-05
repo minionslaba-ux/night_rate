@@ -3,13 +3,22 @@
 // • Владельцу (таблица nf_admins, по Telegram ID): статистика, игроки, чат и жалобы, ошибки, идеи, рассылка, выгрузка. Список — /help.
 //   Всё, что уходит людям (/broadcast), сначала показывается превью с кнопками «Отправить» / «Отмена» (черновик в nf_drafts).
 // • Подключение вебхука и меню команд (один раз и после изменений): GET …/functions/v1/nf-bot?setup=1. Чужой вебхук не перезаписывается без &force=1.
+// • Канал @nightfaregame: ежедневный пост (pg_cron, 19:07 МСК, POST {daily: ключ из nf_settings.cron_key}; не больше одного в день — nf_posts),
+//   /news — новость в канал с превью, /postnow — сегодняшний пост сейчас, /autopost on|off, /pin — закреплённое сообщение с быстрым меню.
 // Запросы от Telegram проверяются секретом, выведенным из токена бота (TELEGRAM_BOT_TOKEN в секретах функций; его добавляет владелец).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import * as XLSX from 'npm:xlsx@0.18.5';
+import { dailyPost, msk as mskNow } from './posts.ts';
 
 const token = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const SELF = `${Deno.env.get('SUPABASE_URL')}/functions/v1/nf-bot`;
 const SITE = 'https://nightfaregame.com/';
+const CHANNEL = '@nightfaregame', BOT_START = 'https://t.me/night_fare_bot?start=channel', VK_GROUP = 'https://vk.ru/club242985713';
+// в канале нельзя кнопку web_app — только ссылки
+const channelBtn = { inline_keyboard: [[{ text: '🚕 Играть в Telegram', url: BOT_START }], [{ text: '🌐 Играть на сайте', url: SITE }]] };
+const setting = async (k: string) => ((await db.from('nf_settings').select('v').eq('k', k).maybeSingle()).data?.v ?? null) as string | null;
+const setSetting = (k: string, v: string) => db.from('nf_settings').upsert({ k, v });
+const toChannel = (text: string) => api('sendMessage', { chat_id: CHANNEL, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: channelBtn });
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 const api = async (method: string, body: Record<string, unknown> = {}) => {
@@ -27,7 +36,7 @@ const msk = (t?: string | null) => (t ? new Date(new Date(t).getTime() + MSK).to
 // начало суток по Москве, сдвиг в днях (0 — сегодня, -1 — вчера)
 const mskDay = (d: number) => new Date(Math.floor((Date.now() + MSK) / 864e5) * 864e5 - MSK + d * 864e5).toISOString();
 const n = (x: unknown) => Number(x || 0).toLocaleString('ru-RU');
-const playBtn = { inline_keyboard: [[{ text: '🚕 Играть', web_app: { url: SITE } }], [{ text: 'Открыть в браузере', url: SITE }]] };
+const playBtn = { inline_keyboard: [[{ text: '🚕 Играть', web_app: { url: SITE } }], [{ text: 'Открыть в браузере', url: SITE }], [{ text: '📢 Канал игры', url: 'https://t.me/nightfaregame' }]] };
 const kb = (rows: [string, string][][]) => ({ inline_keyboard: rows.map((r) => r.map(([text, callback_data]) => ({ text, callback_data }))) });
 
 const PUBLIC_COMMANDS = [{ command: 'start', description: 'Открыть игру' }, { command: 'play', description: 'Кнопка «Играть»' }];
@@ -49,6 +58,10 @@ const ADMIN_COMMANDS = [
   { command: 'tester', description: 'Тестовый режим: /tester логин on|off' },
   { command: 'errors', description: 'Ошибки у игроков за 7 дней' },
   { command: 'health', description: 'Всё ли работает' },
+  { command: 'news', description: 'Новость в канал: /news текст' },
+  { command: 'postnow', description: 'Сегодняшний автопост в канал — сейчас' },
+  { command: 'autopost', description: 'Автопосты в канал: /autopost on|off' },
+  { command: 'pin', description: 'Закреплённое меню в канале' },
   { command: 'broadcast', description: 'Сообщение подписчикам бота: /broadcast текст' },
   { command: 'export', description: 'Игроки в Excel' },
   { command: 'idea', description: 'Что поправить в игре: /idea текст' },
@@ -74,6 +87,12 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 /tester логин on|off — тестовый режим (бессмертие, все главы)
 /errors — ошибки у игроков за 7 дней
 /health — сайт, версия, база, вебхук
+
+📢 <b>Канал @nightfaregame</b> (сначала превью, потом «Отправить»)
+/news текст — новость в канал
+/postnow — сегодняшний автопост сейчас (обычно сам выходит в 19:07 МСК)
+/autopost on · off — включить или выключить ежедневные посты
+/pin — опубликовать или обновить закреплённое меню с кнопками
 
 📣 <b>Рассылка</b> (сначала превью, потом кнопка «Отправить»)
 /broadcast текст — личное сообщение всем, кто нажал /start в боте
@@ -109,6 +128,42 @@ async function report(title: string, from: string, to: string) {
   const [nw, act, msgs, errs, bots, ideas] = await Promise.all([c('profiles', 'created_at'), c('profiles', 'updated_at'), c('chat_messages', 'created_at'), c('client_errors', 'created_at'), c('nf_bot_users', 'started_at'), c('nf_ideas', 'created_at')]);
   const [tg, vk, mx] = await Promise.all(['tg_accounts', 'vk_accounts', 'max_accounts'].map((t) => c(t, 'created_at')));
   return `📊 <b>${title}</b>\n\n👥 Игроков всего: <b>${n(total)}</b>\n🆕 Новых: <b>${n(nw)}</b> (Telegram ${n(tg)} · ВК ${n(vk)} · MAX ${n(mx)})\n🚕 Заходили в игру: <b>${n(act)}</b>\n💬 Сообщений в чате: ${n(msgs)}\n⚠️ Ошибок у игроков: ${n(errs)}${errs ? ' — /errors' : ''}\n🤖 Новых подписчиков бота: ${n(bots)}\n📝 Идей: ${n(ideas)}`;
+}
+
+// итоги недели для воскресного поста — только настоящие цифры
+async function weekStats() {
+  const from = new Date(Date.now() - 7 * 864e5).toISOString();
+  const { count: nw } = await db.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', from);
+  const { count: act } = await db.from('profiles').select('*', { count: 'exact', head: true }).gte('updated_at', from);
+  const { data } = await db.from('profiles').select('name, data').gte('updated_at', from).limit(2000);
+  let fares = 0, tasks = 0; const top: [string, number][] = [];
+  for (const p of data || []) { const st = (p.data && p.data.st) || {}; fares += Number(st.fares || 0); tasks += Number(st.tasks || 0); top.push([p.name || 'Игрок', Number(st.earned || 0)]); }
+  top.sort((a, b) => b[1] - a[1]);
+  const t3 = top.filter((x) => x[1] > 0).slice(0, 3).map((x, i) => `${['🥇', '🥈', '🥉'][i]} ${esc(x[0])} — ${n(x[1])} монет`).join('\n');
+  return `📊 <b>Неделя в Порт-Северном</b>\n\n👥 Водителей за рулём: <b>${n(act)}</b>${nw ? ` (новых — ${n(nw)})` : ''}\n🚕 Поездок такси у них всего: ${n(fares)}\n📋 Выполнено заданий: ${n(tasks)}${t3 ? `\n\n<b>Лучшие водители</b> (заработано всего)\n${t3}` : ''}\n\nНовая неделя — новые заказы. До встречи на смене!`;
+}
+const PIN_TEXT = `🚕 <b>«Ночной тариф»</b> — ночной город, такси, погони и перестрелки.\n\n• Сюжет из 14 эпизодов\n• Открытый город: другие игроки, чат, группы с друзьями\n• 60 000 заданий, гараж и тюнинг\n\nИграйте в Telegram или на сайте — профиль общий. Новости игры — здесь, в канале.`;
+const pinBtn = { inline_keyboard: [[{ text: '🚕 Играть в Telegram', url: BOT_START }], [{ text: '🌐 Играть на сайте', url: SITE }], [{ text: '👥 Группа ВКонтакте', url: VK_GROUP }]] };
+async function pinMenu() {
+  const old = Number(await setting('pin_msg')) || 0;
+  if (old) { const r = await api('editMessageText', { chat_id: CHANNEL, message_id: old, text: PIN_TEXT, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: pinBtn }); if (r.ok || /not modified/.test(r.description || '')) return { ok: true, updated: true }; }
+  const m = await api('sendMessage', { chat_id: CHANNEL, text: PIN_TEXT, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: pinBtn });
+  if (!m.ok) return { ok: false, error: m.description };
+  await setSetting('pin_msg', String(m.result.message_id));
+  const pin = await api('pinChatMessage', { chat_id: CHANNEL, message_id: m.result.message_id, disable_notification: true });
+  return { ok: true, pinned: pin.ok, error: pin.ok ? '' : pin.description };
+}
+// ежедневный пост: вызывает pg_cron; один пост в день
+async function dailyRun(force = false) {
+  if (!force && (await setting('autopost')) === 'off') return { skipped: 'off' };
+  const day = mskNow().toISOString().slice(0, 10);
+  const { data: done } = await db.from('nf_posts').select('day').eq('day', day).maybeSingle();
+  if (done) return { skipped: 'already' };
+  const text = await dailyPost(weekStats);
+  const r = await toChannel(text);
+  if (!r.ok) return { ok: false, error: r.description };
+  await db.from('nf_posts').insert({ day, kind: 'daily', message_id: r.result.message_id });
+  return { ok: true };
 }
 
 async function exportUsers(chatId: number) {
@@ -233,6 +288,28 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
       await say(`🩺 <b>Проверка</b>\n${site.ok ? '✅' : '❌'} Сайт: ${site.code} за ${ms} мс, версия <b>${esc(ver)}</b>\n${dbOk ? '✅' : '❌'} База данных\n${wh.url === SELF ? '✅' : '⚠️'} Вебхук бота${wh.pending_update_count ? ` · в очереди ${wh.pending_update_count}` : ''}${wh.last_error_message ? `\n⚠️ Последняя ошибка вебхука: ${esc(wh.last_error_message)} (${msk(new Date(wh.last_error_date * 1000).toISOString())})` : ''}`);
       return true;
     }
+    case 'news': {
+      if (arg.length < 3) { await say('Напишите текст: <code>/news Вышло обновление: погода и времена года!</code>\nСначала покажу превью, потом кнопка «Отправить» опубликует в канал @nightfaregame.'); return true; }
+      const { data } = await db.from('nf_drafts').insert({ tg_id: tg, kind: 'news', payload: { text: arg.slice(0, 3500) } }).select('id').single();
+      await say(`📢 <b>Превью новости для канала</b>:\n\n${esc(arg)}`, { reply_markup: kb([[['✅ Опубликовать', `adm:${data!.id}:send`], ['✖ Отмена', `adm:${data!.id}:cancel`]], [['Только мне (проверка)', `adm:${data!.id}:me`]]]) });
+      return true;
+    }
+    case 'postnow': {
+      const text = await dailyPost(weekStats);
+      const { data } = await db.from('nf_drafts').insert({ tg_id: tg, kind: 'post', payload: { html: text } }).select('id').single();
+      await say(`📅 <b>Сегодняшний автопост</b> (обычно выходит сам в 19:07 МСК):\n\n${text}`, { reply_markup: kb([[['✅ Опубликовать сейчас', `adm:${data!.id}:send`], ['✖ Отмена', `adm:${data!.id}:cancel`]]]) });
+      return true;
+    }
+    case 'autopost': {
+      const v = arg.toLowerCase();
+      if (v === 'on' || v === 'off') { await setSetting('autopost', v); await say(v === 'on' ? '✅ Автопосты в канал включены: каждый день в 19:07 МСК.' : '⏸ Автопосты в канал выключены. Включить — /autopost on'); return true; }
+      await say(`Автопосты сейчас: <b>${(await setting('autopost')) === 'off' ? 'выключены' : 'включены'}</b>. Изменить: <code>/autopost on</code> или <code>/autopost off</code>`); return true;
+    }
+    case 'pin': {
+      const r = await pinMenu();
+      await say(r.ok ? (r.updated ? '📌 Закреплённое меню в канале обновлено.' : r.pinned ? '📌 Меню опубликовано и закреплено в канале.' : `📌 Меню опубликовано, но закрепить не вышло: ${esc(r.error)}. Дайте боту в канале право «Закреплять сообщения» (или «Редактировать сообщения») и повторите /pin.`) : `Не удалось опубликовать в канал: ${esc(r.error)}. Проверьте, что бот — админ канала с правом публикации.`);
+      return true;
+    }
     case 'broadcast': {
       if (arg.length < 3) { await say('Напишите текст: <code>/broadcast Вышла новая глава — «Северный экспресс»!</code>\nСначала покажу превью.'); return true; }
       const { count } = await db.from('nf_bot_users').select('*', { count: 'exact', head: true }).eq('blocked', false);
@@ -267,6 +344,16 @@ async function onCallback(cq: any) {
   const done = async (text: string) => { await api('answerCallbackQuery', { callback_query_id: cq.id, text }); await api('editMessageReplyMarkup', { chat_id: chatId, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } }); };
   if (!d) return done('Черновик уже обработан');
   if (m[2] === 'cancel') { await db.from('nf_drafts').delete().eq('id', d.id); return done('Отменено'); }
+  if (d.kind === 'news' || d.kind === 'post') {
+    const html = d.kind === 'post' ? String(d.payload?.html || '') : `📢 ${esc(d.payload?.text)}`;
+    if (m[2] === 'me') { await api('sendMessage', { chat_id: chatId, text: html, parse_mode: 'HTML', reply_markup: channelBtn }); return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Отправил только вам' }); }
+    if (m[2] !== 'send') return;
+    await db.from('nf_drafts').delete().eq('id', d.id);
+    const r = await toChannel(html);
+    if (r.ok && d.kind === 'post') await db.from('nf_posts').upsert({ day: mskNow().toISOString().slice(0, 10), kind: 'daily', message_id: r.result.message_id });
+    await done(r.ok ? 'Опубликовано' : 'Ошибка');
+    return api('sendMessage', { chat_id: chatId, text: r.ok ? '✅ Опубликовано в канале @nightfaregame.' : `Не удалось опубликовать: ${r.description}. Проверьте, что бот — админ канала.` });
+  }
   const text = `🚕 <b>Ночной тариф</b>\n\n${esc(d.payload?.text)}`;
   if (m[2] === 'me') { await api('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', reply_markup: playBtn }); return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Отправил только вам' }); }
   if (m[2] !== 'send') return;
@@ -289,7 +376,7 @@ async function onMessage(msg: any) {
   if (cmd === 'start' || cmd === 'play') {
     await db.from('nf_bot_users').upsert({ tg_id: from.id, name: [from.first_name, from.last_name].filter(Boolean).join(' ').slice(0, 64), username: from.username || null, blocked: false }, { onConflict: 'tg_id' });
     await api('sendMessage', { chat_id: chat.id, parse_mode: 'HTML', reply_markup: playBtn,
-      text: cmd === 'play' ? '🚕 «Ночной тариф» — жми «Играть».' : '🚕 <b>«Ночной тариф»</b> — ночной город, такси, погони и перестрелки.\n\nСюжет из 14 эпизодов, а в «Открытом городе» — другие игроки, чат, заказы такси и 30 000 заданий. Вход через Telegram — прогресс сохраняется.' });
+      text: cmd === 'play' ? '🚕 «Ночной тариф» — жми «Играть».' : '🚕 <b>«Ночной тариф»</b> — ночной город, такси, погони и перестрелки.\n\nСюжет из 14 эпизодов, а в «Открытом городе» — другие игроки, чат, заказы такси и 60 000 заданий. Вход через Telegram — прогресс сохраняется.' });
     if (await isAdmin(from.id)) await api('sendMessage', { chat_id: chat.id, text: 'Вы владелец: команды — /help' });
     return;
   }
@@ -315,6 +402,12 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
   if (!token) return json({ error: 'not_configured' }, 503);
+  if (!req.headers.get('x-telegram-bot-api-secret-token')) {   // не Telegram: расписание (pg_cron) с ключом из базы
+    const b = await req.clone().json().catch(() => null);
+    const key = await setting('cron_key');
+    if (b && key && b.daily === key) return json(await dailyRun());
+    return json({ error: 'forbidden' }, 403);
+  }
   if (req.headers.get('x-telegram-bot-api-secret-token') !== (await secret())) return json({ error: 'forbidden' }, 403);
   const u = await req.json().catch(() => null);
   try {
