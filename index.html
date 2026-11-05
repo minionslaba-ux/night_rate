@@ -1963,7 +1963,7 @@ function buildStation() {
   putB(B.trim, G.cyl, 720, 0.25, -200, 22, 0.5, 22, 0, col(0x5a544c)); putB(B.metal, G.box, 720, 0.55, -200, 22, 0.2, 2.2, 0.6, col(0x8a8a92)); addBox(720, -200, 3, 3, 0.6);
   for (let k = 0; k < 4; k++) { putB(B.metal, G.box, 682 + k * 28, 3, 40, 1, 6, 1, 0, yel); }
   for (const [x, z, n] of [[690, 70, 2], [702, 70, 3], [714, 70, 1], [690, 110, 2], [714, 110, 2], [740, 90, 3], [752, 140, 2], [700, 170, 1], [730, 190, 2], [760, 60, 1]]) {
-    for (let k = 0; k < n; k++) boxB(B.container, x - 1.25, k * 2.75, z - 6, x + 1.25, k * 2.75 + 2.6, z + 6, { us: 1 / 2, vs: 1 / 2.6, col: col([0xb33a2e, 0x2e6bb3, 0x2fa36b, 0xd4a020, 0x7a3fb3][(x + z + k) % 5]) });
+    for (let k = 0; k < n; k++) contSlot(x, k * 2.75, z, CONT_COLS[(x + z + k) % CONT_COLS.length]);
     addBox(x, z, 2.5, 12, n * 2.75);
   }
   for (const s of [-1, 1]) for (const z of [60, 190]) putB(B.metal, G.box, 725 + s * 22, 9, z, 1, 18, 1, 0, yel);
@@ -2106,7 +2106,9 @@ function buildWorld() {
   kitInstances('streetlight', lamps, KIT.prop, true);
   buildSignals(tlights); buildRoadSigns();
 
+  CONTS.glb = !isTouch && perf.level === 0;
   buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage();
+  contBuild();
 
   // one material per batch: a few draw calls for the whole city
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -2158,15 +2160,47 @@ function buildPark() {
   addBox(X, Z, 10, 10, 1.2);
 }
 
+// ---- shipping containers: the model (assets/models/container.glb) on computers, colored boxes on phones ----
+// Every 12 m slot holds two 20-foot containers, each its own color; all of them are one instanced mesh.
+const CONT_COLS = [0xb33a2e, 0x2e6bb3, 0x2fa36b, 0xd4a020, 0x7a3fb3, 0xcc5a1e, 0x8a8a90, 0x1f8a8a, 0xe8e4da, 0x8a3a2a, 0x3a5a8a, 0x5a7a3a];
+const CONTS = { slots: [], glb: false };
+function contSlot(x, y, z, c) {
+  if (CONTS.glb) { CONTS.slots.push({ x, y, z, c: [pick(CONT_COLS), pick(CONT_COLS)] }); return; }
+  boxB(B.container, x - 1.25, y, z - 6, x + 1.25, y + 2.6, z + 6, { us: 1 / 2, vs: 1 / 2.6, col: col(c) });
+}
+function contBuild() {
+  if (!CONTS.slots.length) return;
+  const place = (geo, mat, sx, sy, sz, rot) => {
+    const n = CONTS.slots.length * 2, im = new THREE.InstancedMesh(geo, mat, n), o = new THREE.Object3D(), c = new THREE.Color();
+    let i = 0;
+    for (const q of CONTS.slots) for (const h of [0, 1]) {
+      o.position.set(q.x, q.y, q.z + (h ? 3.02 : -3.02)); o.rotation.set(0, rot + (Math.random() < 0.5 ? PI : 0), 0); o.scale.set(sx, sy, sz); o.updateMatrix();
+      im.setMatrixAt(i, o.matrix); im.setColorAt(i, c.setHex(q.c[h])); i++;
+    }
+    im.castShadow = true; im.receiveShadow = true; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; scene.add(im); return im;
+  };
+  const boxes = () => place(new THREE.BoxGeometry(2.5, 2.6, 5.96).translate(0, 1.3, 0), new THREE.MeshStandardMaterial({ map: ribTex, roughness: 0.6, metalness: 0.3 }), 1, 1, 1, 0);
+  if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') { boxes(); return; }
+  const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.load('assets/models/container.glb', (gl) => {
+    let mesh = null; gl.scene.updateMatrixWorld(true); gl.scene.traverse((m) => { if (m.isMesh && !mesh) mesh = m; });
+    if (!mesh) { boxes(); return; }
+    const geo = mesh.geometry.clone(); geo.applyMatrix4(mesh.matrixWorld); geo.computeBoundingBox();
+    const b = geo.boundingBox, sz = b.getSize(new V3()); geo.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
+    const mat = mesh.material.clone(); mat.color.setRGB(1.25, 1.25, 1.25); mat.metalnessMap = null; mat.roughnessMap = null; mat.metalness = 0.25; mat.roughness = 0.55; mat.envMapIntensity = 1.2;
+    // the long side of the model is x: turned by 90° it runs along z like the slots
+    place(geo, mat, 5.96 / sz.x, 2.6 / sz.y, 2.5 / sz.z, PI / 2);
+  }, undefined, boxes);
+}
 function buildDocks() {
-  const contCols = [0xb33a2e, 0x2e6bb3, 0x2fa36b, 0xd4a020, 0x7a3fb3, 0xcc5a1e, 0x8a8a90];
+  const contCols = CONT_COLS;
   for (const x of [-144, -132, -120, -108, -96]) for (const z of [102, 120, 138]) {
     if (srand() < 0.2) continue;
     const n = 1 + Math.floor(srand() * 3);
     for (let k = 0; k < n; k++) {
-      const c = col(pick(contCols));
-      boxB(B.container, x - 1.25, 0.15 + k * 2.75, z - 6, x + 1.25, 0.15 + k * 2.7 + 2.6, z + 6, { us: 1 / 2, vs: 1 / 2.6, col: c });
-      putB(B.metal, G.box, x, 0.15 + k * 2.75 + 1.3, z + 6.02, 2.3, 2.4, 0.06, 0, c.clone().multiplyScalar(0.6));
+      const ch = pick(contCols), c = col(ch);
+      contSlot(x, 0.15 + k * 2.72, z, ch);
+      if (!CONTS.glb) putB(B.metal, G.box, x, 0.15 + k * 2.75 + 1.3, z + 6.02, 2.3, 2.4, 0.06, 0, c.clone().multiplyScalar(0.6));
     }
     addBox(x, z, 2.5, 12, n * 2.75);
   }
@@ -9862,7 +9896,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { NR, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { NR, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
