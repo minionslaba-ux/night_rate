@@ -216,7 +216,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 .keys b { color: var(--text); font-weight: 500; }
 .btns { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn { appearance: none; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); font: 500 15px var(--font-body); padding: 12px 18px; border-radius: 8px; cursor: pointer; }
-.btn.tg { background: #2aabee; border-color: #2aabee; color: #fff; font-weight: 700; } .btn.vk { background: #0077ff; border-color: #0077ff; color: #fff; font-weight: 700; } .ok { color: #4dffa6; } .btn.linkish { background: none; border-color: transparent; color: var(--muted); text-decoration: underline; } .gate-nopass { text-align: center; margin: 0; }
+.btn.tg { background: #2aabee; border-color: #2aabee; color: #fff; font-weight: 700; } .btn.vk { background: #0077ff; border-color: #0077ff; color: #fff; font-weight: 700; } .ok { color: #4dffa6; } .join-bar { position: fixed; left: 50%; top: calc(12px + var(--sat)); transform: translateX(-50%); z-index: 70; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: min(560px, calc(100% - 24px)); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; box-shadow: 0 8px 30px rgba(0,0,0,.5); } .btn.linkish { background: none; border-color: transparent; color: var(--muted); text-decoration: underline; } .gate-nopass { text-align: center; margin: 0; }
 .pver { font-weight: 400; opacity: .55; margin-left: 6px; letter-spacing: 0; }
 .gate-or { text-align: center; font-size: 12px; color: var(--muted); }
 .btn.primary { background: var(--taxi); color: #1a1405; border-color: var(--taxi); font-weight: 700; }
@@ -439,7 +439,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v41'; window.__errs = [];
+window.APP_VER = 'v42'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5873,7 +5873,28 @@ let achBusy = false;
 function walletAdd(n) { if (!n) return; PROF.coins += n; PROF.st.earned += Math.max(0, n); saveProfile(); checkAch(); }
 function canPay(price) { return PROF.god || PROF.coins >= price; }
 function pay(price) { if (!canPay(price)) return false; if (!PROF.god) PROF.coins -= price; saveProfile(); return true; }
-function profStat(k, n) { PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); }
+function profStat(k, n) { PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); }
+// ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
+// The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
+const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: '', maxUrl: '' };
+const joinWhere = () => (PLATFORM === 'vk' || PLATFORM === 'web' ? 'vk' : PLATFORM === 'tg' && COMMUNITY.tgUrl ? 'tg' : PLATFORM === 'max' && COMMUNITY.maxUrl ? 'max' : '');
+async function joinCommunity() {
+  const w = joinWhere(); if (!w) return;
+  if (w === 'vk' && PLATFORM === 'vk') { const r = await vkBridge('VKWebAppJoinGroup', { group_id: COMMUNITY.vkGroup }, 60000); if (r && r.result) { store.set('nf-joined', true); toast('Спасибо, что с нами!', 2); } return; }
+  const url = w === 'vk' ? COMMUNITY.vkUrl : w === 'tg' ? COMMUNITY.tgUrl : COMMUNITY.maxUrl;
+  try { if (PLATFORM === 'tg' && window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) Telegram.WebApp.openTelegramLink(url); else window.open(url, '_blank', 'noopener'); } catch (e) { location.href = url; }
+  store.set('nf-joined', true);
+}
+const joinLabel = () => ({ vk: 'Вступить в группу ВКонтакте', tg: 'Подписаться на канал', max: 'Подписаться на канал MAX' }[joinWhere()] || '');
+// once, after the first finished chapter: a small bar with the button, gone by itself in 15 s
+function joinNudge() {
+  if (store.get('nf-joined') || store.get('nf-joinask') || !joinWhere()) return;
+  store.set('nf-joinask', true);
+  const bar = document.createElement('div'); bar.className = 'join-bar';
+  bar.innerHTML = `<span>Понравилось? В группе — новости и новые главы первыми.</span><button class="btn sm ${joinWhere() === 'vk' ? 'vk' : 'tg'}" type="button">${joinLabel()}</button><button class="btn sm" type="button" aria-label="Закрыть">✕</button>`;
+  const [go, x] = bar.querySelectorAll('button'); go.onclick = () => { joinCommunity(); bar.remove(); }; x.onclick = () => bar.remove();
+  document.body.appendChild(bar); setTimeout(() => bar.remove(), 15000);
+}
 function profMax(k, v) { if (v > (PROF.st[k] || 0)) { PROF.st[k] = v; saveProfile(); checkAch(); } }
 function profEp(ep) { if (!PROF.st.eps.includes(ep)) { PROF.st.eps.push(ep); saveProfile(); } checkAch(); }
 function checkAch() {
@@ -5998,6 +6019,7 @@ function renderProfile() {
       : `<div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
       <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>${PROF.cloud ? '' : '<div class="prow"><button class="btn sm tg" data-act="tglogin" type="button">Войти через Telegram</button><button class="btn sm vk" data-act="vklogin" type="button">Войти через ВКонтакте</button></div>'}<div class="prow"><small>Игра есть и в Telegram: <a href="https://t.me/night_fare_bot" target="_blank" rel="noopener">@night_fare_bot</a></small></div>`}
     ${PROF.cloud ? profLinksHtml() : ''}
+    ${joinWhere() ? `<div class="plabel">Наши сообщества</div><div class="prow"><span>Новости и новые главы первыми</span><button class="btn sm ${joinWhere() === 'vk' ? 'vk' : 'tg'}" data-act="join" type="button">${joinLabel()}</button></div>` : ''}
     <div class="plabel">Один аккаунт на всех устройствах</div>
     <div class="prow">${PROF.cloud ? `<button class="btn sm" data-act="getcode" type="button">Получить код для другого устройства</button>${CLOUD.code ? `<b class="pcode">${CLOUD.code}</b><small>действует 10 минут</small>` : ''}` : '<span>Войди в профиль, чтобы получить код.</span>'}</div>
     <div class="plogin"><input id="pCode" type="text" placeholder="Код с другого устройства" maxlength="9" autocapitalize="characters"><button class="btn sm" data-act="usecode" type="button">${inMiniApp ? 'Привязать по коду' : 'Войти по коду'}</button></div>${inMiniApp ? `<div class="prow"><small>Уже играешь на сайте или в другом приложении? Возьми там код («Получить код для другого устройства») и введи здесь — ${PLATFORM === 'max' ? 'MAX' : PLATFORM === 'vk' ? 'ВКонтакте' : 'Telegram'} привяжется к тому же профилю.</small></div>` : ''}
@@ -6035,6 +6057,7 @@ function profAction(act, id) {
   }
   else if (act === 'pflogin') { platformLogin().then((err) => { profMsg = err || 'Готово: профиль загружен.'; renderProfile(); }); return; }
   else if (act === 'getcode') { getLinkCode().then((j) => { if (j.code) CLOUD.code = j.code.slice(0, 4) + '-' + j.code.slice(4); profMsg = j.error || 'Введи этот код на другом устройстве или в другой площадке в течение 10 минут.'; renderProfile(); }); return; }
+  else if (act === 'join') { joinCommunity(); return; }
   else if (act === 'linkvk' || act === 'linktg') { profMsg = act === 'linkvk' ? 'Открываю ВКонтакте…' : 'Открываю Telegram…'; renderProfile(); linkStart(act === 'linkvk' ? 'vk' : 'tg').then((err) => { if (err) { try { localStorage.removeItem('nf-link'); } catch (e) { /* storage unavailable */ } profMsg = err; renderProfile(); } }); return; }
   else if (act === 'vklogin') { profMsg = 'Открываю ВКонтакте…'; renderProfile(); vkSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
   else if (act === 'tglogin') { profMsg = 'Открываю Telegram…'; renderProfile(); tgSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
@@ -7839,7 +7862,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
