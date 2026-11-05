@@ -434,13 +434,12 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   <div class="card" style="text-align:center; justify-items:center">
     <div class="kicker">Реклама за награду</div>
     <div id="adCount" class="count">3</div>
-    <p class="lead">Здесь игрок смотрит рекламный ролик и получает награду.</p>
-    <div class="note">Заглушка прототипа. В релизе — SDK Яндекс Игр, VK или Telegram.</div>
+    <p class="lead">Пара секунд — и награда твоя.</p>
   </div>
 </div>
 
 <script>
-window.APP_VER = 'v37'; window.__errs = [];
+window.APP_VER = 'v38'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6045,7 +6044,7 @@ function profAction(act, id) {
   else if (act === 'buy-up') { const l = PROF.up[id]; if (l < UP_MAX && pay(upPrice(l))) { PROF.up[id]++; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'buy-pack') {
     if (PROF.god) { PACKS[id].grant(PROF); saveProfile(); applyLoadout(); checkAch(); profMsg = `«${PACKS[id].name}» выдан (тестовый профиль).`; }
-    else profMsg = 'Оплата в рублях подключается через платёжный SDK площадки (Яндекс Игры, VK Play). В прототипе покупка — заглушка, деньги не списываются.';
+    else profMsg = 'Покупка наборов скоро появится. Деньги не списываются.';
   }
   renderProfile();
 }
@@ -7627,13 +7626,13 @@ function showEnd() {
       <button id="mEp2" class="btn primary" type="button">Эпизод 2 →</button>
       <button id="mAgain" class="btn" type="button">Сменить водителя</button>
     </div>
-    <div class="kicker" style="color:var(--muted)">Гараж · витрина прототипа</div>
+    <div class="kicker" style="color:var(--muted)">Гараж · наборы</div>
     <div class="garage">
       <div class="car-card owned"><b>Такси «Комета»</b><span>Скорость 3 · броня 2</span><span class="price">В гараже</span></div>
       <div class="car-card"><b>Перехватчик «Сокол»</b><span>Скорость 5 · броня 2</span><span class="price">1500 монет</span></div>
       <div class="car-card"><b>Броневан «Бизон»</b><span>Скорость 2 · броня 5</span><span class="price">Набор за 149 ₽</span></div>
     </div>
-    <div class="note">Покупки в прототипе не работают: витрина показывает, что можно продавать.</div>`, {
+    <div class="note">Покупка наборов появится скоро.</div>`, {
     mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
     mAgain: () => { hideModal(); showSelect(); },
     mEp2: () => { hideModal(); startEpisode2(1); },
