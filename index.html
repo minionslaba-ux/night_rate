@@ -116,6 +116,7 @@ body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, bo
 .chat input, .chat-row input, .plogin input, .gate-form input { -webkit-user-select: text; user-select: text; touch-action: manipulation; } .clink { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 3px; }
 .chat-row { display: flex; gap: 6px; } .chat-form { display: flex; flex: 1; gap: 6px; min-width: 0; margin: 0; } .chat-row input { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 8px 10px; font: 16px var(--font-body); }
 #btnChat.new { background: var(--taxi); color: #1a1405; }
+.cab-arrow { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(26vw, 150px); pointer-events: none; filter: drop-shadow(0 0 10px rgba(77,255,166,.55)); } .cab-arrow svg { width: 100%; height: auto; display: block; transition: transform .12s linear; }
 .chat.party { grid-template-rows: auto 1fr; } .chat.svc { min-height: 0; } .svc .btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .care { display: grid; gap: 4px; } .care .bar { grid-template-columns: auto 1fr auto; } .bar-fill.fuel { background: #ff9a3d; } .bar-fill.fuel.low { background: var(--neon); } .fuel-n { font-size: 11px; min-width: 32px; text-align: right; }
 .care-txt { font-size: 11px; color: var(--muted); background: var(--panel); padding: 4px 10px; border-radius: 6px; } .care-txt.bad { color: #ffb08a; } .hud-chip.tow { color: #ffb08a; border-color: rgba(255,154,61,.6); } .ptitle { display: flex; justify-content: space-between; align-items: center; } .pbody { overflow-y: auto; display: grid; gap: 8px; align-content: start; font-size: 14px; }
@@ -330,6 +331,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   </div>
   <div id="bars" class="bars" hidden></div>
   <div id="nav" class="nav" hidden><svg id="navArrow" viewBox="-50 -50 100 100" aria-hidden="true"><path d="M0 -42 L32 0 L13 0 L13 40 L-13 40 L-13 0 L-32 0 Z" fill="#4dffa6" stroke="#0b0d1f" stroke-width="5" stroke-linejoin="round"/></svg><div><b id="navTurn">Прямо</b><span id="navDist"></span></div></div>
+  <div id="cabArrow" class="cab-arrow" hidden><svg id="cabArrowI" viewBox="-50 -50 100 100" aria-hidden="true"><path d="M0 -44 L34 -4 L14 -4 L14 40 L-14 40 L-14 -4 L-34 -4 Z" fill="#4dffa6" fill-opacity=".85" stroke="#0b0d1f" stroke-opacity=".7" stroke-width="4" stroke-linejoin="round"/></svg></div>
   <div id="speedo" class="speedo"><b id="speed">0</b><small>км/ч</small></div>
   <div id="toast" class="toast" hidden></div>
   <div id="hint" class="hint"></div>
@@ -426,7 +428,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v33'; window.__errs = [];
+window.APP_VER = 'v34'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1456,7 +1458,7 @@ function updateStation(dt) {
 function buildWorld() {
   // asphalt with puddles (low roughness patches reflect the city)
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(720, 486), new THREE.MeshStandardMaterial({ map: asphaltTex, roughnessMap: puddleTex, roughness: 1, metalness: 0.0, envMapIntensity: 0.9, color: 0x9a9aa2 }));
-  ground.rotation.x = -PI / 2; ground.position.set(0, 0, -67); ground.receiveShadow = true; scene.add(ground);
+  ground.rotation.x = -PI / 2; ground.position.set(0, 0, -67); ground.receiveShadow = true; scene.add(ground); KIT.groundMat = ground.material;
   putB(B.water, G.box, 0, -1.6, 310, 900, 0.2, 260, 0, col(0xffffff));
   boxB(B.trim, -360, -1.6, 176, 360, 0.15, 182, { col: col(0x55525a) });
 
@@ -1586,9 +1588,9 @@ function buildWorld() {
   meshB(B.archwin, new THREE.MeshBasicMaterial({ map: archWinTex, vertexColors: true, color: new THREE.Color(1.25, 1.2, 1.1) }), false);
   meshB(B.sign, new THREE.MeshBasicMaterial({ map: signAtlas, vertexColors: true, color: new THREE.Color(1.7, 1.7, 1.7) }), false);
   meshB(B.ad, new THREE.MeshBasicMaterial({ map: adAtlas, vertexColors: true, color: new THREE.Color(1.25, 1.25, 1.25) }), false);
-  meshB(B.walk, new THREE.MeshStandardMaterial({ map: pavingTex, vertexColors: true, color: 0x9a948c, roughness: 0.6, envMapIntensity: 0.9 }), false);
-  meshB(B.grass, new THREE.MeshStandardMaterial({ map: grassTex, vertexColors: true, roughness: 1 }), false);
-  meshB(B.leaf, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
+  KIT.walkMat = (meshB(B.walk, new THREE.MeshStandardMaterial({ map: pavingTex, vertexColors: true, color: 0x9a948c, roughness: 0.6, envMapIntensity: 0.9 }), false) || {}).material;
+  KIT.grassMat = (meshB(B.grass, new THREE.MeshStandardMaterial({ map: grassTex, vertexColors: true, roughness: 1 }), false) || {}).material;
+  KIT.leafMat = (meshB(B.leaf, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true) || {}).material;
   meshB(B.mark, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), false);
   meshB(B.container, new THREE.MeshStandardMaterial({ map: ribTex, vertexColors: true, roughness: 0.6, metalness: 0.3 }), true);
   meshB(B.wood, new THREE.MeshStandardMaterial({ map: woodTex, vertexColors: true, roughness: 0.85 }), true);
@@ -2995,7 +2997,81 @@ for (let i = 0; i < RAIN_N; i++) { const x = rand(-50, 50), y = rand(0, 40), z =
 rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
 const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: new THREE.Color(0.75, 0.82, 1.2), transparent: true, opacity: 0.32, depthWrite: false }));
 rain.frustumCulled = false; scene.add(rain);
+// ---------------- weather and seasons ----------------
+// The season follows the calendar (or the player's choice in the pause menu). The weather changes every 4 minutes,
+// picked from the clock, so everyone in the open city sees the same sky: clear, cloudy, rain, downpour, fog, snow in winter.
+const SEASONS = { winter: 'Зима', spring: 'Весна', summer: 'Лето', autumn: 'Осень' };
+const WX_NAMES = { clear: 'Ясно', cloudy: 'Облачно', rain: 'Дождь', storm: 'Ливень', fog: 'Туман', snow: 'Снег' };
+const WX_ODDS = {
+  winter: [['clear', 30], ['cloudy', 25], ['snow', 35], ['fog', 10]],
+  spring: [['clear', 35], ['cloudy', 25], ['rain', 30], ['fog', 10]],
+  summer: [['clear', 55], ['cloudy', 20], ['rain', 10], ['storm', 7], ['fog', 8]],
+  autumn: [['clear', 20], ['cloudy', 25], ['rain', 35], ['storm', 10], ['fog', 10]],
+};
+const WX = { pref: 'auto', season: null, kind: null, rain: 0, snow: 0, fog: 0, cloud: 0, slot: -1, applied: null, snowPts: null, said: false };
+try { WX.pref = localStorage.getItem('nf-season') || 'auto'; } catch (e) { /* storage unavailable */ }
+function wxSeasonNow() {
+  if (WX.pref !== 'auto' && SEASONS[WX.pref]) return WX.pref;
+  const m = new Date().getMonth();
+  return m === 11 || m < 2 ? 'winter' : m < 5 ? 'spring' : m < 8 ? 'summer' : 'autumn';
+}
+function wxPick(season, slot) {
+  const h = ((slot * 2654435761) >>> 0) / 4294967296, list = WX_ODDS[season], sum = list.reduce((a, q) => a + q[1], 0);
+  let x = h * sum; for (const [k, w] of list) { x -= w; if (x <= 0) return k; } return list[0][0];
+}
+const WX_TARGET = { clear: [0, 0, 0, 0], cloudy: [0, 0, 0.15, 0.6], rain: [0.65, 0, 0.25, 0.8], storm: [1, 0, 0.4, 1], fog: [0, 0, 1, 0.7], snow: [0, 1, 0.35, 0.7] };
+function wxSnowBuild() {
+  const N = isTouch ? 900 : 1800, pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) pos.set([rand(-45, 45), rand(0, 30), rand(-45, 45)], i * 3);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const tex = canvasTex(32, 32, (c, w) => { const gr = c.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, w); });
+  const m = new THREE.Points(g, new THREE.PointsMaterial({ map: tex, size: 0.32, color: new THREE.Color(1.2, 1.25, 1.35), transparent: true, opacity: 0, depthWrite: false }));
+  m.frustumCulled = false; scene.add(m); WX.snowPts = { m, pos, N };
+}
+// season colours: leaves, grass and pavements (snow on the ground in winter)
+function wxSeasonLook(season) {
+  if (WX.applied === season) return; WX.applied = season;
+  const L = KIT.leafMat, Gr = KIT.grassMat, W = KIT.walkMat, A = KIT.groundMat;
+  const set = (m, c, e) => { if (!m) return; if (!m.userData.c0) { m.userData.c0 = m.color.clone(); m.userData.e0 = m.emissive ? m.emissive.clone() : null; } m.color.copy(m.userData.c0).multiply(new THREE.Color(...c)); if (m.emissive) m.emissive.copy(m.userData.e0).add(new THREE.Color(...e)); };
+  if (season === 'winter') { set(L, [1.5, 1.2, 1.5], [0.32, 0.34, 0.38]); set(Gr, [1.6, 1.6, 1.8], [0.4, 0.42, 0.46]); set(W, [1.15, 1.15, 1.25], [0.08, 0.08, 0.1]); set(A, [1.08, 1.08, 1.14], [0, 0, 0]); }
+  else if (season === 'autumn') { set(L, [4.2, 1.6, 0.25], [0.2, 0.07, 0]); set(Gr, [1.25, 1.0, 0.55], [0, 0, 0]); set(W, [1, 1, 1], [0, 0, 0]); set(A, [1, 1, 1], [0, 0, 0]); }
+  else if (season === 'spring') { set(L, [1.2, 1.45, 1.0], [0, 0.01, 0]); set(Gr, [1.15, 1.35, 1.0], [0, 0, 0]); set(W, [1, 1, 1], [0, 0, 0]); set(A, [1, 1, 1], [0, 0, 0]); }
+  else { set(L, [1, 1, 1], [0, 0, 0]); set(Gr, [1, 1, 1], [0, 0, 0]); set(W, [1, 1, 1], [0, 0, 0]); set(A, [1, 1, 1], [0, 0, 0]); }
+}
+function updateWeather(dt, focusP) {
+  const season = wxSeasonNow(); WX.season = season; wxSeasonLook(season);
+  const slot = Math.floor(Date.now() / 240000);
+  if (slot !== WX.slot) {
+    const first = WX.slot < 0; WX.slot = slot; const k = wxPick(season, slot);
+    if (k !== WX.kind) {
+      WX.kind = k;
+      if (!first && (state.mode === 'drive' || state.mode === 'foot') && typeof toast === 'function') toast({ clear: 'Небо проясняется', cloudy: 'Набежали тучи', rain: 'Начинается дождь', storm: 'Начинается ливень', fog: 'Город накрывает туман', snow: 'Пошёл снег' }[k], 2);
+    }
+    if (first) { const t = WX_TARGET[k]; WX.rain = t[0]; WX.snow = t[1]; WX.fog = t[2]; WX.cloud = t[3]; }
+  }
+  const t = WX_TARGET[WX.kind], s = Math.min(1, dt * 0.08);   // ~20 s to change over
+  WX.rain += (t[0] - WX.rain) * s; WX.snow += (t[1] - WX.snow) * s; WX.fog += (t[2] - WX.fog) * s; WX.cloud += (t[3] - WX.cloud) * s;
+  // rain: lines and splashes; fog: the fog closes in; wet asphalt reflects more
+  rain.visible = WX.rain > 0.03; rain.material.opacity = 0.42 * WX.rain;
+  scene.fog.near = 70 - 62 * WX.fog; scene.fog.far = 290 - 215 * WX.fog;
+  if (KIT.groundMat) KIT.groundMat.envMapIntensity = 0.35 + 0.6 * Math.min(1, WX.rain + 0.4 * WX.fog);
+  if (WX.snow > 0.03) {
+    if (!WX.snowPts) wxSnowBuild();
+    const S = WX.snowPts; S.m.visible = true; S.m.material.opacity = 0.9 * WX.snow;
+    for (let i = 0; i < S.N; i++) { const k = i * 3; S.pos[k + 1] -= dt * (1.4 + (i % 5) * 0.25); S.pos[k] += Math.sin(state.t * 0.8 + i) * dt * 0.5; if (S.pos[k + 1] < 0) S.pos[k + 1] += 30; }
+    S.m.geometry.attributes.position.needsUpdate = true; S.m.position.set(focusP.x, 0, focusP.z);
+  } else if (WX.snowPts) WX.snowPts.m.visible = false;
+}
+function wxLabel() { return `${SEASONS[WX.season] || ''} · ${WX_NAMES[WX.kind] || ''}${WX.pref === 'auto' ? '' : ' (выбрано)'}`; }
+function wxCyclePref() {
+  const order = ['auto', 'winter', 'spring', 'summer', 'autumn'];
+  WX.pref = order[(order.indexOf(WX.pref) + 1) % order.length]; WX.slot = -1;
+  try { localStorage.setItem('nf-season', WX.pref); } catch (e) { /* storage unavailable */ }
+  return WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref];
+}
+
 function updateRain(dt, focus) {
+  if (!rain.visible) return;
   const d = 38 * dt;
   for (let i = 0; i < RAIN_N; i++) { const k = i * 6; let y = rainPos[k + 1] - d; if (y < 0) y += 40; rainPos[k + 1] = y; rainPos[k + 4] = y + 0.9; }
   rainGeo.attributes.position.needsUpdate = true;
@@ -3596,6 +3672,10 @@ function updateDrive(dt) {
   arrowCore.material.color.setRGB(0.12, 0.8 + Math.sin(state.t * 6) * 0.2, 0.42);
   const rel = wrapA(bearing - pc.h);
   $('navArrow').style.transform = `rotate(${(-rel).toFixed(3)}rad)`;
+  // from the cab the 3D arrow over the roof is out of sight: a big arrow «painted» on the windscreen shows the route instead
+  const cab = carView === 'cab' && arrow.visible;
+  $('cabArrow').hidden = !cab;
+  if (cab) { const q = NAV.pts.length && pc.pos.distanceTo(NAV.pts[0]) > 4 ? NAV.pts[0] : NAV.pts[1] || NAV.target, r2 = wrapA(Math.atan2(q.x - pc.pos.x, q.z - pc.pos.z) - pc.h); $('cabArrowI').style.transform = `perspective(260px) rotateX(58deg) rotateZ(${(-r2).toFixed(3)}rad)`; }
   const m = Math.round(NAV.turnDist / 5) * 5;
   const navName = state.ep === 1 ? 'Склад №7' : MIS.navName;
   $('navTurn').textContent = Math.abs(rel) > 2.2 ? 'Развернись' : NAV.pts.length === 1 ? navName : NAV.turn ? `${NAV.turn > 0 ? 'Направо' : 'Налево'} через ${m} м` : `Прямо ${m} м`;
@@ -5543,7 +5623,7 @@ function renderBars(list, timer, bad) {
   if (timer) { $('barT').textContent = timer; $('barT').classList.toggle('bad', bad); }
 }
 function updateHud(dt) {
-  camLabel();
+  camLabel(); if (state.mode !== 'drive' && !$('cabArrow').hidden) $('cabArrow').hidden = true;
   $('touch').classList.toggle('on-foot', state.mode === 'foot');
   if (state.mode !== 'foot' && aimHeld && window.__nfSetAim) window.__nfSetAim(false);
   if (state.mode === 'foot' && isTouch && toastT <= 0 && !store.get('nf-aimhint')) { store.set('nf-aimhint', true); toast('Держи «Прицел», чтобы целиться от первого лица. Кнопка «Камера» вверху меняет вид', 4); }
@@ -7075,9 +7155,10 @@ function pauseGame() {
   const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
   showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
     <p class="lead">Прогресс сохраняется по главам: выйдешь в меню — продолжишь с начала этой главы.</p>
-    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
+    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
     pResume: () => { hideModal(); state.mode = pausedFrom; state.fireLock = true; },
     pView: () => { cycleView(); $('pView').textContent = 'Камера: ' + VIEW_NAMES[footView]; },
+    pSeason: () => { $('pSeason').textContent = wxCyclePref(); updateWeather(0.016, focus); toast(wxLabel(), 1.6); },
     pMenu: () => { hideModal(); showSelect(); },
   });
 }
@@ -7410,7 +7491,7 @@ function loop(now) {
   updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
-  updateRain(dt, focus);
+  updateWeather(dt, focus); updateRain(dt, focus);
   flash.intensity *= Math.exp(-dt * 12);
   beam.material.opacity = 0.18 + Math.sin(state.t * 3) * 0.06;
   const sel = state.mode === 'select', kk = Math.min(1, dt * 4);
@@ -7437,7 +7518,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, scene, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, scene, WX, wxCyclePref, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
