@@ -162,6 +162,7 @@ if (!process.env.NOPAGE) fs.writeFileSync(SP + '/test/' + PAGE, '<!doctype html>
         if (S.mode === 'dying') { end = 'death'; break; }
         if (S.mode === 'dead') { end = g.DIFF.last && g.DIFF.last.result === 'fail' ? 'fail' : 'death'; break; }
         if (S.mode !== 'drive') { end = 'mode:' + S.mode; break; }
+        if (g.PROF.inv.ammo < 40 && t % 30 === 0) { g.PROF.coins = Math.max(g.PROF.coins, 200); g.buyAmmo(); }   // like a player: buy a new set when the gun runs dry
         drive(type);
         g.keys.Space = !noFire();
         g.sim(1, 1 / 30);

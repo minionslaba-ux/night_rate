@@ -5580,7 +5580,7 @@ const EPS = {
         about: 'Пока Орлова в пути, поднять посёлок: развезти листовки «Все к озеру!» по двенадцати ящикам на Ольховой и Сосновой — чем больше свидетелей, тем меньше шансов, что Сухов уйдёт тихо.',
         intro: [['galina', 'Один свидетель — это слово. Сто свидетелей — это посёлок. Листовки уже напечатаны.'], ['hero', 'Медленно у ящиков, быстро между ними. Я теперь профессионал.']],
         outro: [['galina', 'Люди выходят. Смотрите — все с фонариками идут к озеру.'], ['semyon', 'И гуси со мной! Пусть только попробуют проехать.'], ['hero', 'Тягачи заводятся. Сейчас пойдут на выезд.']] },
-      { t: 'Тягачи', type: 'stop', start: [0, -700, 'N'], car: [0, -760, 'S'], convoy: 2, hp: 120, speed: 15, shoot: false, scale: 1.1, name: 'Тягач с угнанными машинами', chase: 0,
+      { t: 'Тягачи', type: 'stop', start: [0, -790, 'S'], car: [0, -720, 'S'], convoy: 2, hp: 400, speed: 15, shoot: false, scale: 1.1, name: 'Тягач с угнанными машинами', chase: 0,
         route: [[0, -470], [0, -420], [0, -560], [-200, -560], [0, -560], [0, -740], [200, -740], [0, -740]],
         about: 'Два тягача с угнанными машинами пытаются вырваться из посёлка. Остановить обоих тараном и огнём по колёсам, не дав уйти дальше 150 метров. Стрелять — только по тягачам.',
         intro: [['orlova', 'Я на шоссе, через пять минут у шлагбаума. Задержи их!'], ['suhov', 'Таксист, у тебя ещё есть шанс уехать домой.'], ['hero', 'У меня смена. Домой я поеду утром.']],
@@ -6523,7 +6523,7 @@ const UPGRADES = [
 ];
 const UP_MAX = 5, upPrice = (lvl) => 400 * (lvl + 1);
 const ITEMS = {
-  ammo: { name: 'Патроны', price: 40, pack: 300, desc: 'Комплект: 300 патронов. Кончились — оружие молчит, пока не купишь новый.' },
+  ammo: { name: 'Патроны', price: 40, pack: 400, desc: 'Комплект: 400 патронов. Кончились — оружие молчит, пока не купишь новый.' },
   nitro: { name: 'Нитро', price: 120, desc: '3 секунды ускорения. Клавиша N или кнопка «Нитро».' },
   shield: { name: 'Щит', price: 250, desc: '6 секунд неуязвимости. Клавиша B или кнопка «Щит».' },
   repair: { name: 'Ремкомплект', price: 150, desc: 'Сам чинит машину, когда прочность падает ниже 30%.' },
@@ -6559,7 +6559,7 @@ const ACH = [
 ];
 function profDefaults(name, login) {
   return { v: 1, name: name || 'Гость', login: login || null, coins: 300, cars: ['taxi'], car: 'taxi', paints: { taxi: ['yellow'] }, paint: { taxi: 'yellow' }, neons: [], neon: null, outfits: [], outfit: null,
-    up: { engine: 0, body: 0, gun: 0, rate: 0, vest: 0 }, inv: { nitro: 2, shield: 1, repair: 1, medkit: 1, revive: 0, x2: 0, ammo: 600 }, ach: {},
+    up: { engine: 0, body: 0, gun: 0, rate: 0, vest: 0 }, inv: { nitro: 2, shield: 1, repair: 1, medkit: 1, revive: 0, x2: 0, ammo: 800 }, ach: {},
     st: { carKills: 0, footKills: 0, bosses: 0, chapters: 0, eps: [], earned: 0, nitro: 0, loot: 0, tunnel: 0, bridge: 0, style: 0, time: 0 }, noAds: false, pass: false };
 }
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } } };
