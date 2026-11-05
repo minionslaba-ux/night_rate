@@ -148,6 +148,10 @@ body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, bo
 .chat.party { grid-template-rows: auto 1fr; } .tcard { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); } .tcard p { margin: 0; }
 .cam-flash { position: fixed; inset: 0; background: #fff; opacity: .85; pointer-events: none; z-index: 60; animation: camflash .38s ease-out forwards; } @keyframes camflash { to { opacity: 0; } } .chat.svc { min-height: 0; } .svc .btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .care { display: grid; gap: 4px; } .care .bar { grid-template-columns: auto 1fr auto; } .bar-fill.fuel { background: #ff9a3d; } .bar-fill.fuel.low { background: var(--neon); } .fuel-n { font-size: 11px; min-width: 32px; text-align: right; }
+/* открытый город: меньше плашек поверх дороги */
+body.online:not(.task) .hud-tl > .bar, body.online .care-txt:not(.bad), body.online .kills-w { display: none; }
+body.online #objective { pointer-events: auto; cursor: pointer; } body.online .hud-tl { max-width: min(40vw, 320px); } .obj.min { padding-top: 7px; padding-bottom: 7px; } .obj.min > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; opacity: .85; }
+.onl-stat { color: #4dffa6; font-weight: 600; }
 .care-txt { font-size: 11px; color: var(--muted); background: var(--panel); padding: 4px 10px; border-radius: 6px; } .care-txt.bad { color: #ffb08a; } .hud-chip.tow { color: #ffb08a; border-color: rgba(255,154,61,.6); } .ptitle { display: flex; justify-content: space-between; align-items: center; } .pbody { overflow-y: auto; display: grid; gap: 8px; align-content: start; font-size: 14px; }
 .prow2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; } .plist { display: grid; gap: 6px; }
 .tbtn.talk { display: none; --c: #7aff9a; right: calc(266px + var(--sar)); bottom: calc(40px + var(--sab)); width: 72px; height: 72px; }
@@ -471,7 +475,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
   </div>
   <div class="hud-tr">
     <canvas id="minimap" width="300" height="300"></canvas>
-    <div class="stats"><b id="coins">0</b> монет · <b id="kills">0</b> сбито</div>
+    <div class="stats"><span id="onlStat" class="onl-stat" hidden></span><b id="coins">0</b> монет<span class="kills-w"> · <b id="kills">0</b> сбито</span></div>
     <div id="boosts" class="stats boosts"></div>
     <button id="btnAmmo" class="ammo-buy" type="button" hidden></button>
     <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
@@ -4279,7 +4283,8 @@ function addCoins(n) { n = Math.round(n * P.coins * (state.x2 ? 2 : 1)); state.c
 // ---------------- UI helpers ----------------
 let toastT = 0;
 function toast(text, sec) { const el = $('toast'); el.textContent = text; el.hidden = false; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; toastT = sec || 1.4; }
-function setObjective(t) { $('objText').textContent = t; }
+let objT = 0;   // когда (performance.now)  свернуть подсказку задания в одну строку (в открытом городе)
+function setObjective(t) { $('objText').textContent = t; $('objective').classList.remove('min'); objT = performance.now() + 8000; }
 function showModal(html, handlers) {
   $('modalCard').innerHTML = html; $('modal').hidden = false;
   for (const id in handlers) { const b = $(id); if (b) b.addEventListener('click', handlers[id]); }
@@ -6739,6 +6744,8 @@ function updateHud(dt) {
   const r = Math.max(0, Math.round(hp / (state.act === 1 ? 100 : P.footMax) * 100));
   if (r !== lastHp) { lastHp = r; $('hpFill').style.width = r + '%'; $('hpFill').classList.toggle('low', r < 35); }
   $('coins').textContent = state.coins; $('kills').textContent = state.carKills + state.footKills;
+  $('onlStat').hidden = !ONL.on; if (ONL.on) $('onlStat').textContent = `● ${ONL.count || 1} онлайн · `;
+  if (objT && performance.now() > objT) { objT = 0; if (ONL.on) $('objective').classList.add('min'); }
   $('speedo').hidden = state.act !== 1;
   $('nav').hidden = !(state.act === 1 && state.mode === 'drive');
   if (state.act === 1 && pc) $('speed').textContent = Math.round(Math.abs(pc.vf || 0) * 3.3);
@@ -7855,7 +7862,7 @@ function startOnline() {
   const [x, z, h] = onlineSpawnPoint(); beginDrive(x, z, h); state.invuln = 1e9;
   MIS = { title: 'Открытый город', online: true, noFire: true, noFireMsg: 'В открытом городе не стреляют', chase: { max: 0 }, get navName() { return JOBS.cur ? (JOBS.cur.ph === 'pick' ? 'Пассажир: ' + JOBS.cur.from[0] : JOBS.cur.to[0]) : ''; },
     navGoal: () => (JOBS.cur ? new V3(...(JOBS.cur.ph === 'pick' ? [JOBS.cur.from[1][0], 0, JOBS.cur.from[1][1]] : [JOBS.cur.to[1][0], 0, JOBS.cur.to[1][1]])) : pc.pos),
-    update(dt) { jobsUpdate(dt); }, hud() { if (JOBS.cur && JOBS.cur.ph === 'ride') return { timer: `Заказ: ${fmt(JOBS.cur.left)} · ${JOBS.cur.reward} монет`, bad: JOBS.cur.left < 15 }; return { timer: `Онлайн: ${ONL.count} · ботов ${BOTS.list.length} · комната ${ONL.room}` }; } };
+    update(dt) { jobsUpdate(dt); }, hud() { if (JOBS.cur && JOBS.cur.ph === 'ride') return { timer: `Заказ: ${fmt(JOBS.cur.left)} · ${JOBS.cur.reward} монет`, bad: JOBS.cur.left < 15 }; return {}; } };
   setObjective('Открытый город: катайся, бери заказы такси, сигналь (H) и общайся в чате. Машины других игроков — призраки.'); JOBS.cur = null; JOBS.wait = 8;
   beam.visible = false;
   state.mode = 'drive'; ONL.on = true;
@@ -9520,6 +9527,7 @@ $('btnTalk').addEventListener('pointerdown', (e) => { e.preventDefault(); try { 
 ['pointerup', 'pointercancel'].forEach((ev) => $('btnTalk').addEventListener(ev, () => talk(false)));
 window.addEventListener('blur', () => talk(false));
 $('btnChat').addEventListener('click', () => toggleChat());
+$('objective').addEventListener('click', () => { if (!ONL.on) return; if (!$('objective').classList.toggle('min')) objT = performance.now() + 8000; });
 // one path for the button, Enter and the keyboard's «Отправить»: the form's submit. The tiny delay lets the keyboard finish inserting an emoji.
 let chatBusy = false;
 function chatSubmit(e) { if (e) e.preventDefault(); if (chatBusy) return; chatBusy = true; setTimeout(() => { chatBusy = false; sendChat(); }, 30); }
@@ -9621,7 +9629,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { NR, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { NR, setObjective, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
