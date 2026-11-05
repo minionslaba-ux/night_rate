@@ -439,7 +439,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v46'; window.__errs = [];
+window.APP_VER = 'v47'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5709,8 +5709,8 @@ const SB_URL = 'https://xqgibyazilueurdqufso.supabase.co', SB_KEY = 'sb_publisha
 const CLOUD = { sb: null, user: null, saveT: 0, busy: false };
 const loginEmail = (l) => 'u' + Array.from(new TextEncoder().encode(l)).map((b) => b.toString(16).padStart(2, '0')).join('') + '@players.nightfare.invalid';
 function cloudInit() { try { if (window.supabase && !CLOUD.sb) CLOUD.sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'nf-auth' } }); } catch (e) { CLOUD.sb = null; } return !!CLOUD.sb; }
-const NO_SERVER_NET = 'Сервер профилей не отвечает. Проверь интернет (или попробуй через VPN) — или играй как гость.';
-const NO_SERVER_LIB = 'Не загрузился модуль входа. Обнови страницу — или играй как гость.';
+const NO_SERVER_NET = 'Сервер профилей не отвечает. Проверь интернет (или попробуй через VPN) и попробуй ещё раз.';
+const NO_SERVER_LIB = 'Не загрузился модуль входа. Обнови страницу.';
 const NO_SERVER = NO_SERVER_NET;
 function noServer() { return window.supabase ? NO_SERVER_NET : NO_SERVER_LIB; }
 function collectProgress() {
@@ -6065,10 +6065,10 @@ function profAction(act, id) {
   else if (act === 'usecode') { const v = $('pCode').value; profMsg = 'Связываюсь с сервером…'; renderProfile(); loginWithCode(v).then((err) => { profMsg = err || 'Готово: вошли в аккаунт по коду.'; renderProfile(); }); return; }
   else if (act === 'delete') {
     showModal(`<h2 class="h2 bad">Удалить аккаунт?</h2><p class="lead">Профиль, монеты, машины и прогресс будут удалены с сервера навсегда.</p><div class="btns"><button id="dYes" class="btn primary" type="button">Удалить</button><button id="dNo" class="btn" type="button">Отмена</button></div>`,
-      { dYes: () => { hideModal(); deleteAccount().then((err) => { profMsg = err || 'Аккаунт удалён. Сейчас играет гость.'; renderProfile(); }); }, dNo: hideModal });
+      { dYes: () => { hideModal(); deleteAccount().then((err) => { if (err) { profMsg = err; renderProfile(); } else gateAgain('Аккаунт удалён. Чтобы играть дальше, создай новый профиль.'); }); }, dNo: hideModal });
     return;
   }
-  else if (act === 'logout') { CLOUD.links = null; profLogout().then(() => { profMsg = 'Вы вышли. Сейчас играет гость.'; renderProfile(); }); return; }
+  else if (act === 'logout') { CLOUD.links = null; profLogout().then(() => { gateMode = 'login'; gateAgain('Вы вышли из профиля. Войди снова, чтобы играть.'); }); return; }
   else if (act === 'outfit') { PROF.outfit = id || null; saveProfile(); applyLoadout(); }
   else if (act === 'buy-outfit') { if (pay(OUTFITS[id].price)) { PROF.outfits.push(id); PROF.outfit = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'car') { PROF.car = id; saveProfile(); applyLoadout(); }
@@ -6377,23 +6377,39 @@ function platformHint() {
 }
 let gateStep = 'install', gateMode = 'register', gateMsg = '', gateForm = false, gateMaxUrl = '';
 function startGate() {
-  if (VK_AUTH) { finishGate(); toast('Вход через ВКонтакте…', 2); vkidFinish(VK_AUTH).then((err) => { toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return; }
+  if (VK_AUTH) { finishGate(); toast('Вход через ВКонтакте…', 2); vkidFinish(VK_AUTH).then((err) => { if (!PROF.login) return gateAgain(err || 'Не удалось войти через ВКонтакте.'); toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return; }
   if (!inMiniApp && store.get('nf-max') && Date.now() - store.get('nf-max').t < 10 * 60e3) {   // the page reloaded while waiting for MAX
-    finishGate(); toast(maxHint(), 6); maxSiteWait().then((err) => { if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return;
+    gateStep = 'register'; gateMsg = maxHint(); $('gate').hidden = false; renderGate();
+    maxSiteWait().then((err) => { if (!PROF.login) return gateAgain(err || ''); finishGate(); if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); }); return;
   }
-  if (TG_AUTH) { finishGate(); toast('Вход через Telegram…', 2); tgWidgetLogin(TG_AUTH).then((err) => { toast(err || `Привет, ${PROF.name}!`, 3); updateProfChip(); }); return; }
-  if (inMiniApp) { platformLogin().then((err) => { if (!err) toast(PROF.god ? 'Тестовый профиль' : `Привет, ${PROF.name}!`, 2); updateProfChip(); }); return; }
+  if (TG_AUTH) { finishGate(); toast('Вход через Telegram…', 2); tgWidgetLogin(TG_AUTH).then((err) => { if (!PROF.login) return gateAgain(err || 'Не удалось войти через Telegram.'); toast(err || `Привет, ${PROF.name}!`, 3); updateProfChip(); }); return; }
+  if (inMiniApp) {
+    if (!PROF.login) { gateStep = 'platform'; gateMsg = ''; $('gate').hidden = false; renderGate(); }
+    platformLogin().then((err) => { updateProfChip(); if (!err && PROF.login) { finishGate(); toast(PROF.god ? 'Тестовый профиль' : `Привет, ${PROF.name}!`, 2); } else if (!PROF.login) gateAgain(err || 'Не удалось войти.'); });
+    return;
+  }
   const needInstall = !isStandalone() && !store.get('nf-installed');
   gateStep = needInstall ? 'install' : 'register';
   if (store.get('nf-last-login') && !PROF.login) gateMode = 'login';
   if (gateStep === 'register' && !needRegister()) return finishGate();
   $('gate').hidden = false; renderGate();
 }
-const needRegister = () => !PROF.login && (!store.get('nf-guest') || !!store.get('nf-last-login'));
+// играть можно только с профилем: гостевого входа нет (прогресс, который был у гостя на этом устройстве, переносится в новый профиль)
+const needRegister = () => !PROF.login;
+// show the sign-in screen again (after logout, account deletion, or a failed sign-in in a mini app)
+function gateAgain(msg) { if (typeof closeProfile === 'function' && !$('prof').hidden) $('prof').hidden = true; gateStep = inMiniApp ? 'platform' : 'register'; gateMsg = msg || ''; gateForm = false; $('gate').hidden = false; renderGate(); }
 function gateNext() { if (gateStep === 'install') { gateStep = 'register'; gateMsg = ''; if (!needRegister()) return finishGate(); renderGate(); } else finishGate(); }
 function finishGate() { $('gate').hidden = true; updateProfChip(); }
 function renderGate() {
   const c = $('gateCard');
+  if (gateStep === 'platform') {   // inside Telegram / VK / MAX: the sign-in is automatic, here only its progress or a retry
+    const where = PLATFORM === 'vk' ? 'ВКонтакте' : PLATFORM === 'tg' ? 'Telegram' : 'MAX';
+    c.innerHTML = `<h2 class="h2">Вход через ${where}</h2><p class="lead">${gateMsg ? esc(gateMsg) : 'Входим в профиль…'}</p>
+      ${gateMsg ? '<div class="btns"><button id="gRetry" class="btn primary big" type="button">Попробовать ещё раз</button></div>' : ''}
+      <div class="note">Профиль хранит монеты, машины и пройденные главы — на любом устройстве.</div>`;
+    if ($('gRetry')) $('gRetry').onclick = () => { gateMsg = ''; renderGate(); platformLogin().then((err) => { updateProfChip(); if (!err && PROF.login) { finishGate(); toast(`Привет, ${PROF.name}!`, 2); } else gateAgain(err || 'Не удалось войти.'); }); };
+    return;
+  }
   if (gateStep === 'install') {
     c.innerHTML = `<div class="gate-icon"><span></span></div>
       <div class="kicker">Шаг 1 из 2</div><h2 class="h2">Установи игру</h2>
@@ -6415,19 +6431,18 @@ function renderGate() {
       <button id="gTg" class="btn tg big" type="button">Войти через Telegram</button><button id="gVk" class="btn vk big" type="button">Войти через ВКонтакте</button>${gateMaxUrl ? `<a id="gMaxGo" class="btn max big" href="${esc(gateMaxUrl)}" target="_blank" rel="noopener">Открыть бота в MAX ещё раз</a>` : maxLinkHtml('btn max big', 'Войти через MAX', 'id="gMax"')}
       <p class="note gate-nopass">Пароль не нужен: подтверди вход в Telegram, ВКонтакте или MAX — и всё.</p>
       <div class="pmsg">${gateForm ? '' : esc(gateMsg)}</div>
-      ${gateForm ? '' : `<div class="btns"><button id="gGuest" class="btn" type="button">Играть как гость</button><button id="gMore" class="btn linkish" type="button">${reg ? 'Создать профиль с логином и паролем' : 'Войти по логину и паролю'}</button></div>`}
+      ${gateForm ? '' : `<div class="btns"><button id="gMore" class="btn linkish" type="button">${reg ? 'Создать профиль с логином и паролем' : 'Войти по логину и паролю'}</button></div>`}
       <form id="gForm" class="gate-form" autocomplete="on"${gateForm ? '' : ' hidden'}>
         ${reg ? '<label>Имя в игре<input id="gNick" type="text" maxlength="20" placeholder="Например, Ночной гонщик" autocomplete="nickname"></label>' : ''}
         <label>Логин<input id="gLogin" type="text" maxlength="24" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
         <label>Пароль<input id="gPass" type="password" maxlength="40" autocomplete="${reg ? 'new-password' : 'current-password'}" required></label>
         ${reg ? '<label>Повтори пароль<input id="gPass2" type="password" maxlength="40" autocomplete="new-password" required></label>' : ''}
         <div class="pmsg">${esc(gateMsg)}</div>
-        <div class="btns"><button class="btn primary big" type="submit">${reg ? 'Создать профиль' : 'Войти'}</button>${gateForm ? '<button id="gGuest" class="btn" type="button">Играть как гость</button>' : ''}</div>
+        <div class="btns"><button class="btn primary big" type="submit">${reg ? 'Создать профиль' : 'Войти'}</button></div>
       </form>
       <div class="note">Профиль хранится на сервере: прогресс, машины и монеты будут с тобой на любом устройстве.</div>`;
     c.querySelectorAll('[data-g]').forEach((b) => { b.onclick = () => { gateMode = b.dataset.g; gateMsg = ''; renderGate(); }; });
     if ($('gMore')) $('gMore').onclick = () => { gateForm = true; gateMsg = ''; renderGate(); };
-    $('gGuest').onclick = () => { maxPollRun++; gateMaxUrl = ''; try { localStorage.removeItem('nf-max'); } catch (e) { /* storage unavailable */ } store.set('nf-guest', true); finishGate(); };
     vkidLoad().catch(() => {});   // load early: VK's window must open right on the tap, or the browser blocks it
     $('gVk').onclick = () => { if (CLOUD.busy) return; $('gVk').disabled = true; $('gVk').textContent = 'Открываю ВКонтакте…'; vkSiteLogin().then((err) => { if (err) { gateMsg = err; renderGate(); } }); };
     if ($('gMax') && $('gMax').tagName === 'A') $('gMax').onclick = (e) => {
@@ -7927,7 +7942,9 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   $('loading').hidden = true;
   showPreview(); $('ageBadge').hidden = PLATFORM !== 'vk';
   // a signed-in player skips the entry screen; wait for the server at most 4 s
-  Promise.race([cloudRestore(), new Promise((r) => setTimeout(() => r(false), 4000))]).then(() => { updateProfChip(); startGate(); });
+  const restoring = cloudRestore();
+  restoring.then(() => { if (PROF.login && !$('gate').hidden && gateStep === 'register' && !CLOUD.busy) { finishGate(); updateProfChip(); } }).catch(() => {});
+  Promise.race([restoring, new Promise((r) => setTimeout(() => r(false), 4000))]).then(() => { updateProfChip(); startGate(); });
   requestAnimationFrame(loop);
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
