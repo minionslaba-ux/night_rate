@@ -112,8 +112,9 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, body.online:not(.task) .tbtn.shield, body.online:not(.task) .tbtn.fire, body.online:not(.job):not(.task) #nav, body.online:not(.task) .boosts { display: none; }
 .chat { position: fixed; left: calc(12px + var(--sal)); top: calc(110px + var(--sat)); width: min(380px, calc(100% - 24px - var(--sal) - var(--sar))); max-height: calc(100% - 260px - var(--sat) - var(--sab)); min-height: 160px; display: grid; grid-template-rows: 1fr auto auto; gap: 6px; background: rgba(8,10,24,.88); border: 1px solid var(--line); border-radius: 10px; padding: 10px; z-index: 30; }
 .chat-list { overflow-y: auto; display: grid; gap: 4px; align-content: start; font-size: 14px; line-height: 1.35; }
-.cmsg b { color: var(--taxi); } .clink { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 3px; }
-.chat-row { display: flex; gap: 6px; } .chat-row input { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 8px 10px; font: 16px var(--font-body); }
+.cmsg b { color: var(--taxi); } .cmsg.pending { opacity: .6; } .cmsg.failed { color: #ff8a8a; }
+.chat input, .chat-row input, .plogin input, .gate-form input { -webkit-user-select: text; user-select: text; touch-action: manipulation; } .clink { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 3px; }
+.chat-row { display: flex; gap: 6px; } .chat-form { display: flex; flex: 1; gap: 6px; min-width: 0; margin: 0; } .chat-row input { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 8px 10px; font: 16px var(--font-body); }
 #btnChat.new { background: var(--taxi); color: #1a1405; }
 .chat.party { grid-template-rows: auto 1fr; } .ptitle { display: flex; justify-content: space-between; align-items: center; } .pbody { overflow-y: auto; display: grid; gap: 8px; align-content: start; font-size: 14px; }
 .prow2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; } .plist { display: grid; gap: 6px; }
@@ -397,7 +398,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   </div>
 </div>
 
-<div id="chat" class="chat" hidden><div id="chatList" class="chat-list" aria-live="polite"></div><div class="chat-row"><input id="chatInput" type="text" maxlength="140" placeholder="Сообщение…" autocomplete="off" autocapitalize="sentences"><button id="chatSend" class="btn sm primary" type="button">Отправить</button><button id="chatClose" class="btn sm" type="button">✕</button></div><small id="chatHint" class="note"></small></div>
+<div id="chat" class="chat" hidden><div id="chatList" class="chat-list" aria-live="polite"></div><div class="chat-row"><form id="chatForm" class="chat-form" action="#" autocomplete="off"><input id="chatInput" type="text" placeholder="Сообщение…" autocomplete="off" autocapitalize="sentences" enterkeyhint="send"><button id="chatSend" class="btn sm primary" type="submit">Отправить</button></form><button id="chatClose" class="btn sm" type="button">✕</button></div><small id="chatHint" class="note"></small></div>
 <div id="tasks" class="chat party" hidden><div class="ptitle"><b>Задания</b><button id="tasksClose" class="btn sm" type="button">✕</button></div><div id="tasksBody" class="pbody"></div></div>
 <div id="party" class="chat party" hidden><div class="ptitle"><b>Группа и голос</b><button id="partyClose" class="btn sm" type="button">✕</button></div><div id="partyBody" class="pbody"></div></div>
 <div id="dialog" class="dialog" hidden>
@@ -421,7 +422,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v28'; window.__errs = [];
+window.APP_VER = 'v30'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6156,9 +6157,18 @@ const ONL = { on: false, ch: null, chat: null, room: 1, id: '', others: new Map(
 const ROOM_MAX = 20;
 try { (JSON.parse(localStorage.getItem('nf-muted')) || []).forEach((m) => ONL.muted.add(m)); } catch (e) { /* none */ }
 function onlineName() { return (PROF.cloud ? PROF.name : 'Гость ' + ONL.id.slice(-4)).slice(0, 20); }
-function nameTag(text, colr) {
-  const t = canvasTex(256, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.font = 'bold 30px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 6; g.strokeStyle = 'rgba(5,6,16,.85)'; g.strokeText(text, w / 2, h / 2, w - 12); g.fillStyle = colr || '#ffffff'; g.fillText(text, w / 2, h / 2, w - 12); });
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false })); s.scale.set(7, 1.75, 1); s.renderOrder = 10; return s;
+function nameTag(text, colr, sub) {
+  // a small rounded plate: the name in the game font, an optional grey note («бот»)
+  const W = 320, H = 64, font = '600 28px Rubik, "Segoe UI", Arial, sans-serif', fontS = '500 20px Rubik, "Segoe UI", Arial, sans-serif';
+  const mc = document.createElement('canvas').getContext('2d'); mc.font = font; let tw = mc.measureText(text).width; mc.font = fontS; const sw = sub ? mc.measureText(sub).width + 10 : 0;
+  const bw = Math.min(W - 4, tw + sw + 28);
+  const t = canvasTex(W, H, (g) => {
+    g.clearRect(0, 0, W, H); const x0 = (W - bw) / 2;
+    g.fillStyle = 'rgba(8,10,24,.72)'; g.beginPath(); if (g.roundRect) g.roundRect(x0, 10, bw, 44, 22); else g.rect(x0, 10, bw, 44); g.fill();
+    g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = font; g.fillStyle = colr || '#ffffff'; g.fillText(text, x0 + 14, 33, bw - 28 - sw);
+    if (sub) { g.font = fontS; g.fillStyle = 'rgba(200,206,224,.75)'; g.fillText(sub, x0 + 14 + Math.min(tw, bw - 28 - sw) + 8, 34); }
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false })); s.scale.set(3.4, 0.68, 1); s.renderOrder = 10; return s;
 }
 function onlineSpawnPoint() {
   for (let k = 0; k < 30; k++) {
@@ -6210,7 +6220,10 @@ function joinRoom(n) {
   CLOUD.sb.from('chat_messages').select('id, user_id, name, body, created_at').eq('room', 'city-' + n).order('created_at', { ascending: false }).limit(30)
     .then(({ data }) => { if (data) { ONL.msgs = data.reverse(); renderChat(); } });
   ONL.chat = CLOUD.sb.channel('nf-chat-' + n).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'room=eq.city-' + n }, ({ new: m }) => {
-    ONL.msgs.push(m); if (ONL.msgs.length > 40) ONL.msgs.shift(); renderChat();
+    // my own message comes back filtered by the server: it replaces the local copy
+    const own = m.user_id === ONL.id ? ONL.msgs.findIndex((q) => q.sent || q.pending) : -1;
+    if (own >= 0) ONL.msgs.splice(own, 1, m); else ONL.msgs.push(m);
+    if (ONL.msgs.length > 40) ONL.msgs.shift(); renderChat();
     const o = ONL.others.get(m.user_id); if (o && !ONL.muted.has(m.user_id)) chatBubble(o, m.body);
     if (!ONL.chatOpen && m.user_id !== ONL.id && !ONL.muted.has(m.user_id)) { $('btnChat').classList.add('new'); }
   }).subscribe();
@@ -6226,7 +6239,7 @@ function onlinePos(q) {
   let o = ONL.others.get(q.i);
   if (!o) {
     const m = makeCar(PAINTS[q.p] ? new THREE.Color(...PAINTS[q.p].c).getHex() : 0xffc43d, 'civ', CARS[q.c] ? CARS[q.c].model : 'car_taxi');
-    const tag = nameTag(String(q.n || 'Игрок').slice(0, 20), '#ffe9a8'); tag.position.set(0, 3.4, 0); m.g.add(tag);
+    const tag = nameTag(String(q.n || 'Игрок').slice(0, 20), '#ffe9a8'); tag.position.set(0, 3.0, 0); m.g.add(tag);
     o = Object.assign(m, { id: q.i, pos: new V3(q.x, 0, q.z), h: q.h || 0, vx: 0, vz: 0, t: performance.now(), name: q.n, tag, bubble: null, bubbleT: 0 });
     m.g.position.copy(o.pos); ONL.others.set(q.i, o); partyTag(o);
   }
@@ -6242,7 +6255,7 @@ function onlineHonk(q) {
 function onlineHonkMine() { if (!ONL.on || !ONL.ch) return; sfx.horn(1); ONL.ch.send({ type: 'broadcast', event: 'hk', payload: { i: ONL.id } }); }
 function chatBubble(o, text) {
   if (o.bubble) o.g.remove(o.bubble);
-  o.bubble = nameTag(String(text).slice(0, 40), '#7ad6ff'); o.bubble.scale.set(7, 1.75, 1); o.bubble.position.set(0, 5, 0); o.g.add(o.bubble); o.bubbleT = 5;
+  o.bubble = nameTag(String(text).slice(0, 34), '#7ad6ff'); o.bubble.scale.set(4.6, 0.92, 1); o.bubble.position.set(0, 4.0, 0); o.g.add(o.bubble); o.bubbleT = 5;
 }
 function updateOnline(dt) {
   if (!ONL.on || !pc) return;
@@ -6267,17 +6280,24 @@ function updateOnline(dt) {
 // chat panel
 function renderChat() {
   const box = $('chatList'); if (!box) return;
-  box.innerHTML = ONL.msgs.filter((m) => !ONL.muted.has(m.user_id)).map((m) => `<div class="cmsg"><b>${esc(m.name)}</b> ${esc(m.body)}${m.user_id !== ONL.id && !m.bot ? ` <button class="clink" data-rep="${m.id}" type="button" title="Пожаловаться">⚑</button><button class="clink" data-mute="${esc(m.user_id)}" type="button" title="Скрыть игрока">⨯</button>` : ''}</div>`).join('') || '<div class="cmsg note">Сообщений пока нет. Поздоровайся!</div>';
+  box.innerHTML = ONL.msgs.filter((m) => !ONL.muted.has(m.user_id)).map((m) => `<div class="cmsg${m.failed ? ' failed' : m.pending ? ' pending' : ''}"><b>${esc(m.name)}</b> ${esc(m.body)}${m.failed ? ' <small>— не отправлено</small>' : m.pending ? ' <small>…</small>' : ''}${m.user_id !== ONL.id && !m.bot ? ` <button class="clink" data-rep="${m.id}" type="button" title="Пожаловаться">⚑</button><button class="clink" data-mute="${esc(m.user_id)}" type="button" title="Скрыть игрока">⨯</button>` : ''}</div>`).join('') || '<div class="cmsg note">Сообщений пока нет. Поздоровайся!</div>';
   box.scrollTop = box.scrollHeight;
   box.querySelectorAll('[data-rep]').forEach((b) => { b.onclick = () => reportMsg(+b.dataset.rep); });
   box.querySelectorAll('[data-mute]').forEach((b) => { b.onclick = () => { ONL.muted.add(b.dataset.mute); try { localStorage.setItem('nf-muted', JSON.stringify([...ONL.muted])); } catch (e) { /* storage */ } dropOther(b.dataset.mute); renderChat(); toast('Игрок скрыт', 1.4); }; });
   $('chatHint').textContent = PROF.cloud ? '' : 'Писать в чат могут только игроки с профилем: Профиль → Вход.';
 }
 async function sendChat() {
-  const inp = $('chatInput'), body = inp.value.trim(); if (!body) return;
+  // emoji are two or more UTF-16 units each: count and cut by characters, never in the middle of one;
+  // the draft kept from 'input' covers iOS, where the field can read empty while the keyboard is still committing
+  const inp = $('chatInput'), raw = (inp.value || ONL.draft || '').trim(); ONL.draft = '';
+  const body = Array.from(raw).slice(0, 140).join(''); if (!body) return;
   if (!PROF.cloud) { toast('Войди в профиль, чтобы писать в чат', 2); return; }
   inp.value = '';
-  const { error } = await CLOUD.sb.from('chat_messages').insert({ room: 'city-' + ONL.room, body: body.slice(0, 140) });
+  const mine = { id: 'p' + Date.now(), user_id: ONL.id, name: onlineName(), body, pending: true };
+  ONL.msgs.push(mine); renderChat();
+  let error = null;
+  try { const r = await CLOUD.sb.from('chat_messages').insert({ room: 'city-' + ONL.room, body }); error = r.error; } catch (e) { error = { message: 'network' }; }
+  if (error) { mine.failed = true; mine.pending = false; renderChat(); } else { mine.pending = false; mine.sent = true; renderChat(); }
   if (!error) botsHear(body);
   if (error) { const m = String(error.message || ''); toast(/too_fast/.test(m) ? 'Не так быстро' : /chat_banned/.test(m) ? 'Чат для тебя закрыт' : /empty/.test(m) ? 'Сообщение пустое после фильтра' : 'Не отправилось', 1.8); }
 }
@@ -6346,7 +6366,7 @@ function partyTag(o) {
   const want = PARTY.members.has(o.id);
   if (o.isParty === want) return;
   o.isParty = want; if (o.tag) o.g.remove(o.tag);
-  o.tag = nameTag((want ? '★ ' : '') + String(o.name || 'Игрок').slice(0, 20), want ? '#7aff9a' : '#ffe9a8'); o.tag.position.set(0, 3.4, 0); o.g.add(o.tag);
+  o.tag = nameTag((want ? '★ ' : '') + String(o.name || 'Игрок').slice(0, 20), want ? '#7aff9a' : '#ffe9a8'); o.tag.position.set(0, 3.0, 0); o.g.add(o.tag);
 }
 function partyLeave(quiet) {
   if (PARTY.voiceOn) voiceToggleOff();
@@ -6469,7 +6489,7 @@ function botSpawn(i) {
   const carKeys = Object.keys(CARS), car = carKeys[Math.floor(Math.random() * carKeys.length)], paints = Object.keys(PAINTS).filter((k) => !PAINTS[k].pass);
   const paint = paints[Math.floor(Math.random() * paints.length)];
   const m = makeCar(new THREE.Color(...PAINTS[paint].c).getHex(), 'civ', CARS[car].model);
-  const tag = nameTag(name + ' · бот', '#c8d0e0'); tag.position.set(0, 3.4, 0); m.g.add(tag);
+  const tag = nameTag(name, '#dfe4f2', 'бот'); tag.position.set(0, 3.0, 0); m.g.add(tag);
   // start on a random street, away from the player
   let a, bb;
   for (let k = 0; k < 20; k++) {
@@ -6951,9 +6971,14 @@ $('btnTalk').addEventListener('pointerdown', (e) => { e.preventDefault(); try { 
 ['pointerup', 'pointercancel'].forEach((ev) => $('btnTalk').addEventListener(ev, () => talk(false)));
 window.addEventListener('blur', () => talk(false));
 $('btnChat').addEventListener('click', () => toggleChat());
-$('chatSend').addEventListener('click', sendChat);
+// one path for the button, Enter and the keyboard's «Отправить»: the form's submit. The tiny delay lets the keyboard finish inserting an emoji.
+let chatBusy = false;
+function chatSubmit(e) { if (e) e.preventDefault(); if (chatBusy) return; chatBusy = true; setTimeout(() => { chatBusy = false; sendChat(); }, 30); }
+$('chatForm').addEventListener('submit', chatSubmit);
+$('chatSend').addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') chatSubmit(e); });
+$('chatInput').addEventListener('input', (e) => { const v = Array.from(e.target.value); if (v.length > 140) e.target.value = v.slice(0, 140).join(''); ONL.draft = e.target.value; });
 $('chatClose').addEventListener('click', () => toggleChat(false));
-$('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChat(); } });
+
 $('btnHorn').addEventListener('pointerdown', (e) => { e.preventDefault(); onlineHonkMine(); });
 $('btnProfile').addEventListener('click', () => openProfile('me'));
 $('btnView').addEventListener('click', cycleView); $('btnPause').addEventListener('click', pauseGame); camLabel();
