@@ -2,6 +2,8 @@
 // • Telegram Mini App: initData подписан токеном бота (секрет TELEGRAM_BOT_TOKEN).
 // • Telegram Login на сайте: данные входа подписаны тем же токеном (ключ — SHA-256 токена). Аккаунт тот же, что в Mini App.
 // • VK Mini App: параметры запуска vk_* подписаны защищённым ключом приложения (секрет VK_APP_SECRET).
+// • VK ID на сайте (кнопка «Войти через ВК», приложение VK ID 54878563): браузер получает токен VK ID, сервер сам спрашивает у VK,
+//   чей это токен (id.vk.com/oauth2/user_info), и только тогда входит. Аккаунт тот же, что в мини-приложении ВК (один vk_id).
 // • MAX Mini App: initData (WebAppData) подписан токеном бота MAX тем же способом, что в Telegram (секрет MAX_BOT_TOKEN).
 // Секреты добавляет владелец в Supabase → Edge Functions → Secrets; пока их нет, вход этой площадки отвечает not_configured.
 // Аккаунт площадки — пользователь Supabase Auth с служебным адресом tg<id>@tg.nightfare.invalid (писем не шлём) и строка profiles;
@@ -57,6 +59,15 @@ async function vkLaunchUser(v: any) {
   const id = Number(q.get('vk_user_id'));
   return id > 0 ? { id, first_name: String(v.name || '').replace(/[<>]/g, '').slice(0, 24) } : null;
 }
+// VK ID (сайт): токен проверяет сам VK; он выдан только нашему приложению VK ID, поэтому чужой токен не подойдёт
+const VKID_APP = '54878563';
+async function vkIdUser(token: unknown) {
+  if (typeof token !== 'string' || token.length < 10 || token.length > 4096) return null;
+  const r = await fetch('https://id.vk.com/oauth2/user_info', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: VKID_APP, access_token: token }) });
+  const j = await r.json().catch(() => null);
+  const u = j && j.user, id = Number(u && u.user_id);
+  return id > 0 ? { id, first_name: String(u.first_name || '').slice(0, 24), last_name: String(u.last_name || '').slice(0, 24) } : null;
+}
 
 const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((x) => CODE_ABC[x % CODE_ABC.length]).join('');
@@ -109,7 +120,8 @@ Deno.serve(async (req) => {
 
     const code = typeof body.code === 'string' ? body.code.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
     const widget = body.tg_widget && typeof body.tg_widget === 'object';
-    const plat = typeof body.max_init === 'string' && body.max_init ? 'max' : body.vk_launch ? 'vk' : (typeof body.initData === 'string' && body.initData) || widget ? 'tg' : '';
+    const vkid = typeof body.vkid_token === 'string' && body.vkid_token;
+    const plat = typeof body.max_init === 'string' && body.max_init ? 'max' : body.vk_launch || vkid ? 'vk' : (typeof body.initData === 'string' && body.initData) || widget ? 'tg' : '';
     if (code && !plat) { const target = await useCode(db, code); return target ? await sessionFor(db, target, '') : json({ error: 'bad_code' }, 403); }
     if (!plat) return json({ error: 'no_proof' }, 400);
 
@@ -119,6 +131,7 @@ Deno.serve(async (req) => {
       u = widget ? await widgetUser(t, body.tg_widget) : await initDataUser(t, body.initData);
     }
     else if (plat === 'max') { const t = (Deno.env.get('MAX_BOT_TOKEN') || '').trim(); if (!t) return json({ error: 'not_configured' }, 503); u = await initDataUser(t, body.max_init); }
+    else if (vkid) u = await vkIdUser(body.vkid_token);
     else { if (!(Deno.env.get('VK_APP_SECRET') || '').trim()) return json({ error: 'not_configured' }, 503); u = await vkLaunchUser(body.vk_launch); }
     if (!u?.id) return json({ error: 'bad_signature' }, 403);
 

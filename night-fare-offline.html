@@ -216,7 +216,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 .keys b { color: var(--text); font-weight: 500; }
 .btns { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn { appearance: none; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); font: 500 15px var(--font-body); padding: 12px 18px; border-radius: 8px; cursor: pointer; }
-.btn.tg { background: #2aabee; border-color: #2aabee; color: #fff; font-weight: 700; }
+.btn.tg { background: #2aabee; border-color: #2aabee; color: #fff; font-weight: 700; } .btn.vk { background: #0077ff; border-color: #0077ff; color: #fff; font-weight: 700; }
 .pver { font-weight: 400; opacity: .55; margin-left: 6px; letter-spacing: 0; }
 .gate-or { text-align: center; font-size: 12px; color: var(--muted); }
 .btn.primary { background: var(--taxi); color: #1a1405; border-color: var(--taxi); font-weight: 700; }
@@ -439,7 +439,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v38'; window.__errs = [];
+window.APP_VER = 'v39'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5986,7 +5986,7 @@ function renderProfile() {
     ${PROF.cloud ? `<div class="prow"><span>Профиль <b>${esc(PROF.login)}</b> на сервере.</span>${inMiniApp ? '' : '<button class="btn sm" data-act="logout" type="button">Выйти</button>'}</div>` : ''}
     ${inMiniApp ? (PROF.cloud ? '' : `<div class="prow"><span>Вход через ${PLATFORM === 'vk' ? 'ВКонтакте' : PLATFORM === 'tg' ? 'Telegram' : 'MAX'}.</span><button class="btn sm primary" data-act="pflogin" type="button">Войти</button></div>`)
       : `<div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
-      <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>${PROF.cloud ? '' : '<div class="prow"><button class="btn sm tg" data-act="tglogin" type="button">Войти через Telegram</button></div>'}<div class="prow"><small>Игра есть и в Telegram: <a href="https://t.me/night_fare_bot" target="_blank" rel="noopener">@night_fare_bot</a></small></div>`}
+      <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>${PROF.cloud ? '' : '<div class="prow"><button class="btn sm tg" data-act="tglogin" type="button">Войти через Telegram</button><button class="btn sm vk" data-act="vklogin" type="button">Войти через ВКонтакте</button></div>'}<div class="prow"><small>Игра есть и в Telegram: <a href="https://t.me/night_fare_bot" target="_blank" rel="noopener">@night_fare_bot</a></small></div>`}
     <div class="plabel">Один аккаунт на всех устройствах</div>
     <div class="prow">${PROF.cloud ? `<button class="btn sm" data-act="getcode" type="button">Получить код для другого устройства</button>${CLOUD.code ? `<b class="pcode">${CLOUD.code}</b><small>действует 10 минут</small>` : ''}` : '<span>Войди в профиль, чтобы получить код.</span>'}</div>
     <div class="plogin"><input id="pCode" type="text" placeholder="Код с другого устройства" maxlength="9" autocapitalize="characters"><button class="btn sm" data-act="usecode" type="button">Войти по коду</button></div>
@@ -6024,6 +6024,7 @@ function profAction(act, id) {
   }
   else if (act === 'pflogin') { platformLogin().then((err) => { profMsg = err || 'Готово: профиль загружен.'; renderProfile(); }); return; }
   else if (act === 'getcode') { getLinkCode().then((j) => { if (j.code) CLOUD.code = j.code.slice(0, 4) + '-' + j.code.slice(4); profMsg = j.error || 'Введи этот код на другом устройстве или в другой площадке в течение 10 минут.'; renderProfile(); }); return; }
+  else if (act === 'vklogin') { profMsg = 'Открываю ВКонтакте…'; renderProfile(); vkSiteLogin().then((err) => { profMsg = err || 'Готово: ты вошёл через ВКонтакте.'; renderProfile(); }); return; }
   else if (act === 'tglogin') { profMsg = 'Открываю Telegram…'; renderProfile(); tgSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
   else if (act === 'usecode') { const v = $('pCode').value; profMsg = 'Связываюсь с сервером…'; renderProfile(); loginWithCode(v).then((err) => { profMsg = err || 'Готово: вошли в аккаунт по коду.'; renderProfile(); }); return; }
   else if (act === 'delete') {
@@ -6158,6 +6159,37 @@ async function tgSiteLogin() {
     return '';
   } catch (e) { return NO_SERVER; }
 }
+// VK ID on the website: VK's own window confirms the account; the browser gets a VK ID token and the server asks VK whose it is.
+// The same VK account as in the VK Mini App (vk.com/app54878467), so progress is shared. The SDK loads only on the website.
+const VKID_APP = 54878563, VKID_SDK = '@vkid/sdk@2.6.9/dist-sdk/umd/index.js';
+let vkidP = null;
+function vkidLoad() {
+  if (window.VKIDSDK) return Promise.resolve(window.VKIDSDK);
+  if (vkidP) return vkidP;
+  const add = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = () => (window.VKIDSDK ? res(window.VKIDSDK) : rej(new Error('vkid'))); s.onerror = rej; document.head.appendChild(s); });
+  vkidP = add('https://unpkg.com/' + VKID_SDK).catch(() => add('https://cdn.jsdelivr.net/npm/' + VKID_SDK)).catch((e) => { vkidP = null; throw e; });
+  return vkidP;
+}
+async function vkSiteLogin() {
+  if (!cloudInit()) return noServer();
+  let V;
+  try { V = await vkidLoad(); } catch (e) { return 'Не удалось загрузить вход ВКонтакте. Проверь интернет и попробуй ещё раз.'; }
+  let token = '';
+  try {
+    V.Config.init({ app: VKID_APP, redirectUrl: location.origin + '/', responseMode: V.ConfigResponseMode.Callback, source: V.ConfigSource.LOWCODE, scope: '' });
+    const a = await V.Auth.login();
+    const t = await V.Auth.exchangeCode(a.code, a.device_id);
+    token = t && t.access_token;
+  } catch (e) { return 'Вход через ВКонтакте отменён или не удался. Попробуй ещё раз.'; }
+  if (!token) return 'ВКонтакте не подтвердил вход. Попробуй ещё раз.';
+  try {
+    const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ vkid_token: token }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) return 'Не удалось войти через ВКонтакте. Попробуй ещё раз.';
+    const { data, error } = await CLOUD.sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
+    return error || !data.user ? 'Не удалось войти через ВКонтакте.' : await cloudLoadProfile(data.user);
+  } catch (e) { return NO_SERVER; }
+}
 // the signed answer comes back as #tgAuthResult=<base64 JSON> (or as ?id=…&hash=…); read it once and clean the address bar
 function tgAuthFromLocation() {
   let user = null;
@@ -6252,7 +6284,7 @@ function renderGate() {
     c.innerHTML = `<div class="kicker">Шаг 2 из 2</div><h2 class="h2">${reg ? 'Регистрация' : 'Вход'}</h2>
       <p class="lead">${reg ? 'Профиль хранит монеты, машины, достижения и пройденные главы.' : 'Войди в свой профиль на этом устройстве.'}</p>
       <div class="gate-tabs"><button class="chip${reg ? ' active' : ''}" data-g="register" type="button">Регистрация</button><button class="chip${reg ? '' : ' active'}" data-g="login" type="button">Вход</button></div>
-      <button id="gTg" class="btn tg big" type="button">Войти через Telegram</button><div class="gate-or">или ${reg ? 'создай профиль с логином и паролем' : 'войди по логину и паролю'}</div>
+      <button id="gTg" class="btn tg big" type="button">Войти через Telegram</button><button id="gVk" class="btn vk big" type="button">Войти через ВКонтакте</button><div class="gate-or">или ${reg ? 'создай профиль с логином и паролем' : 'войди по логину и паролю'}</div>
       <form id="gForm" class="gate-form" autocomplete="on">
         ${reg ? '<label>Имя в игре<input id="gNick" type="text" maxlength="20" placeholder="Например, Ночной гонщик" autocomplete="nickname"></label>' : ''}
         <label>Логин<input id="gLogin" type="text" maxlength="24" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
@@ -6264,6 +6296,8 @@ function renderGate() {
       <div class="note">Профиль хранится на сервере: прогресс, машины и монеты будут с тобой на любом устройстве.</div>`;
     c.querySelectorAll('[data-g]').forEach((b) => { b.onclick = () => { gateMode = b.dataset.g; gateMsg = ''; renderGate(); }; });
     $('gGuest').onclick = () => { store.set('nf-guest', true); finishGate(); };
+    vkidLoad().catch(() => {});   // load early: VK's window must open right on the tap, or the browser blocks it
+    $('gVk').onclick = () => { if (CLOUD.busy) return; $('gVk').disabled = true; $('gVk').textContent = 'Открываю ВКонтакте…'; vkSiteLogin().then((err) => { if (err) { gateMsg = err; renderGate(); } else finishGate(); }); };
     $('gTg').onclick = () => { if (CLOUD.busy) return; $('gTg').disabled = true; $('gTg').textContent = 'Открываю Telegram…'; tgSiteLogin().then((err) => { if (err) { gateMsg = err; renderGate(); } }); };
     $('gForm').onsubmit = (e) => {
       e.preventDefault();
