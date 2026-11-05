@@ -517,7 +517,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
       <button id="selProfile" class="chip prof-chip" type="button"></button>
       <h2 class="sel-title">Выбери водителя</h2>
       <div id="epChips" class="episodes" aria-label="Эпизод"></div>
-      <div id="chapters" class="episodes" aria-label="Глава" hidden></div>
+      <div id="chapters" class="episodes" aria-label="Миссия" hidden></div>
     </div>
     <div class="group-label">Мужчины</div>
     <div id="rosterM" class="roster"></div>
@@ -4224,16 +4224,16 @@ function updateBullets(dt) {
 function clearBullets() { for (const b of bullets) scene.remove(b.m); bullets.length = 0; }
 
 // ---------------- difficulty: keep chapters passable ----------------
-// Каждая попытка главы (прошёл / погиб / провалил) записывается на сервер (nf_runs). Урон по игроку умножается на:
-//  • множитель главы с сервера (nf_diff: раз в сутки глава с проходимостью ниже 75% становится легче — функция nf_tune);
-//  • личную помощь: после каждого провала этой главы урон −15% (до −55%); после победы помощь сбрасывается.
+// Каждая попытка миссии (прошёл / погиб / провалил) записывается на сервер (nf_runs). Урон по игроку умножается на:
+//  • множитель миссии с сервера (nf_diff: раз в сутки миссия с проходимостью ниже 75% становится легче — функция nf_tune);
+//  • личную помощь: после каждого провала этой миссии урон −15% (до −55%); после победы помощь сбрасывается.
 const DIFF = { srv: {}, dmg: 0 };
 const diffKey = () => `${state.ep}:${state.ep >= 2 ? 'c' + state.ch : 'a' + state.act}`;
 const diffTries = () => (store.get('nf-tries') || {})[diffKey()] || 0;
 // пешие бои: базовый урон ×0.6 (автотест: стоящий и стреляющий игрок без укрытий погибал за 6–8 секунд); машина — ×1
 const FOOT_BASE = 0.6;
 function diffMult() { const s = DIFF.srv[diffKey()]; return Math.max(0.2, (state.act === 2 ? FOOT_BASE : 1) * (typeof s === 'number' ? s : 1) * Math.max(0.45, 1 - 0.15 * diffTries())); }
-// чем легче глава, тем чаще враги пешком промахиваются: дополнительный разброс выстрела (рад)
+// чем легче миссия, тем чаще враги пешком промахиваются: дополнительный разброс выстрела (рад)
 const diffSpread = () => (state.act === 2 ? Math.min(0.2, (1 - diffMult()) * 0.22) : 0);
 function diffLoad() { try { if (cloudInit()) CLOUD.sb.from('nf_diff').select('ch_key, mult').then(({ data }) => { for (const r of data || []) DIFF.srv[r.ch_key] = r.mult; }); } catch (e) { /* offline: no server multipliers */ } }
 function runEnd(result, reason) {
@@ -4242,7 +4242,7 @@ function runEnd(result, reason) {
   const key = diffKey(), all = store.get('nf-tries') || {}, tries = all[key] || 0, mult = Math.round(diffMult() * 100) / 100;
   if (result === 'win') delete all[key]; else all[key] = Math.min(9, tries + 1);
   store.set('nf-tries', all);
-  if (result !== 'win' && all[key] >= 2) setTimeout(() => toast('Глава стала чуть легче: враги бьют слабее', 3), 600);
+  if (result !== 'win' && all[key] >= 2) setTimeout(() => toast('Миссия стала чуть легче: враги бьют слабее', 3), 600);
   if (PROF.cloud && !PROF.god && CLOUD.sb) CLOUD.sb.from('nf_runs').insert({ ch_key: key, result, reason: reason ? String(reason).slice(0, 60) : null, tries, mult }).then(() => {}, () => {});
 }
 
@@ -4630,7 +4630,7 @@ function updateFoot(dt) {
           const sx = diffSpread(); dir.applyAxisAngle(new V3(0, 1, 0), sp + rand(-0.04 - sx, 0.04 + sx));
           fire(e.pos.clone().add(new V3(0, 1.02 * (e.boss ? 1.18 : 1), 0)).addScaledVector(dir, 0.9), dir, 48, e.dmg || (e.boss ? 9 : 7), 'e');
         }
-        e.fireCd = (e.boss ? rand(1.0, 1.4) : rand(1.0, 1.7)) * (1 + (1 - diffMult()) * 0.9);   // на облегчённой главе враги стреляют реже
+        e.fireCd = (e.boss ? rand(1.0, 1.4) : rand(1.0, 1.7)) * (1 + (1 - diffMult()) * 0.9);   // на облегчённой миссии враги стреляют реже
       }
     }
   }
@@ -4860,7 +4860,7 @@ function failChapter(title, text) {
     <div class="kicker">Эпизод ${state.ep} · ${MIS.title}</div>
     <h2 class="h2 bad">${title}</h2>
     <p class="lead">${text}</p>
-    <div class="btns"><button id="mRetry" class="btn primary" type="button">Начать главу заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>`, {
+    <div class="btns"><button id="mRetry" class="btn primary" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>`, {
     mRetry: () => { hideModal(); startChapter(state.ch); },
     mMenu: () => { hideModal(); showSelect(); },
   });
@@ -4876,7 +4876,7 @@ function ch1(intro) {
     const route = [[80, -80], [80, 0], [160, 0], [160, 80], [80, 80], [80, 160], [0, 160], [0, 80], [-80, 80], [-80, 0], [-80, -80], [-160, -80], [-160, 80], [-160, 160], [-120, 160]];
     const t = makeScripted('tail', route, 104, -80, -PI / 2, { speed: 17, stops: { 2: 4, 5: 5, 8: 4, 11: 5 } });
     MIS = {
-      title: 'Глава 1 · Хвост', noFire: true, chase: null, sus: 0, lost: 0, target: t, navName: 'Серая машина',
+      title: 'Миссия 1 · Хвост', noFire: true, chase: null, sus: 0, lost: 0, target: t, navName: 'Серая машина',
       navGoal: () => t.pos,
       update(dt) {
         setBeam(t.pos);
@@ -4929,7 +4929,7 @@ function ch2() {
   [[-126, 120], [-114, 104], [-102, 138], [-138, 130], [-150, 112], [-92, 100]].forEach(([x, z]) => spawnEnemy(x, z, false, thug()));
   const alarm = [[[-150, 92], [-140, 90], [-130, 92]], [[-90, 150], [-92, 140], [-90, 130]], [[-150, 150], [-146, 140], [-90, 92]]];
   MIS = {
-    title: 'Глава 2 · Накладные', arena: { x0: -154, x1: -86, z0: 86, z1: 158 }, found: 0, phase: 'docs', boss: null,
+    title: 'Миссия 2 · Накладные', arena: { x0: -154, x1: -86, z0: 86, z1: 158 }, found: 0, phase: 'docs', boss: null,
     update(dt) {
       if (this.phase === 'docs' && this.found >= 3 && aliveFoes() === 0 && !spawnQueue.length) {
         this.phase = 'boss';
@@ -4971,7 +4971,7 @@ function ch3() {
   const CAFE = new V3(160, 0, -120), PARK = new V3(0, 0, 40);
   setBeam(CAFE);
   MIS = {
-    title: 'Глава 3 · Пассажир', leg: 1, chase: { max: 2 }, kills0: 0, need: 4, timer: 0, navName: 'Кафе на Восточной',
+    title: 'Миссия 3 · Пассажир', leg: 1, chase: { max: 2 }, kills0: 0, need: 4, timer: 0, navName: 'Кафе на Восточной',
     navGoal() {
       if (this.leg === 3) return PARK;
       if (this.leg === 2) { let b = null, bd = 1e9; for (const e of enemyCars) if (!e.dead && !e.script) { const d = e.pos.distanceTo(pc.pos); if (d < bd) { bd = d; b = e; } } return b ? b.pos : pc.pos; }
@@ -5033,7 +5033,7 @@ function ch4() {
   };
   spawnW(1);
   MIS = {
-    title: 'Глава 4 · Засада в парке', arena: { x0: -74, x1: -6, z0: 6, z1: 74 }, wave: 1, gap: 0,
+    title: 'Миссия 4 · Засада в парке', arena: { x0: -74, x1: -6, z0: 6, z1: 74 }, wave: 1, gap: 0,
     onAllyDown: () => failChapter('Лёва ранен', 'Без Лёвы не найти Марка. Держись ближе к фонтану и снимай тех, кто идёт к Лёве.'),
     update(dt) {
       if (this.wave > 4 || aliveFoes() > 0 || spawnQueue.length) return;
@@ -5064,7 +5064,7 @@ function ch5() {
   const van = makeScripted('van', loopR, 0, 24, PI, { speed: 29, loop: true, hp: 420, shoot: true });
   state.spawnT = 8;
   MIS = {
-    title: 'Глава 5 · Фургон', chase: { max: 2 }, far: 0, van, navName: 'Фургон', done: false,
+    title: 'Миссия 5 · Фургон', chase: { max: 2 }, far: 0, van, navName: 'Фургон', done: false,
     navGoal: () => van.pos,
     update(dt) {
       setBeam(van.pos);
@@ -5104,7 +5104,7 @@ function ch6() {
   yardGate.position.y = 0; gateCollider = addBox(120, -88, 16, 1, 2.6);
   [[95, -131], [110, -131], [130, -131], [146, -131], [120, -119]].forEach(([x, z]) => spawnEnemy(x, z, false, { react: rand(0.8, 1.6) }));
   MIS = {
-    title: 'Глава 6 · Конечная', stage: 1, boss: null,
+    title: 'Миссия 6 · Конечная', stage: 1, boss: null,
     update() {
       if (this.stage === 1 && aliveFoes() === 0 && !spawnQueue.length) {
         this.stage = 2; addMedkit(120, -106); warehouseDoor.position.y = 6.2;
@@ -5169,7 +5169,7 @@ function renderChapters() {
   box.innerHTML = titles.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1}. ${t}</button>`).join('');
   box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { ep2Pick = +b.dataset.ch; renderChapters(); }));
   const L = loadLast();
-  $('btnGo').textContent = L && L.ep === selEp && L.ch === ep2Pick && selEp >= 2 ? `Продолжить: эпизод ${selEp}, глава ${ep2Pick}` : selEp >= 2 ? (ep2Pick === 1 ? `Начать эпизод ${selEp}` : `Глава ${ep2Pick}`) : 'В путь';
+  $('btnGo').textContent = L && L.ep === selEp && L.ch === ep2Pick && selEp >= 2 ? `Продолжить: эпизод ${selEp}, миссия ${ep2Pick}` : selEp >= 2 ? (ep2Pick === 1 ? `Начать эпизод ${selEp}` : `Миссия ${ep2Pick}`) : 'В путь';
 }
 function showEnd2() {
   profEp(2);
@@ -6078,7 +6078,7 @@ function startGen(ep, i, withIntro) {
   const E = EPS[ep], c = E.chapters[i]; saveLast(ep, i + 1);
   clearStage(); setMood(c.mood || 'night');
   state.ep = ep; state.ch = i + 1; epSave(ep, i + 1); state.fireLock = true;
-  const title = `Глава ${i + 1} · ${c.t}`;
+  const title = `Миссия ${i + 1} · ${c.t}`;
   let finished = false;
   const done = () => {
     if (finished) return; finished = true;
@@ -6821,7 +6821,7 @@ async function cloudLoadProfile(user) {
   if (gs > 0 && cs === 0) { finish(guest); toast('Прогресс гостя перенесён в профиль', 2); }
   else if (gs > 0 && cs > 0 && Math.abs(gs - cs) > 50) {
     // both sides have progress: the player decides
-    const desc = (x) => `${(x.coins || 0).toLocaleString('ru-RU')} монет, глав пройдено: ${(x.st && x.st.chapters) || 0}, машин: ${(x.cars || ['taxi']).length}`;
+    const desc = (x) => `${(x.coins || 0).toLocaleString('ru-RU')} монет, миссий пройдено: ${(x.st && x.st.chapters) || 0}, машин: ${(x.cars || ['taxi']).length}`;
     await new Promise((ok) => showModal(`<div class="kicker">Сохранения</div><h2 class="h2">Где продолжить?</h2>
       <p class="lead">На сервере: ${desc(cloudData)}.<br>На этом устройстве (гость): ${desc(guest)}.</p>
       <div class="btns"><button id="kCloud" class="btn primary" type="button">Взять с сервера</button><button id="kLocal" class="btn" type="button">Взять с устройства</button></div>
@@ -6888,7 +6888,7 @@ const PACKS = {
   pass: { name: 'Сезонный пропуск «Большой куш»', rub: 299, desc: '+50% монет за всё, золотая краска, золотой неон и золотой костюм', grant: (p) => { p.pass = true; } },
 };
 const ACH = [
-  ['first', 'Первая смена', 'Пройди первую главу', 100, (p) => [p.st.chapters, 1]],
+  ['first', 'Первая смена', 'Пройди первую миссию', 100, (p) => [p.st.chapters, 1]],
   ['ep1', 'Груз доставлен', 'Пройди эпизод 1', 150, (p) => [p.st.eps.includes(1) ? 1 : 0, 1]],
   ['s1', 'Конец ночи', 'Пройди первый сезон (эпизод 7)', 1000, (p) => [p.st.eps.includes(7) ? 1 : 0, 1]],
   ['s2', 'Большой куш', 'Пройди второй сезон (эпизод 10)', 1500, (p) => [p.st.eps.includes(10) ? 1 : 0, 1]],
@@ -6902,7 +6902,7 @@ const ACH = [
   ['garage6', 'Коллекционер', 'Собери все 6 машин', 1500, (p) => [p.cars.length, 6]],
   ['tuning', 'Тюнинг', 'Прокачай любой параметр до максимума', 400, (p) => [Math.max(...Object.values(p.up)), UP_MAX]],
   ['nitro10', 'Форсаж', 'Используй нитро 10 раз', 150, (p) => [p.st.nitro, 10]],
-  ['loot', 'Чистая работа', 'Довези 13 млн в главе «Отход»', 500, (p) => [Math.floor(p.st.loot), 13]],
+  ['loot', 'Чистая работа', 'Довези 13 млн в миссии «Отход»', 500, (p) => [Math.floor(p.st.loot), 13]],
   ['tourist', 'Турист', 'Проедь через тоннель и по мосту через канал', 100, (p) => [(p.st.tunnel ? 1 : 0) + (p.st.bridge ? 1 : 0), 2]],
   ['style', 'Стиляга', 'Купи покраску, неон или костюм', 150, (p) => [p.st.style ? 1 : 0, 1]],
 ];
@@ -6970,7 +6970,7 @@ function joinNudge() {
   if (store.get('nf-joined') || store.get('nf-joinask') || !joinList().length) return;
   store.set('nf-joinask', true);
   const bar = document.createElement('div'); bar.className = 'join-bar';
-  bar.innerHTML = `<span>Понравилось? Подписывайся — новости и новые главы первыми.</span>${joinButtons('data-join')}<button class="btn sm" data-x type="button" aria-label="Закрыть">✕</button>`;
+  bar.innerHTML = `<span>Понравилось? Подписывайся — новости и новые миссии первыми.</span>${joinButtons('data-join')}<button class="btn sm" data-x type="button" aria-label="Закрыть">✕</button>`;
   bar.querySelectorAll('[data-join]').forEach((b) => { b.onclick = () => { joinCommunity(b.dataset.join); bar.remove(); }; }); bar.querySelector('[data-x]').onclick = () => bar.remove();
   document.body.appendChild(bar); setTimeout(() => bar.remove(), 15000);
 }
@@ -7031,7 +7031,7 @@ async function pushStateSend() {
   const k = JSON.stringify(Object.assign({}, st, { lastPlay: st.lastPlay.slice(0, 13) })); if (k === pushStateLast) return; pushStateLast = k;
   try { const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); if (sub) await pushPost({ action: 'state', endpoint: sub.endpoint, state: st }); } catch (e) { /* offline */ }
 }
-// предложение: после первой пройденной главы, «Позже» — снова не раньше чем через 3 дня, «Не спрашивать» — никогда
+// предложение: после первой пройденной миссии, «Позже» — снова не раньше чем через 3 дня, «Не спрашивать» — никогда
 function pushAsk() {
   if (pushOn() || store.get('nf-push-never') || pushCan() !== 'ok' || Notification.permission !== 'default') return;
   if (Date.now() - (store.get('nf-push-ask') || 0) < 3 * 864e5 || !$('modal').hidden) return;
@@ -7046,7 +7046,7 @@ setTimeout(async () => {
   try { const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); if (sub) { await pushSave(sub); pushStateSend(); } else localStorage.removeItem('nf-push'); } catch (e) { /* no service worker */ }
 }, 5000);
 // ---------- реклама Рекламной сети Яндекса: полноэкранный блок для телефона ----------
-// Только на сайте и на телефоне, только между главами (со второй пройденной главы), не чаще раза в 5 минут.
+// Только на сайте и на телефоне, только между миссиями (со второй пройденной миссии), не чаще раза в 5 минут.
 // В мини-приложениях Telegram, ВКонтакте и MAX не показывается (в ВК по правилам — только реклама ВК), тестовому профилю — тоже.
 // Пока сайт не прошёл модерацию РСЯ, Яндекс просто ничего не покажет.
 const AD_BLOCK = 'R-A-20345213-1', AD_GAP = 5 * 60e3;
@@ -7202,14 +7202,14 @@ function renderProfile() {
       <div class="pbox"><div class="plabel">Уровень ${lvl}</div>${bar(S.earned - prev, next - prev)}<small>${S.earned.toLocaleString('ru-RU')} монет заработано всего · до следующего уровня ${(next - S.earned).toLocaleString('ru-RU')}</small></div>
       <div class="pbox"><div class="plabel">Герой: ${esc(CH.name)} «${esc(CH.nick)}»</div><small>${esc(CH.perk[0])}: ${esc(CH.perk[1])}</small><button class="btn sm" data-act="hero" type="button">Сменить героя</button></div>
     </div>
-    <div class="pstats">${[['Глав пройдено', S.chapters], ['Эпизодов', S.eps.length + ' из 10'], ['Машин сбито', S.carKills], ['Противников', S.footKills], ['Боссов', S.bosses], ['Достижений', Object.keys(PROF.ach).length + ' из ' + ACH.length], ['В игре', Math.round(S.time / 60) + ' мин']].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div>
+    <div class="pstats">${[['Миссий пройдено', S.chapters], ['Эпизодов', S.eps.length + ' из 10'], ['Машин сбито', S.carKills], ['Противников', S.footKills], ['Боссов', S.bosses], ['Достижений', Object.keys(PROF.ach).length + ' из ' + ACH.length], ['В игре', Math.round(S.time / 60) + ' мин']].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div>
     <div class="plabel">Костюм героя</div><div class="pitems"><div class="pitem${!PROF.outfit ? ' on' : ''}"><b>Свой</b><span>как на портрете</span><button class="btn sm" data-act="outfit" data-id="" type="button">${!PROF.outfit ? 'Надет' : 'Надеть'}</button></div>${outfits}</div>
     <div class="plabel">Вход <small class="pver">версия ${APP_VER}</small></div>
     ${PROF.cloud ? `<div class="prow"><span>Профиль <b>${esc(PROF.login)}</b> на сервере.</span>${inMiniApp ? '' : '<button class="btn sm" data-act="logout" type="button">Выйти</button>'}</div>` : ''}
     ${inMiniApp ? (PROF.cloud ? '' : `<div class="prow"><span>Вход через ${PLATFORM === 'vk' ? 'ВКонтакте' : PLATFORM === 'tg' ? 'Telegram' : 'MAX'}.</span><button class="btn sm primary" data-act="pflogin" type="button">Войти</button></div>`)
       : `${PROF.cloud ? '' : '<div class="prow"><button class="btn sm tg" data-act="tglogin" type="button">' + viaLabel('tg', 'Telegram') + '</button><button class="btn sm vk" data-act="vklogin" type="button">' + viaLabel('vk', 'ВКонтакте') + '</button>' + maxLinkHtml('btn sm max', viaLabel('max', 'MAX'), 'data-maxgo="login"') + '</div>'}<div class="prow"><small>Игра есть и в Telegram: <a href="https://t.me/night_fare_bot" target="_blank" rel="noopener">@night_fare_bot</a></small></div>`}
     ${PROF.cloud ? profLinksHtml() : ''}
-    ${joinList().length ? `<div class="plabel">Наши сообщества</div><div class="prow"><span>Новости и новые главы первыми</span>${joinButtons('data-join')}</div>` : ''}
+    ${joinList().length ? `<div class="plabel">Наши сообщества</div><div class="prow"><span>Новости и новые миссии первыми</span>${joinButtons('data-join')}</div>` : ''}
     <div class="plabel">Один аккаунт на всех устройствах</div>
     <div class="prow">${PROF.cloud ? `<button class="btn sm" data-act="getcode" type="button">Получить код для другого устройства</button>${CLOUD.code ? `<b class="pcode">${CLOUD.code}</b><small>действует 10 минут</small>` : ''}` : '<span>Войди в профиль, чтобы получить код.</span>'}</div>
     <div class="plogin"><input id="pCode" type="text" placeholder="Код с другого устройства" maxlength="9" autocapitalize="characters"><button class="btn sm" data-act="usecode" type="button">${inMiniApp ? 'Привязать по коду' : 'Войти по коду'}</button></div>${inMiniApp ? `<div class="prow"><small>Уже играешь на сайте или в другом приложении? Возьми там код («Получить код для другого устройства») и введи здесь — ${PLATFORM === 'max' ? 'MAX' : PLATFORM === 'vk' ? 'ВКонтакте' : 'Telegram'} привяжется к тому же профилю.</small></div>` : ''}
@@ -7641,7 +7641,7 @@ function renderGate() {
     const where = PLATFORM === 'vk' ? 'ВКонтакте' : PLATFORM === 'tg' ? 'Telegram' : 'MAX';
     c.innerHTML = `<h2 class="h2">Вход через ${where}</h2><p class="lead">${gateMsg ? esc(gateMsg) : 'Входим в профиль…'}</p>
       ${gateMsg ? '<div class="btns"><button id="gRetry" class="btn primary big" type="button">Попробовать ещё раз</button></div>' : ''}
-      <div class="note">Профиль хранит монеты, машины и пройденные главы — на любом устройстве.</div>`;
+      <div class="note">Профиль хранит монеты, машины и пройденные миссии — на любом устройстве.</div>`;
     if ($('gRetry')) $('gRetry').onclick = () => { gateMsg = ''; renderGate(); platformLogin().then((err) => { updateProfChip(); if (!err && PROF.login) { finishGate(); toast(`Привет, ${PROF.name}!`, 2); } else gateAgain(err || 'Не удалось войти.'); }); };
     return;
   }
@@ -7660,7 +7660,7 @@ function renderGate() {
     $('gSkip').onclick = gateNext;
   } else {
     c.innerHTML = `<div class="kicker">${store.get('nf-installed') || isStandalone() ? 'Последний шаг' : 'Шаг 2 из 2'}</div><h2 class="gate-title">Начать <span>игру</span></h2>
-      <p class="lead">Войди через Telegram, ВКонтакте или MAX — профиль создастся сам. Монеты, машины и пройденные главы будут с тобой на любом устройстве.</p>
+      <p class="lead">Войди через Telegram, ВКонтакте или MAX — профиль создастся сам. Монеты, машины и пройденные миссии будут с тобой на любом устройстве.</p>
       <button id="gTg" class="btn tg big" type="button">${viaLabel('tg', 'Telegram')}</button><button id="gVk" class="btn vk big" type="button">${viaLabel('vk', 'ВКонтакте')}</button>${gateMaxUrl ? `<a id="gMaxGo" class="btn max big" href="${esc(gateMaxUrl)}" target="_blank" rel="noopener"><i class="bico">${BRAND_ICO.max}</i> Открыть бота в MAX ещё раз</a>` : maxLinkHtml('btn max big', viaLabel('max', 'MAX'), 'id="gMax"')}
       <p class="note gate-nopass">Пароль не нужен: подтверди вход в Telegram, ВКонтакте или MAX — и всё.</p>
       <div class="pmsg">${esc(gateMsg)}</div>
@@ -9242,7 +9242,7 @@ function pauseGame() {
   if (document.pointerLockElement) document.exitPointerLock();
   const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
   showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
-    <p class="lead">Прогресс сохраняется по главам: выйдешь в меню — продолжишь с начала этой главы.</p>
+    <p class="lead">Прогресс сохраняется по миссиям: выйдешь в меню — продолжишь с начала этой миссии.</p>
     <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
     pResume: () => { hideModal(); state.mode = pausedFrom; state.fireLock = true; },
     pView: () => { cycleView(); $('pView').textContent = 'Камера: ' + VIEW_NAMES[footView]; },
@@ -9446,11 +9446,11 @@ function showDead() {
   showModal(`
     <div class="kicker">${state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ` + MIS.title : act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
     <h2 class="h2 bad">${act === 1 ? 'Машина разбита' : CH.name + ' ' + gx('ранен', 'ранена')}</h2>
-    <p class="lead">${state.ep >= 2 ? (act === 1 ? 'Такси больше не едет, а погоня уже рядом.' : 'Бой ещё не окончен.') + ' Можно продолжить с этого места, начать главу заново или выйти в меню — прогресс сохранится.' : act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>
+    <p class="lead">${state.ep >= 2 ? (act === 1 ? 'Такси больше не едет, а погоня уже рядом.' : 'Бой ещё не окончен.') + ' Можно продолжить с этого места, начать миссию заново или выйти в меню — прогресс сохранится.' : act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>
     <div class="btns">
       ${PROF.inv.revive > 0 ? `<button id="mChance" class="btn primary" type="button">Второй шанс (×${PROF.inv.revive})</button>` : ''}
       <button id="mRevive" class="btn primary" type="button" ${used ? 'disabled' : ''}>${PROF.noAds ? 'Продолжить' : 'Продолжить за рекламу'}</button>
-      <button id="mRetry" class="btn" type="button">${state.ep >= 2 ? 'Начать главу заново' : 'Начать акт заново'}</button>
+      <button id="mRetry" class="btn" type="button">${state.ep >= 2 ? 'Начать миссию заново' : 'Начать акт заново'}</button>
       <button id="mMenu" class="btn" type="button">В меню</button>
     </div>
     <div class="note">${used ? 'Продолжение за рекламу — один раз за акт.' : 'Продолжение вернёт 60% прочности на месте.'}</div>`, {

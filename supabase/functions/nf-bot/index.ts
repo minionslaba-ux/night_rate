@@ -108,7 +108,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 /ban логин · /unban логин — закрыть / открыть чат и голос игроку
 
 🧪 <b>Игра</b>
-/tester логин on|off — тестовый режим (бессмертие, все главы)
+/tester логин on|off — тестовый режим (бессмертие, все миссии)
 /errors — ошибки у игроков за 7 дней
 /health — сайт, версия, база, вебхук
 
@@ -214,7 +214,7 @@ async function exportUsers(chatId: number) {
   const rows = (ps || []).map((p: any) => {
     const t: any = tg.get(p.id), st = p.data?.st || {};
     return { 'Имя': p.name, 'Логин': p.login, 'Telegram': t?.username ? '@' + t.username : '', 'Telegram ID': t?.tg_id || '', 'Регистрация (МСК)': msk(p.created_at), 'Последний визит (МСК)': msk(p.updated_at),
-      'Монет': p.data?.coins ?? '', 'Заработано': st.earned ?? '', 'Глав пройдено': st.chapters ?? '', 'Поездок такси': st.fares ?? '', 'Машин': (p.data?.cars || []).length, 'Тестер': p.is_tester ? 'да' : '', 'Чат закрыт': p.chat_banned ? 'да' : '' };
+      'Монет': p.data?.coins ?? '', 'Заработано': st.earned ?? '', 'Миссий пройдено': st.chapters ?? '', 'Поездок такси': st.fares ?? '', 'Машин': (p.data?.cars || []).length, 'Тестер': p.is_tester ? 'да' : '', 'Чат закрыт': p.chat_banned ? 'да' : '' };
   });
   const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [18, 16, 16, 13, 17, 17, 9, 11, 9, 9, 7, 7, 9].map((w) => ({ wch: w }));
@@ -247,7 +247,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
     case 'top': {
       const { data } = await db.from('profiles').select('id, login, name, data').limit(2000);
       const top = (data || []).map((p: any) => ({ p, e: Number(p.data?.st?.earned || 0), ch: Number(p.data?.st?.chapters || 0) })).sort((a, b) => b.e - a.e).slice(0, 10);
-      await say(top.length ? `🏆 <b>Лучшие игроки</b> (заработано за всё время)\n${top.map((x, i) => `${i + 1}. ${pName(x.p)} — ${n(x.e)} монет · глав ${x.ch}`).join('\n')}` : 'Пока пусто.');
+      await say(top.length ? `🏆 <b>Лучшие игроки</b> (заработано за всё время)\n${top.map((x, i) => `${i + 1}. ${pName(x.p)} — ${n(x.e)} монет · миссий ${x.ch}`).join('\n')}` : 'Пока пусто.');
       return true;
     }
     case 'find': {
@@ -267,7 +267,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
       const { count: msgs } = await db.from('chat_messages').select('*', { count: 'exact', head: true }).eq('user_id', p.id);
       const { count: vr } = await db.from('voice_reports').select('*', { count: 'exact', head: true }).eq('reported', p.id);
       const d = p.data || {}, st = d.st || {};
-      await say(`👤 <b>${esc(p.name || 'Игрок')}</b>\nЛогин: <code>${esc(p.login)}</code>${t ? `\nTelegram: ${t.username ? '@' + esc(t.username) : '—'} (<code>${t.tg_id}</code>)` : ''}\nРегистрация: ${msk(p.created_at)}\nПоследний визит: ${msk(p.updated_at)}\n\n💰 Монет: ${n(d.coins)} · заработано ${n(st.earned)}\n🚕 Машин: ${(d.cars || []).length} (сейчас «${esc(d.car || 'taxi')}») · поездок такси ${n(st.fares)}\n📖 Глав пройдено: ${n(st.chapters)} · сбито машин ${n(st.carKills)}\n💬 Сообщений в чате: ${n(msgs)} · жалоб на голос: ${n(vr)}\n${p.is_tester ? '🧪 Тестер (бессмертие, все главы)\n' : ''}${p.chat_banned ? '🔇 Чат и голос закрыты\n' : ''}`);
+      await say(`👤 <b>${esc(p.name || 'Игрок')}</b>\nЛогин: <code>${esc(p.login)}</code>${t ? `\nTelegram: ${t.username ? '@' + esc(t.username) : '—'} (<code>${t.tg_id}</code>)` : ''}\nРегистрация: ${msk(p.created_at)}\nПоследний визит: ${msk(p.updated_at)}\n\n💰 Монет: ${n(d.coins)} · заработано ${n(st.earned)}\n🚕 Машин: ${(d.cars || []).length} (сейчас «${esc(d.car || 'taxi')}») · поездок такси ${n(st.fares)}\n📖 Миссий пройдено: ${n(st.chapters)} · сбито машин ${n(st.carKills)}\n💬 Сообщений в чате: ${n(msgs)} · жалоб на голос: ${n(vr)}\n${p.is_tester ? '🧪 Тестер (бессмертие, все миссии)\n' : ''}${p.chat_banned ? '🔇 Чат и голос закрыты\n' : ''}`);
       return true;
     }
     case 'chat': {
@@ -309,7 +309,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
       const p = await findProfile(who || '');
       if (!p || !/^(on|off)$/i.test(mode || '')) { await say('Так: <code>/tester tg344759585 on</code> или <code>off</code>'); return true; }
       await db.from('profiles').update({ is_tester: /on/i.test(mode) }).eq('id', p.id);
-      await say(/on/i.test(mode) ? `🧪 ${pName(p)}: тестовый режим включён (бессмертие, все главы). Сработает при следующем входе.` : `${pName(p)}: тестовый режим выключен.`);
+      await say(/on/i.test(mode) ? `🧪 ${pName(p)}: тестовый режим включён (бессмертие, все миссии). Сработает при следующем входе.` : `${pName(p)}: тестовый режим выключен.`);
       return true;
     }
     case 'errors': {
@@ -379,7 +379,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
       return true;
     }
     case 'broadcast': {
-      if (arg.length < 3) { await say('Напишите текст: <code>/broadcast Вышла новая глава — «Северный экспресс»!</code>\nСначала покажу превью.'); return true; }
+      if (arg.length < 3) { await say('Напишите текст: <code>/broadcast Вышла новая миссия — «Северный экспресс»!</code>\nСначала покажу превью.'); return true; }
       const { count } = await db.from('nf_bot_users').select('*', { count: 'exact', head: true }).eq('blocked', false);
       const { data } = await db.from('nf_drafts').insert({ tg_id: tg, kind: 'broadcast', payload: { text: arg.slice(0, 3500) } }).select('id').single();
       await say(`📣 <b>Превью рассылки</b> — получат ${n(count)} подписчиков бота (кто нажал /start):\n\n${esc(arg)}`, { reply_markup: kb([[['✅ Отправить', `adm:${data!.id}:send`], ['✖ Отмена', `adm:${data!.id}:cancel`]], [['Только мне (проверка)', `adm:${data!.id}:me`]]]) });
