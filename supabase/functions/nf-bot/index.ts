@@ -11,7 +11,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import * as XLSX from 'npm:xlsx@0.18.5';
 import { dailyPost, msk as mskNow } from './posts.ts';
-import { maxBroadcast, maxPin, maxOn } from './max.ts';
+import { maxBroadcast, maxPin, maxOn, maxSendPlay } from './max.ts';
 
 const token = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const SELF = `${Deno.env.get('SUPABASE_URL')}/functions/v1/nf-bot`;
@@ -84,6 +84,7 @@ const ADMIN_COMMANDS = [
   { command: 'autopost', description: 'Автопосты в канал: /autopost on|off' },
   { command: 'pin', description: 'Закреплённое меню в канале' },
   { command: 'maxsetup', description: 'Канал MAX: подключить и проверить' },
+  { command: 'maxtest', description: 'Тестовый пост в канал MAX' },
   { command: 'vk', description: 'Посты в группу ВК: проверка, /vk on|off' },
   { command: 'broadcast', description: 'Сообщение подписчикам бота: /broadcast текст' },
   { command: 'export', description: 'Игроки в Excel' },
@@ -117,6 +118,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 /autopost on · off — включить или выключить ежедневные посты
 /pin — опубликовать или обновить закреплённое меню с кнопками
 /vk — дубль постов в группу ВК: проверка · /vk on · /vk off
+/maxtest — тестовый пост в канал MAX
 /maxsetup — канал MAX: посты туда уходят с кнопкой «▶ Играть» (игра открывается прямо в MAX); /pin закрепляет такую кнопку и там
 
 📣 <b>Рассылка</b> (сначала превью, потом кнопка «Отправить»)
@@ -170,6 +172,15 @@ async function weekStats() {
 const PIN_TEXT = `🚕 <b>«Ночной тариф»</b> — ночной город, такси, погони и перестрелки.\n\n• Сюжет из 14 эпизодов\n• Открытый город: другие игроки, чат, группы с друзьями\n• 60 000 заданий, гараж и тюнинг\n\nИграйте в Telegram или на сайте — профиль общий. Новости игры — здесь, в канале.`;
 // закреплённое сообщение в канале MAX: игра открывается прямо здесь, без ссылок на другие площадки
 const MAX_PIN_TEXT = `🚕 <b>«Ночной тариф»</b> — ночной город, такси, погони и перестрелки.\n\n• Сюжет из 14 эпизодов\n• Открытый город: другие игроки, чат, группы с друзьями\n• 60 000 заданий, гараж и тюнинг\n\nИграйте прямо здесь, в MAX, без регистрации — кнопка «▶ Играть» ниже. Новости игры — в этом канале.`;
+// тестовый пост в каналы MAX (команда /maxtest): проверить, что бот публикует и кнопка «Играть» работает
+const MAX_TEST_TEXT = `🚕 <b>Проверка связи</b>\n\nЭто тестовое сообщение: проверяем, что новости «Ночного тарифа» доходят в этот канал. Кнопка «▶ Играть» ниже открывает игру прямо здесь, в MAX.`;
+async function maxTest() {
+  const { data: chats } = await db.from('nf_max_chats').select('chat_id, title').eq('enabled', true).eq('is_channel', true).limit(10);
+  if (!chats?.length) return ['канал не подключён (/maxsetup)'];
+  const out: string[] = [];
+  for (const c of chats) { const r = await maxSendPlay(Number(c.chat_id), MAX_TEST_TEXT, 'test'); out.push(`«${c.title || c.chat_id}»: ${r.mid ? '✅ опубликовано' : '❌ ' + r.error}`); }
+  return out;
+}
 const pinBtn = { inline_keyboard: [[{ text: '🚕 Играть в Telegram', url: BOT_START }], [{ text: '🌐 Играть на сайте', url: SITE }], [{ text: '👥 Группа ВКонтакте', url: VK_GROUP }]] };
 async function pinMenu() {
   const old = Number(await setting('pin_msg')) || 0;
@@ -342,6 +353,11 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
       await say(r.ok ? (r.updated ? '📌 Закреплённое меню в канале обновлено.' : r.pinned ? '📌 Меню опубликовано и закреплено в канале.' : `📌 Меню опубликовано, но закрепить не вышло: ${esc(r.error)}. Дайте боту в канале право «Закреплять сообщения» (или «Редактировать сообщения») и повторите /pin.`) : `Не удалось опубликовать в канал: ${esc(r.error)}. Проверьте, что бот — админ канала с правом публикации.`);
       return true;
     }
+    case 'maxtest': {
+      if (!maxOn()) { await say('Нет токена бота MAX.'); return true; }
+      await say(`💬 <b>Тест канала MAX</b>\n${(await maxTest()).map(esc).join('\n')}`);
+      return true;
+    }
     case 'maxsetup': {
       if (!maxOn()) { await say('Нет токена бота MAX (MAX_BOT_TOKEN в секретах Supabase).'); return true; }
       // подписка вебхука MAX (он живёт в nf-login и сам сохраняет каналы, куда добавлен бот)
@@ -459,6 +475,7 @@ Deno.serve(async (req) => {
   if (!req.headers.get('x-telegram-bot-api-secret-token')) {   // не Telegram: расписание (pg_cron) с ключом из базы
     const b = await req.clone().json().catch(() => null);
     const key = await setting('cron_key');
+    if (b && key && b.daily === key && b.max_test === true) return json({ max: await maxTest() });   // тот же ключ расписания: тестовый пост в MAX
     if (b && key && b.daily === key) return json(await dailyRun());
     return json({ error: 'forbidden' }, 403);
   }
