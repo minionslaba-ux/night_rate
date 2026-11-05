@@ -11,6 +11,8 @@
 // Коды: action 'link_code' + access_token — выдать одноразовый код (8 символов, 10 минут);
 //   code + подтверждение площадки — эта площадка навсегда привязывается к аккаунту кода; code без площадки (сайт) — вход в аккаунт кода.
 // action 'delete_account' + access_token — удалить аккаунт целиком (правила VK Mini Apps: удаление прямо из приложения).
+// action 'links' + access_token — какие площадки привязаны к аккаунту; action 'link' + access_token + подтверждение площадки —
+//   привязать площадку к своему аккаунту. Если она уже входила в другой, пустой аккаунт (без прогресса), тот удаляется; с прогрессом — отказ.
 // action 'tg_config' — номер бота для кнопки «Войти через Telegram» (публичная часть токена до двоеточия, не секрет).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -125,6 +127,12 @@ Deno.serve(async (req) => {
       return error ? json({ error: 'delete_failed' }, 500) : json({ deleted: true });
     }
 
+    if (body.action === 'links') {
+      const cur = await me(); if (!cur) return json({ error: 'bad_session' }, 401);
+      const has = async (t: string) => ((await db.from(t).select('user_id', { count: 'exact', head: true }).eq('user_id', cur.id)).count || 0) > 0;
+      return json({ tg: await has('tg_accounts'), vk: await has('vk_accounts'), max: await has('max_accounts') });
+    }
+
     const code = typeof body.code === 'string' ? body.code.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
     const widget = body.tg_widget && typeof body.tg_widget === 'object';
     const vkid = typeof body.vkid_token === 'string' && body.vkid_token;
@@ -146,6 +154,20 @@ Deno.serve(async (req) => {
     const name = [u.first_name, u.last_name].filter(Boolean).join(' ').slice(0, 24) || u.username || (plat === 'max' ? 'MAX' : plat === 'vk' ? 'VK' : 'Telegram');
     const extra = plat === 'tg' ? { username: String(u.username || '').slice(0, 64) } : {};
     const { data: link } = await db.from(T.table).select('user_id').eq(T.key, u.id).maybeSingle();
+
+    if (body.action === 'link') {   // привязать эту площадку к аккаунту, в который игрок уже вошёл
+      const cur = await me(); if (!cur) return json({ error: 'bad_session' }, 401);
+      if (link && link.user_id === cur.id) return json({ linked: true, already: true });
+      if (link) {
+        const { data: other } = await db.from('profiles').select('data, progress, is_tester').eq('id', link.user_id).maybeSingle();
+        const st = (other?.data && other.data.st) || {}, pr = other?.progress || {};
+        const busy = !!other?.is_tester || Number(st.earned || 0) > 0 || Number(st.chapters || 0) > 0 || Number(st.fares || 0) > 0 || Object.keys(pr.eps || {}).length > 0 || !!pr.last;
+        if (busy) return json({ error: 'linked_other' }, 409);
+        await db.auth.admin.deleteUser(link.user_id);   // пустой аккаунт этой площадки: удаляем вместе со связкой (каскад)
+      }
+      const { error } = await db.from(T.table).upsert({ [T.key]: u.id, user_id: cur.id, name, ...extra });
+      return error ? json({ error: 'link_failed' }, 500) : json({ linked: true });
+    }
 
     if (code) {   // эта площадка теперь входит в аккаунт кода
       const target = await useCode(db, code); if (!target) return json({ error: 'bad_code' }, 403);

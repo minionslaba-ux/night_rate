@@ -216,7 +216,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 .keys b { color: var(--text); font-weight: 500; }
 .btns { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn { appearance: none; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); font: 500 15px var(--font-body); padding: 12px 18px; border-radius: 8px; cursor: pointer; }
-.btn.tg { background: #2aabee; border-color: #2aabee; color: #fff; font-weight: 700; } .btn.vk { background: #0077ff; border-color: #0077ff; color: #fff; font-weight: 700; } .btn.linkish { background: none; border-color: transparent; color: var(--muted); text-decoration: underline; } .gate-nopass { text-align: center; margin: 0; }
+.btn.tg { background: #2aabee; border-color: #2aabee; color: #fff; font-weight: 700; } .btn.vk { background: #0077ff; border-color: #0077ff; color: #fff; font-weight: 700; } .ok { color: #4dffa6; } .btn.linkish { background: none; border-color: transparent; color: var(--muted); text-decoration: underline; } .gate-nopass { text-align: center; margin: 0; }
 .pver { font-weight: 400; opacity: .55; margin-left: 6px; letter-spacing: 0; }
 .gate-or { text-align: center; font-size: 12px; color: var(--muted); }
 .btn.primary { background: var(--taxi); color: #1a1405; border-color: var(--taxi); font-weight: 700; }
@@ -439,7 +439,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v40'; window.__errs = [];
+window.APP_VER = 'v41'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5725,6 +5725,7 @@ function applyProgress(pr) {
   } catch (e) { /* storage unavailable */ }
 }
 async function cloudLoadProfile(user) {
+  CLOUD.links = null;
   const { data: row, error } = await CLOUD.sb.from('profiles').select('login, name, data, progress, is_tester').eq('id', user.id).maybeSingle();
   if (error || !row) return 'Профиль не найден на сервере.';
   const guest = store.get(profKey(null)), cloudData = row.data || {};
@@ -5965,6 +5966,16 @@ function priceBtn(act, id, price, owned, label) {
   return `<button class="btn sm primary" data-act="buy-${act}" data-id="${id}" type="button" ${canPay(price) ? '' : 'disabled'}>${PROF.god ? 'Взять' : price.toLocaleString('ru-RU') + ' монет'}</button>`;
 }
 function bar(v, max) { return `<div class="pbar"><i style="width:${Math.round(Math.min(1, v / max) * 100)}%"></i></div>`; }
+// «Способы входа»: what is linked to this profile, and buttons to add the rest
+function profLinksHtml() {
+  if (!CLOUD.links && !CLOUD.linksBusy) { CLOUD.linksBusy = true; nfCall({ action: 'links' }).then((j) => { CLOUD.linksBusy = false; CLOUD.links = j.error ? { err: true } : j; if (!$('prof').hidden) renderProfile(); }); }
+  const L = CLOUD.links || {}, row = (on, name, btn) => `<div class="prow"><span>${name}: ${on ? '<b class="ok">привязан ✓</b>' : 'не привязан'}</span>${on ? '' : btn}</div>`;
+  if (!CLOUD.links || L.err) return `<div class="plabel">Способы входа</div><div class="prow"><small>${L.err ? 'Не удалось проверить — открой профиль ещё раз.' : 'Загружаю…'}</small></div>`;
+  return `<div class="plabel">Способы входа</div>
+    ${row(L.tg, 'Telegram', inMiniApp ? '' : '<button class="btn sm tg" data-act="linktg" type="button">Привязать</button>')}
+    ${row(L.vk, 'ВКонтакте', inMiniApp ? '' : '<button class="btn sm vk" data-act="linkvk" type="button">Привязать</button>')}
+    ${row(L.max, 'MAX', '<small>получи код ниже и введи его в игре внутри MAX</small>')}`;
+}
 function renderProfile() {
   const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения']];
   $('profTabs').innerHTML = tabs.map(([k, t]) => `<button class="chip${profTab === k ? ' active' : ''}" data-tab="${k}" type="button">${t}</button>`).join('');
@@ -5986,9 +5997,10 @@ function renderProfile() {
     ${inMiniApp ? (PROF.cloud ? '' : `<div class="prow"><span>Вход через ${PLATFORM === 'vk' ? 'ВКонтакте' : PLATFORM === 'tg' ? 'Telegram' : 'MAX'}.</span><button class="btn sm primary" data-act="pflogin" type="button">Войти</button></div>`)
       : `<div class="plogin"><input id="pLogin" type="text" placeholder="Логин" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="24"><input id="pPass" type="password" placeholder="Пароль" autocomplete="current-password" maxlength="40">
       <button class="btn sm primary" data-act="login" type="button">Войти</button><button class="btn sm" data-act="register" type="button">Создать</button></div>${PROF.cloud ? '' : '<div class="prow"><button class="btn sm tg" data-act="tglogin" type="button">Войти через Telegram</button><button class="btn sm vk" data-act="vklogin" type="button">Войти через ВКонтакте</button></div>'}<div class="prow"><small>Игра есть и в Telegram: <a href="https://t.me/night_fare_bot" target="_blank" rel="noopener">@night_fare_bot</a></small></div>`}
+    ${PROF.cloud ? profLinksHtml() : ''}
     <div class="plabel">Один аккаунт на всех устройствах</div>
     <div class="prow">${PROF.cloud ? `<button class="btn sm" data-act="getcode" type="button">Получить код для другого устройства</button>${CLOUD.code ? `<b class="pcode">${CLOUD.code}</b><small>действует 10 минут</small>` : ''}` : '<span>Войди в профиль, чтобы получить код.</span>'}</div>
-    <div class="plogin"><input id="pCode" type="text" placeholder="Код с другого устройства" maxlength="9" autocapitalize="characters"><button class="btn sm" data-act="usecode" type="button">Войти по коду</button></div>
+    <div class="plogin"><input id="pCode" type="text" placeholder="Код с другого устройства" maxlength="9" autocapitalize="characters"><button class="btn sm" data-act="usecode" type="button">${inMiniApp ? 'Привязать по коду' : 'Войти по коду'}</button></div>${inMiniApp ? `<div class="prow"><small>Уже играешь на сайте или в другом приложении? Возьми там код («Получить код для другого устройства») и введи здесь — ${PLATFORM === 'max' ? 'MAX' : PLATFORM === 'vk' ? 'ВКонтакте' : 'Telegram'} привяжется к тому же профилю.</small></div>` : ''}
     ${PROF.cloud ? '<div class="prow"><button class="btn sm danger" data-act="delete" type="button">Удалить аккаунт</button></div>' : ''}
     <div class="pmsg">${esc(profMsg)}</div>
     <div class="note">${PROF.cloud ? 'Профиль хранится на сервере и доступен на любом устройстве.' : 'Гость: прогресс хранится только в этом браузере. Войди или создай профиль, чтобы сохранить его на сервере.'}</div>`;
@@ -6023,6 +6035,7 @@ function profAction(act, id) {
   }
   else if (act === 'pflogin') { platformLogin().then((err) => { profMsg = err || 'Готово: профиль загружен.'; renderProfile(); }); return; }
   else if (act === 'getcode') { getLinkCode().then((j) => { if (j.code) CLOUD.code = j.code.slice(0, 4) + '-' + j.code.slice(4); profMsg = j.error || 'Введи этот код на другом устройстве или в другой площадке в течение 10 минут.'; renderProfile(); }); return; }
+  else if (act === 'linkvk' || act === 'linktg') { profMsg = act === 'linkvk' ? 'Открываю ВКонтакте…' : 'Открываю Telegram…'; renderProfile(); linkStart(act === 'linkvk' ? 'vk' : 'tg').then((err) => { if (err) { try { localStorage.removeItem('nf-link'); } catch (e) { /* storage unavailable */ } profMsg = err; renderProfile(); } }); return; }
   else if (act === 'vklogin') { profMsg = 'Открываю ВКонтакте…'; renderProfile(); vkSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
   else if (act === 'tglogin') { profMsg = 'Открываю Telegram…'; renderProfile(); tgSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
   else if (act === 'usecode') { const v = $('pCode').value; profMsg = 'Связываюсь с сервером…'; renderProfile(); loginWithCode(v).then((err) => { profMsg = err || 'Готово: вошли в аккаунт по коду.'; renderProfile(); }); return; }
@@ -6031,7 +6044,7 @@ function profAction(act, id) {
       { dYes: () => { hideModal(); deleteAccount().then((err) => { profMsg = err || 'Аккаунт удалён. Сейчас играет гость.'; renderProfile(); }); }, dNo: hideModal });
     return;
   }
-  else if (act === 'logout') { profLogout().then(() => { profMsg = 'Вы вышли. Сейчас играет гость.'; renderProfile(); }); return; }
+  else if (act === 'logout') { CLOUD.links = null; profLogout().then(() => { profMsg = 'Вы вышли. Сейчас играет гость.'; renderProfile(); }); return; }
   else if (act === 'outfit') { PROF.outfit = id || null; saveProfile(); applyLoadout(); }
   else if (act === 'buy-outfit') { if (pay(OUTFITS[id].price)) { PROF.outfits.push(id); PROF.outfit = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'car') { PROF.car = id; saveProfile(); applyLoadout(); }
@@ -6204,6 +6217,7 @@ async function vkidFinish(a) {
     token = t && t.access_token;
   } catch (e) { vkidErr('exchange ' + String((e && (e.message || e.error_description || e.error)) || e)); return 'ВКонтакте не подтвердил вход. Попробуй ещё раз.'; }
   if (!token) return 'ВКонтакте не подтвердил вход. Попробуй ещё раз.';
+  if (linkIntent('vk')) return await linkFinish({ vkid_token: token }, 'ВКонтакте');
   try {
     const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ vkid_token: token }) });
     const j = await r.json().catch(() => ({}));
@@ -6211,6 +6225,21 @@ async function vkidFinish(a) {
     const { data, error } = await CLOUD.sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
     return error || !data.user ? 'Не удалось войти через ВКонтакте.' : await cloudLoadProfile(data.user);
   } catch (e) { return NO_SERVER; }
+}
+// linking: a signed-in player adds Telegram or VK to the same profile. The intent survives the trip to Telegram/VK in localStorage.
+async function nfCall(body) {
+  const { data } = await CLOUD.sb.auth.getSession(); const tok = data && data.session && data.session.access_token;
+  if (!tok) return { error: 'bad_session' };
+  try { const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(Object.assign({ access_token: tok }, body)) }); return await r.json().catch(() => ({ error: 'bad_answer' })); }
+  catch (e) { return { error: 'network' }; }
+}
+function linkStart(plat) { store.set('nf-link', { plat, t: Date.now() }); return plat === 'vk' ? vkSiteLogin() : tgSiteLogin(); }
+const linkIntent = (plat) => { const L = store.get('nf-link'); try { localStorage.removeItem('nf-link'); } catch (e) { /* storage unavailable */ } return !!(L && L.plat === plat && Date.now() - L.t < 15 * 60e3 && PROF.cloud); };
+const LINK_ERR = { linked_other: 'Этот аккаунт уже входит в другой профиль с прогрессом. Войди через него и, если нужно, напиши в поддержку — объединим вручную.', bad_signature: 'Площадка не подтвердила вход. Попробуй ещё раз.', bad_session: 'Сначала войди в профиль.', network: NO_SERVER };
+async function linkFinish(proof, label) {
+  const j = await nfCall(Object.assign({ action: 'link' }, proof));
+  CLOUD.links = null;
+  return j.linked ? (j.already ? `${label} уже привязан к этому профилю.` : `Готово: ${label} привязан. Теперь можно входить и так.`) : (LINK_ERR[j.error] || 'Не удалось привязать. Попробуй ещё раз.');
 }
 // the signed answer comes back as #tgAuthResult=<base64 JSON> (or as ?id=…&hash=…); read it once and clean the address bar
 function tgAuthFromLocation() {
@@ -6233,6 +6262,7 @@ const TG_AUTH = inMiniApp ? null : tgAuthFromLocation();
 const VK_AUTH = inMiniApp ? null : vkidFromLocation();
 async function tgWidgetLogin(user) {
   if (!cloudInit()) return noServer();
+  if (linkIntent('tg')) return await linkFinish({ tg_widget: user }, 'Telegram');
   try {
     const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ tg_widget: user }) });
     const j = await r.json().catch(() => ({}));
@@ -6276,7 +6306,7 @@ function platformHint() {
 }
 let gateStep = 'install', gateMode = 'register', gateMsg = '', gateForm = false;
 function startGate() {
-  if (VK_AUTH) { finishGate(); toast('Вход через ВКонтакте…', 2); vkidFinish(VK_AUTH).then((err) => { toast(err || `Привет, ${PROF.name}!`, 3); updateProfChip(); }); return; }
+  if (VK_AUTH) { finishGate(); toast('Вход через ВКонтакте…', 2); vkidFinish(VK_AUTH).then((err) => { toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return; }
   if (TG_AUTH) { finishGate(); toast('Вход через Telegram…', 2); tgWidgetLogin(TG_AUTH).then((err) => { toast(err || `Привет, ${PROF.name}!`, 3); updateProfChip(); }); return; }
   if (inMiniApp) { platformLogin().then((err) => { if (!err) toast(PROF.god ? 'Тестовый профиль' : `Привет, ${PROF.name}!`, 2); updateProfChip(); }); return; }
   const needInstall = !isStandalone() && !store.get('nf-installed');
