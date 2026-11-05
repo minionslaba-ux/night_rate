@@ -24,7 +24,7 @@
 <title>Ночной тариф</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap">
 <style>
 /* Layout: full-screen WebGL stage, HUD pinned to corners, story/menus as overlays. Single dark "night city" look by design. */
 :root {
@@ -341,6 +341,117 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   .dlg-text { font-size: 14px; }
   .portrait { width: 44px; height: 44px; font-size: 22px; }
 }
+/* ---------- design v2 (Claude Design handoff «Ночной тариф v2»): smoked-glass panels, taxi-yellow cut-corner actions,
+   LED taximeter, «рация» toasts and dialog, receipt summary. Type: Unbounded (display), Onest (UI), JetBrains Mono (numbers). ---------- */
+:root {
+  --ink: #08090d; --glass: rgba(14, 15, 20, 0.74); --glass-2: rgba(22, 23, 30, 0.86);
+  --hair: rgba(255, 255, 255, 0.09); --hair-2: rgba(255, 255, 255, 0.16);
+  --panel: var(--glass-2); --line: var(--hair-2);
+  --text: #f1efe9; --muted: #9a9aa6; --dim: #6b6b78;
+  --taxi: #ffc43d; --taxi-2: #ffd56e; --taxi-ink: #1a1405; --neon: #ff3d6e; --ok: #6fe3a1;
+  --font-display: "Unbounded", "Arial Black", sans-serif;
+  --font-body: "Onest", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --cut: 10px; --r: 4px;
+}
+html, body { -webkit-font-smoothing: antialiased; }
+a { color: var(--taxi); } a:hover { color: var(--taxi-2); }
+.kicker, .bar-label, .group-label, .plabel { font: 600 10.5px/1 var(--font-body); letter-spacing: .16em; text-transform: uppercase; }
+.kicker { color: var(--taxi); } .bar-label, .group-label, .plabel { color: var(--muted); }
+kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; border: 1px solid var(--hair-2); border-bottom-width: 2px; border-radius: 3px; background: rgba(255,255,255,.04); }
+/* HUD: glass panels */
+.obj, .hud-tl > .bar, .stats, .nav, .care, #minimap { background: var(--glass); border: 1px solid var(--hair); border-radius: var(--r); box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 10px 30px rgba(0,0,0,.35); -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2); }
+.obj { padding: 11px 14px 12px; display: grid; gap: 6px; font: 500 14.5px/1.35 var(--font-body); }
+.obj b { display: flex; align-items: center; gap: 8px; font: 600 10.5px/1 var(--font-body); letter-spacing: .16em; text-transform: uppercase; color: var(--taxi); }
+.obj b::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--taxi); box-shadow: 0 0 10px var(--taxi); animation: v2blink 1.6s steps(2, end) infinite; }
+@keyframes v2blink { 50% { opacity: .25; } }
+.hud-tl > .bar { padding: 9px 12px 10px; }
+.stats { font: 500 12px/1.3 var(--font-body); color: var(--muted); padding: 6px 10px; } .stats b { font: 700 13px/1 var(--font-mono); color: var(--text); }
+#minimap { padding: 4px; background-clip: padding-box; }
+.bar-track { height: 8px; background: rgba(255,255,255,.07); border-radius: 1px; overflow: hidden; -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(10% - 2px), transparent calc(10% - 2px) 10%); mask: repeating-linear-gradient(90deg, #000 0 calc(10% - 2px), transparent calc(10% - 2px) 10%); }
+.bar-fill { background: var(--taxi); box-shadow: 0 0 10px rgba(255,196,61,.5); }
+.bar-fill.low { background: var(--neon); box-shadow: 0 0 10px rgba(255,61,110,.6); animation: v2blink .6s steps(2, end) infinite; }
+.boss, .bars .boss { font: 700 12px/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.boss .bar-fill { background: var(--neon); box-shadow: 0 0 10px rgba(255,61,110,.6); }
+.nav b { font: 700 15px/1.1 var(--font-display); letter-spacing: .01em; } .nav span { font: 500 11.5px/1.2 var(--font-mono); color: var(--muted); }
+/* the speedometer as an LED taximeter */
+.speedo { background: #050607; border: 1px solid rgba(255,196,61,.22); border-radius: 4px; box-shadow: inset 0 0 18px rgba(255,196,61,.08), 0 10px 30px rgba(0,0,0,.4); padding: 18px 14px 8px; }
+.speedo { min-width: 108px; box-sizing: border-box; }
+.speedo::before { content: "Тариф · Ночной"; white-space: nowrap; position: absolute; top: 6px; left: 10px; font: 600 8.5px/1 var(--font-body); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.speedo::after { content: ""; position: absolute; top: 6px; right: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.speedo b { font: 800 46px/1 var(--font-mono); color: var(--taxi); text-shadow: 0 0 14px rgba(255,196,61,.45); letter-spacing: -.02em; }
+.speedo small { font: 600 10.5px/1 var(--font-body); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+/* toasts: a radio call */
+.toast { display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px 14px; background: var(--glass-2); border: 1px solid var(--hair-2); border-radius: var(--r); color: var(--text); font: 700 clamp(15px, 2.2vw, 20px)/1.2 var(--font-display); letter-spacing: .01em; text-shadow: none; box-shadow: 0 16px 40px rgba(0,0,0,.45); animation: v2pop .28s cubic-bezier(.2,.9,.3,1.3); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); max-width: calc(100vw - 40px); white-space: normal; }
+.toast::before { content: "РАЦИЯ"; flex: none; font: 700 9.5px/1 var(--font-mono); letter-spacing: .14em; color: var(--taxi-ink); background: var(--taxi); padding: 5px 6px; border-radius: 2px; }
+@keyframes v2pop { from { transform: translateX(-50%) translateY(-10px) scale(.96); opacity: 0; } }
+.hint { font: 500 12px/1.4 var(--font-body); color: var(--muted); background: var(--glass); border: 1px solid var(--hair); border-radius: var(--r); padding: 7px 11px; }
+/* screens, cards, buttons */
+.screen { background: radial-gradient(ellipse at 50% 30%, rgba(8,9,13,.45), rgba(8,9,13,.94)); }
+.card, .gate-card, .prof-card { background: var(--glass-2); border: 1px solid var(--hair); border-radius: 6px; box-shadow: 0 30px 80px rgba(0,0,0,.5); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.logo { font: 800 clamp(40px, 8.4vw, 96px)/.9 var(--font-display); color: var(--taxi); letter-spacing: -.02em; text-transform: uppercase; text-shadow: 0 0 40px rgba(255,196,61,.28); }
+.logo span { font: 600 clamp(13px, 1.6vw, 17px)/1 var(--font-body); letter-spacing: .3em; color: var(--text); text-shadow: none; }
+.lead { color: #c9c8cf; font: 400 15.5px/1.55 var(--font-body); }
+.btn { min-height: 46px; padding: 0 20px; border: 1px solid var(--hair-2); background: rgba(255,255,255,.03); color: var(--text); font: 600 13px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; border-radius: var(--r); transition: background .12s, border-color .12s, transform .08s; }
+.btn:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.28); }
+.btn:active { transform: translateY(1px); }
+.btn.sm { min-height: 36px; padding: 0 14px; font-size: 11.5px; }
+.btn.primary { position: relative; background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); font: 700 13px/1 var(--font-display); letter-spacing: .08em; border-radius: 0; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+.btn.primary.sm { font-size: 11px; --cut: 7px; }
+.btn.primary:hover { background: var(--taxi-2); } .btn.primary:active { background: #f0b021; }
+.btn.primary::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(0,0,0,.9) 0 6px, transparent 6px 12px) 0 100% / 100% 3px no-repeat; opacity: .22; pointer-events: none; }
+.btn.big { min-height: 58px; padding: 0 34px; font-size: 16px; --cut: 14px; }
+.btn:focus-visible { outline: 2px solid var(--taxi); outline-offset: 3px; }
+.btn kbd { color: inherit; border-color: currentColor; opacity: .55; }
+.note { font: 400 12px/1.45 var(--font-body); color: var(--muted); }
+.h2 { font: 800 clamp(26px, 5vw, 40px)/1.02 var(--font-display); letter-spacing: -.01em; text-transform: uppercase; }
+.h2.bad { color: var(--neon); } .h2.good { color: var(--taxi); }
+.gate-title { font-family: var(--font-display); font-weight: 800; letter-spacing: -.01em; text-transform: uppercase; }
+/* the end of an episode: a cash receipt */
+.summary { display: grid; gap: 0; padding: 18px 18px 22px; background: #efece4; color: #1b1a17; font: 500 13px/1 var(--font-mono); border: 0; border-radius: 2px 2px 0 0; -webkit-mask: radial-gradient(circle 6px at 50% 100%, transparent 98%, #000) 0 0 / 14px 100%; mask: radial-gradient(circle 6px at 50% 100%, transparent 98%, #000) 0 0 / 14px 100% repeat-x; grid-template-columns: 1fr; }
+.summary::before { content: "ТАКСОПАРК «НОЧНОЙ ТАРИФ» · ЧЕК"; display: block; text-align: center; font: 700 11px/1 var(--font-mono); letter-spacing: .12em; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px dashed rgba(0,0,0,.35); }
+.summary div { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0; border-bottom: 1px dashed rgba(0,0,0,.2); background: none; border-radius: 0; }
+.summary small { font: 500 12px/1 var(--font-mono); letter-spacing: .04em; text-transform: uppercase; color: #4a4740; }
+.summary b { font: 800 16px/1 var(--font-mono); color: #1b1a17; }
+.summary div:last-child { border-bottom: 0; padding-top: 12px; } .summary div:last-child b { font-size: 22px; }
+.car-card { background: rgba(255,255,255,.03); border: 1px solid var(--hair); border-radius: var(--r); }
+.car-card b { font: 700 12.5px/1.2 var(--font-display); } .car-card .price { color: var(--taxi); font: 700 12px/1 var(--font-mono); }
+.car-card.owned { border-color: rgba(255,196,61,.5); background: rgba(255,196,61,.06); }
+/* the dialog: a radio */
+.dialog { padding: 14px 18px 14px 14px; background: var(--glass-2); border: 1px solid var(--hair-2); border-radius: 6px; box-shadow: 0 20px 50px rgba(0,0,0,.55); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); width: min(760px, calc(100% - 24px - var(--sal) - var(--sar))); gap: 16px; }
+.portrait { width: 64px; height: 76px; border-radius: 3px; font: 800 28px/1 var(--font-display); color: #0b0d1f; box-shadow: inset 0 -18px 30px rgba(0,0,0,.25); }
+.dlg-name { display: flex; align-items: center; gap: 8px; font: 700 12px/1 var(--font-display); letter-spacing: .06em; text-transform: uppercase; margin: 4px 0 8px; }
+.dlg-name::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.dlg-text { font: 400 17px/1.5 var(--font-body); color: var(--text); }
+.dlg-next { font: 600 10px/1 var(--font-body); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+.ad .count { font: 800 88px/1 var(--font-mono); color: var(--taxi); }
+.loading { color: var(--muted); font: 600 11px/1 var(--font-body); letter-spacing: .2em; text-transform: uppercase; background: var(--ink); display: grid; place-items: center; align-content: center; gap: 14px; }
+.loading::before { content: "НОЧНОЙ ТАРИФ"; font: 800 28px/1 var(--font-display); letter-spacing: -.01em; color: var(--taxi); }
+/* title screen */
+.pv-shade { background: linear-gradient(90deg, rgba(8,9,13,.86) 0%, rgba(8,9,13,.35) 46%, rgba(8,9,13,0) 72%); }
+.pv-k { display: flex; align-items: center; gap: 10px; } .pv-k::before { content: ""; width: 28px; height: 1px; background: var(--taxi); }
+.pv-logo { font-size: clamp(52px, 10vw, 132px); animation: v2neon 6s linear 1.6s infinite; }
+@keyframes v2neon { 0%, 93%, 100% { opacity: 1; } 94% { opacity: .6; } 95% { opacity: 1; } 97% { opacity: .75; } }
+.pv-tag { color: #d6d5dc; font: 400 clamp(14px, 1.5vw, 17px)/1.55 var(--font-body); }
+/* driver select */
+.sel-title { font: 800 26px/1 var(--font-display); text-transform: uppercase; letter-spacing: -.01em; }
+.chip { border: 1px solid var(--hair-2); background: transparent; color: var(--muted); border-radius: 2px; font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; }
+.chip.active { background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); }
+.hud-chip { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.pc-card { border: 1px solid var(--hair); background: #0c0d12; border-radius: 3px; font: 600 10.5px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
+.pc-card:hover { transform: translateY(-2px); border-color: var(--hair-2); }
+.sel-detail { background: rgba(255,255,255,.025); border: 1px solid var(--hair); border-radius: var(--r); }
+.sel-name b { font: 800 22px/1 var(--font-display); text-transform: uppercase; } .sel-name small { font: 500 12px/1 var(--font-mono); }
+.sel-bio { color: #c9c8cf; font: 400 14px/1.5 var(--font-body); }
+.stat { font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.perk { border-top: 1px dashed var(--hair-2); } .perk b { font: 700 12px/1 var(--font-display); text-transform: uppercase; letter-spacing: .04em; }
+.stage-name b { font: 800 clamp(48px, 7.4vw, 112px)/.86 var(--font-display); text-transform: uppercase; letter-spacing: -.03em; text-shadow: 0 6px 30px rgba(0,0,0,.6); }
+.stage-name span { font: 700 clamp(14px, 1.6vw, 18px)/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase; }
+.cine-title b { font-family: var(--font-display); font-weight: 800; text-transform: uppercase; letter-spacing: -.01em; }
+.tbtn { font-family: var(--font-body); letter-spacing: .1em; }
+.prof-coins, .pstats b, .pitem em { font-family: var(--font-mono); }
+@media (max-width: 560px) { .dlg-text { font-size: 15px; } .portrait { width: 50px; height: 60px; font-size: 22px; } .speedo b { font-size: 36px; } }
+@media (prefers-reduced-motion: reduce) { .toast, .pv-logo, .obj b::before, .bar-fill.low { animation: none; } }
 </style>
 </head>
 <body>
@@ -2289,7 +2400,7 @@ function updateSignals() {
 const SIGN_KINDS = ['main', 'yield', 'walk', 'speed60', 'speed40', 'parking', 'stop', 'bus'];
 function signAtlasTex() {
   const C = 128, cv = document.createElement('canvas'); cv.width = C * SIGN_KINDS.length; cv.height = C; const g = cv.getContext('2d');
-  const font = (px) => `800 ${px}px Rubik, "Segoe UI", Arial, sans-serif`;
+  const font = (px) => `800 ${px}px Onest, "Segoe UI", Arial, sans-serif`;
   SIGN_KINDS.forEach((k, i) => {
     const x0 = i * C, cx = x0 + C / 2, cy = C / 2; g.save();
     if (k === 'main') { g.translate(cx, cy); g.rotate(PI / 4); g.fillStyle = '#fff'; g.fillRect(-42, -42, 84, 84); g.fillStyle = '#f2c200'; g.fillRect(-30, -30, 60, 60); g.strokeStyle = '#222'; g.lineWidth = 2; g.strokeRect(-42, -42, 84, 84); }
@@ -7498,7 +7609,7 @@ try { (JSON.parse(localStorage.getItem('nf-muted')) || []).forEach((m) => ONL.mu
 function onlineName() { return (PROF.cloud ? PROF.name : 'Гость ' + ONL.id.slice(-4)).slice(0, 20); }
 function nameTag(text, colr, sub) {
   // a small rounded plate: the name in the game font, an optional grey note («бот»)
-  const W = 320, H = 64, font = '600 28px Rubik, "Segoe UI", Arial, sans-serif', fontS = '500 20px Rubik, "Segoe UI", Arial, sans-serif';
+  const W = 320, H = 64, font = '600 28px Onest, "Segoe UI", Arial, sans-serif', fontS = '500 20px Onest, "Segoe UI", Arial, sans-serif';
   const mc = document.createElement('canvas').getContext('2d'); mc.font = font; let tw = mc.measureText(text).width; mc.font = fontS; const sw = sub ? mc.measureText(sub).width + 10 : 0;
   const bw = Math.min(W - 4, tw + sw + 28);
   const t = canvasTex(W, H, (g) => {
@@ -7935,9 +8046,9 @@ function careBoard(text, sub, color, w, h) {
   g.fillStyle = '#10121e'; g.fillRect(0, 0, c.width, c.height);
   g.strokeStyle = color; g.lineWidth = 10; g.strokeRect(5, 5, c.width - 10, c.height - 10);
   g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = `700 ${Math.round(c.height * (sub ? 0.4 : 0.56))}px Rubik, "Segoe UI", Arial, sans-serif`;
+  g.font = `700 ${Math.round(c.height * (sub ? 0.4 : 0.56))}px Onest, "Segoe UI", Arial, sans-serif`;
   g.fillText(text, c.width / 2, c.height * (sub ? 0.36 : 0.52), c.width - 30);
-  if (sub) { g.fillStyle = '#e8e8f0'; g.font = `500 ${Math.round(c.height * 0.22)}px Rubik, "Segoe UI", Arial, sans-serif`; g.fillText(sub, c.width / 2, c.height * 0.76, c.width - 30); }
+  if (sub) { g.fillStyle = '#e8e8f0'; g.font = `500 ${Math.round(c.height * 0.22)}px Onest, "Segoe UI", Arial, sans-serif`; g.fillText(sub, c.width / 2, c.height * 0.76, c.width - 30); }
   const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, color: new THREE.Color(1.6, 1.6, 1.6), side: THREE.DoubleSide }));
   return m;
@@ -8112,7 +8223,7 @@ function careTow() {
 // station marks on the minimap (drawn upright, whatever way the map is turned)
 function careMinimap(toMap, W) {
   if (!ONL.on) return;
-  mctx.font = '700 15px Rubik, Arial, sans-serif'; mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
+  mctx.font = '700 15px Onest, Arial, sans-serif'; mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
   for (const s of CARE.sites) {
     const [x, y] = toMap(s.pad[0], s.pad[1]); if (Math.hypot(x - W / 2, y - W / 2) > W / 2 - 12) continue;
     const K = CARE_KIND[s.kind]; mctx.fillStyle = '#0b0d1f'; mctx.beginPath(); mctx.arc(x, y, 11, 0, PI * 2); mctx.fill();
@@ -9291,7 +9402,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
