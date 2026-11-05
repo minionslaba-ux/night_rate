@@ -67,6 +67,17 @@ if (!process.env.NOPAGE) fs.writeFileSync(SP + '/test/' + PAGE, '<!doctype html>
           if (f > 0 && f < 22 && Math.abs(lat) < 3.6) { const side = Math.abs(mySide + lat) > 5 ? -Math.sign(mySide + lat) : (lat > 0 ? -1 : 1); tgt = new g.GOAL.constructor(tgt.x + nr.x * side * 5, 0, tgt.z + nr.z * side * 5); break; }
         }
       }
+      // herding: get round behind the flock (on the side away from the gate) and walk it slowly towards the gate
+      if (type === 'herd' && M.geese) {
+        const free = M.geese.filter((q) => !q.pen);
+        if (free.length) {
+          let fx = 0, fz = 0; for (const q of free) { fx += q.pos.x; fz += q.pos.z; } fx /= free.length; fz /= free.length;
+          const gx = M.gate.x, gz = M.gate.z, dl = Math.hypot(fx - gx, fz - gz) || 1, bx = fx + (fx - gx) / dl * 10, bz = fz + (fz - gz) / dl * 10;
+          const behind = Math.hypot(pc.pos.x - bx, pc.pos.z - bz) < 6;
+          tgt = behind ? new g.GOAL.constructor(gx, 0, gz) : new g.GOAL.constructor(bx, 0, bz);
+          B.herdV = behind ? 3.2 : 7;
+        }
+      }
       // a fight: patrol the blocks in the centre and let the autoaim shoot the pursuers
       let hold = false; if (type === 'escape') { try { hold = M.carStyle === 'police' && /Продержись/.test((M.hud() || {}).timer || ''); } catch (e) {} }
       const fight = type === 'hunt' || (type === 'ep2c3' && M.leg === 2) || hold;
@@ -101,6 +112,12 @@ if (!process.env.NOPAGE) fs.writeFileSync(SP + '/test/' + PAGE, '<!doctype html>
       if (/deliver|escape|ep2c3/.test(type) && dG < 30) vWant = Math.min(vWant, 14);
       if (type === 'pacecar') vWant = clamp(vWant, 19, 25);
       if (type === 'photo' && dG < 11) vWant = 0;
+      if (type === 'paperboy') vWant = Math.min(vWant, 10.5);
+      if (type === 'herd') vWant = Math.min(vWant, B.herdV || 6);
+      if (type === 'comfort') vWant = Math.min(vWant, dG < 14 ? 2 : 11);
+      if (type === 'shuttle' && dG < 8) vWant = 0;
+      if (type === 'sneak') vWant = Math.min(vWant, 9);
+      if (type === 'parking') vWant = Math.min(vWant, dG < 3 ? 0 : dG < 16 ? 3 : 12);
       if (type === 'fuel') { const P0b = g.NAV.pts[1]; vWant = Math.min(vWant, 33); }
       if (type === 'slalom') vWant = Math.min(vWant, 15);
       if (type === 'push' && pc.pos.distanceTo(goal) < 12) vWant = Math.min(vWant, 9);

@@ -1370,6 +1370,151 @@ function trkGrid(k) {
   return { x: p.x + nr.x * s, z: p.z + nr.z * s, h: Math.atan2(TRK.tan[i].x, TRK.tan[i].z), i };
 }
 const TRKX = { lights: [], lightMat: null, lightOn: null };
+// ---------------- cottage village «Сосновый Бор» (south of the city, episode 16) ----------------
+// The main street (x = 0) runs south from the gate; five lanes cross it. Cottages stand on plots along the lanes;
+// the square with the shop and the club, the sawmill, the poultry yard, the lake with a pier and the security office fill the rest.
+// Its colliders live in their own list (VCOLS) and are only checked south of the city, so the city does not get slower.
+const VIL = { x0: -330, x1: 330, z0: -905, z1: -385, on: false, gate: -400, lanes: [-470, -560, -650, -740, -830], laneX: 268, lake: { x0: 140, x1: 312, z0: -892, z1: -772 } };
+const VCOLS = [];
+const inVillage = (x, z) => z < -330;
+const vBox = (cx, cz, sx, sz, h) => { const c = { minX: cx - sx / 2, maxX: cx + sx / 2, minZ: cz - sz / 2, maxZ: cz + sz / 2, h }; VCOLS.push(c); return c; };
+const vSolid = (x0, z0, x1, z1, h, soft) => { const c = vBox((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, h); if (soft) c.soft = true; return c; };   // soft: a wooden fence gives way, so a knock costs less
+const laneEnd = (z) => (z === -830 ? 128 : VIL.laneX);
+// plots: the places for cottages, each with a front on a lane; a few are taken by the square, the sawmill, the yard and the office
+const VPLOTS = [];
+const VMAIL = [];
+(function vilPlots() {
+  const taken = (x, z) => (z > -500 && x < -150) || (z > -480 && x > 20 && x < 120) || (Math.abs(x + 45) < 40 && z < -520 && z > -610) || (x < -180 && z < -660 && z > -760) || (x > 120 && z < -760);
+  for (const lz of VIL.lanes) for (const side of [-1, 1]) for (const sx of [-1, 1]) for (let k = 0; k < 6; k++) {
+    const x = sx * (32 + k * 38), z = lz + side * 25;
+    if (Math.abs(x) > laneEnd(lz) - 14 || taken(x, z) || z > VIL.gate - 40 || z < VIL.z0 + 22) continue;
+    VPLOTS.push({ x, z, face: -side, lane: lz, i: VPLOTS.length });
+  }
+})();
+// the street graph for the navigator: the main street and the lanes
+function vilNavPts(pos, goal, out) {
+  const row = (p, tol) => { let b = null, bd = tol; for (const z of VIL.lanes) { const d = Math.abs(p.z - z); if (d < bd && Math.abs(p.x) < laneEnd(z) + 8) { bd = d; b = z; } } return b; };
+  const onMain = (p) => Math.abs(p.x) < 9, b = row(goal, 9) !== null ? row(goal, 9) : onMain(goal) ? null : row(goal, 48);
+  let a = row(pos, 9);
+  // in a yard or on the grass: first back out onto the nearest lane
+  if (a === null && !onMain(pos)) { const r = row(pos, 48); if (r !== null) { out.push(new V3(pos.x, 0, r)); a = r; } }
+  if (Math.hypot(goal.x - pos.x, goal.z - pos.z) < 26 || (a !== null && a === b) || (onMain(pos) && onMain(goal))) { out.push(new V3(goal.x, 0, goal.z)); return; }
+  if (a !== null && !onMain(pos)) out.push(new V3(0, 0, a));
+  if (b !== null) { out.push(new V3(0, 0, b)); out.push(new V3(goal.x, 0, b)); } else out.push(new V3(0, 0, goal.z));
+  out.push(new V3(goal.x, 0, goal.z));
+}
+function buildVillage() {
+  const metal = col(0x3a3c44), white = col(0xe8e8ec), wood = col(0x8a5a3a), woodD = col(0x5a3a26);
+  const asph = (x0, z0, x1, z1) => boxB(B.asph, x0, 0.01, z0, x1, 0.022, z1, { topWorld: 1 / 10, sides: false });
+  const mk = (x0, z0, x1, z1, c) => boxB(B.mark, x0, 0.04, z0, x1, 0.06, z1, { sides: false, col: c });
+  const lamp = (x, z) => { putB(B.metal, G.cyl6, x, 2.6, z, 0.14, 5.2, 0.14, 0, metal); putB(B.metal, G.box, x, 5.2, z, 0.5, 0.18, 0.5, 0, metal); putB(B.neon, G.sph, x, 5.0, z, 0.26, 0.2, 0.26, 0, HDR(0xffd9a0, 5)); };
+  const pine = (x, z, h) => { putB(B.wood, G.cyl6, x, h * 0.2, z, 0.45, h * 0.4, 0.45, 0, col(0x5a4030)); putB(B.leaf, G.cone, x, h * 0.58, z, h * 0.36, h * 0.8, h * 0.36, 0, col(0x1d3f2a)); };
+  const birch = (x, z, h) => { putB(B.wood, G.cyl6, x, h * 0.3, z, 0.32, h * 0.6, 0.32, 0, col(0xe8e4dc)); putB(B.leaf, G.sph, x, h * 0.72, z, h * 0.22, h * 0.3, h * 0.22, 0, col(0x4a7a3a)); };
+  // ground, the highway from the city, the gate
+  boxB(B.grass, VIL.x0 - 30, -0.06, VIL.z0 - 30, VIL.x1 + 30, -0.04, -318, { topWorld: 1 / 8, sides: false });
+  asph(-7, VIL.gate, 7, -318); for (let z = -330; z > VIL.gate; z -= 10) mk(-0.15, z - 5, 0.15, z, white);
+  asph(-6, -880, 6, VIL.gate); for (let z = VIL.gate - 8; z > -875; z -= 10) mk(-0.12, z - 5, 0.12, z, col(0xf0c040));
+  for (const lz of VIL.lanes) { const e = laneEnd(lz); asph(-e, lz - 4.5, e, lz + 4.5); for (let x = -e + 8; x < e - 8; x += 10) if (Math.abs(x) > 9) mk(x, lz - 0.1, x + 5, lz + 0.1, white); }
+  // the gate: a guard booth, a red-and-white barrier (up), the village sign
+  boxB(B.trim, 9, 0, VIL.gate - 4, 15, 3, VIL.gate + 4, { col: col(0xd8d0c0) }); boxB(B.glassA, 8.9, 1.2, VIL.gate - 3, 15.1, 2.6, VIL.gate + 3, { us: 1 / 4, vs: 1 / 2 }); boxB(B.roof, 8.4, 3, VIL.gate - 4.6, 15.6, 3.4, VIL.gate + 4.6, { col: col(0x3a4a3a) }); vSolid(9, VIL.gate - 4, 15, VIL.gate + 4, 3);
+  putB(B.metal, G.box, 8.4, 1.0, VIL.gate, 0.5, 2.0, 0.5, 0, metal);
+  for (let k = 0; k < 6; k++) putB(B.trim, G.box, 8.4 - 0.25, 2.2 + k * 1.05, VIL.gate, 0.18, 1.0, 0.18, 0, k % 2 ? white : col(0xd83a2a));
+  const sTex = cityText(1024, 192, (q, w, h) => { q.fillStyle = '#1f3a2a'; q.fillRect(0, 0, w, h); q.strokeStyle = '#e8dcb0'; q.lineWidth = 6; q.strokeRect(10, 10, w - 20, h - 20); q.fillStyle = '#f2ead0'; q.font = 'bold 84px Arial'; q.fillText('КП «СОСНОВЫЙ БОР»', w / 2, h / 2 + 4, w - 60); });
+  for (const s of [-1, 1]) putB(B.wood, G.box, s * 9, 2.4, VIL.gate + 14, 0.4, 4.8, 0.4, 0, woodD);
+  putB(B.wood, G.box, 0, 4.4, VIL.gate + 14, 19, 2.6, 0.3, 0, col(0x1f3a2a)); textPlane(sTex, 17.6, 3.3, 0, 4.4, VIL.gate + 14.2, 0);
+  // perimeter fence: a long low fence with posts all round
+  for (const [x0, z0, x1, z1] of [[VIL.x0, VIL.z1, -8, VIL.z1 + 0.4], [8, VIL.z1, VIL.x1, VIL.z1 + 0.4], [VIL.x0, VIL.z0, VIL.x1, VIL.z0 + 0.4], [VIL.x0, VIL.z0, VIL.x0 + 0.4, VIL.z1], [VIL.x1 - 0.4, VIL.z0, VIL.x1, VIL.z1]]) {
+    boxB(B.wood, x0, 0.4, z0, x1, 1.6, z1, { col: woodD }); vSolid(x0, z0, x1, z1, 1.6, true);
+  }
+  // cottages: pastel walls, a 45° roof with gables, lit windows, a porch light, a garage, a fence with a gate, a lawn, a mailbox
+  const PAST = [0xf2e3c8, 0xcfe8d8, 0xf6d2c0, 0xc8dcf0, 0xe2d4f0, 0xf0e6a8, 0xe8e8e8, 0xd8c8b0];
+  const ROOF = [0x7a3a32, 0x3a4a5a, 0x4a5a3a, 0x5a3a5a, 0x6a4a2a, 0x2a3a4a];
+  let rs = 11; const rr = () => { rs = (rs * 16807) % 2147483647; return rs / 2147483647; };
+  for (const P_ of VPLOTS) {
+    const { x, z, face } = P_, fz = z + face * 17;                // the front fence line, towards the lane
+    const W = 9 + Math.floor(rr() * 3) * 1.5, D = 8, two = rr() < 0.75, H = two ? 6 : 3.4, hx = x + (rr() < 0.5 ? -4 : 4), hz = z - face * 2;
+    const wc = col(PAST[Math.floor(rr() * PAST.length)]), rc = col(ROOF[Math.floor(rr() * ROOF.length)]);
+    boxB(B.grass, x - 17, -0.03, z - 17, x + 17, -0.015, z + 17, { topWorld: 1 / 6, sides: false, col: col(0x9ad08a, 0.9) });
+    boxB(B.trim, hx - W / 2, 0, hz - D / 2, hx + W / 2, H, hz + D / 2, { col: wc });
+    boxB(B.trim, hx - W / 2 - 0.15, 0, hz - D / 2 - 0.15, hx + W / 2 + 0.15, 0.5, hz + D / 2 + 0.15, { col: col(0x8a8478) });
+    putB(B.trim, G.box, hx, H, hz, W - 0.06, D / Math.SQRT2, D / Math.SQRT2, 0, wc, PI / 4, 0);            // gables (the lower half hides in the walls)
+    for (const s of [-1, 1]) putB(B.roof, G.box, hx, H + D / 4 + 0.12, hz + s * D / 4, W + 0.9, 0.22, D / Math.SQRT2 + 0.7, 0, rc, s * PI / 4, 0);
+    putB(B.trim, G.box, hx + W / 3, H + D / 2 - 0.4, hz, 0.9, 2.4, 0.9, 0, col(0x8a5a4a));
+    // windows: warm light in most of them
+    const wy = two ? [1.6, 4.4] : [1.6];
+    for (const y of wy) for (let k = -1; k <= 1; k++) {
+      if (y === 1.6 && k === 0) continue;
+      const lit = rr() < 0.7, wcol = lit ? HDR(0xffc880, 1.3 + rr() * 0.6) : col(0x1a2030);
+      for (const s of [-1, 1]) putB(lit ? B.bankL : B.trim, G.box, hx + k * W / 3.2, y, hz + s * (D / 2 + 0.03), 1.3, 1.3, 0.06, 0, wcol);
+    }
+    const dz = hz + face * (D / 2 + 0.05);
+    putB(B.wood, G.box, hx, 1.1, dz, 1.2, 2.2, 0.1, 0, woodD); putB(B.neon, G.sph, hx + 1.0, 2.5, dz + face * 0.15, 0.13, 0.13, 0.13, 0, HDR(0xffe0a0, 6));
+    putB(B.trim, G.box, hx, 0.15, dz + face * 1.2, 2.6, 0.3, 2.0, 0, col(0x9a948a));                                      // porch step
+    vBox(hx, hz, W + 0.4, D + 0.4, H);
+    // the garage on the other side of the plot and its driveway
+    const gx = x + (hx > x ? -9 : 9), gz = z - face * 1;
+    boxB(B.trim, gx - 3.4, 0, gz - 3.8, gx + 3.4, 3.0, gz + 3.8, { col: col(0xd0ccc4) }); boxB(B.roof, gx - 3.7, 3.0, gz - 4.1, gx + 3.7, 3.3, gz + 4.1, { col: rc });
+    putB(B.trim, G.box, gx, 1.3, gz + face * 3.82, 5.2, 2.5, 0.08, 0, col(0x6a6e78)); vBox(gx, gz, 7, 7.8, 3);
+    boxB(B.walk, gx - 2.8, 0.005, Math.min(gz + face * 3.8, fz), gx + 2.8, 0.02, Math.max(gz + face * 3.8, fz), { sides: false, col: col(0x8a8680) });
+    // fence along the front with the drive open, short side fences
+    const g0 = gx - 3.2, g1 = gx + 3.2;
+    for (const [a, b] of [[x - 17, Math.min(g0, x + 17)], [Math.max(g1, x - 17), x + 17]]) if (b - a > 0.5) { boxB(B.wood, a, 0.1, fz - 0.12, b, 1.0, fz + 0.12, { col: col(0xe8e2d4) }); vSolid(a, fz - 0.15, b, fz + 0.15, 1, true); }
+    for (const sx of [-17, 17]) { boxB(B.wood, x + sx - 0.1, 0.1, Math.min(z - face * 17, fz), x + sx + 0.1, 1.0, Math.max(z - face * 17, fz), { col: col(0xe8e2d4) }); }
+    const mx = g1 + 1.2, mz = fz + face * 0.9;
+    putB(B.wood, G.box, mx, 0.6, mz, 0.12, 1.2, 0.12, 0, woodD); putB(B.trim, G.box, mx, 1.3, mz, 0.5, 0.42, 0.7, 0, col([0xd83a2a, 0x2a6ad8, 0x2ab86a][P_.i % 3]));
+    VMAIL.push({ x: mx, z: mz, plot: P_.i });
+    // garden: a tree or two and bushes
+    for (let t = 0; t < 2; t++) { const tx = x + (rr() - 0.5) * 26, tz = z - face * (10 + rr() * 5); if (Math.abs(tx - hx) > W / 2 + 2 && Math.abs(tx - gx) > 5) (rr() < 0.5 ? pine : birch)(tx, tz, 7 + rr() * 5); }
+    for (let t = 0; t < 3; t++) putB(B.leaf, G.sph, hx + (rr() - 0.5) * W, 0.55, hz + face * (D / 2 + 0.9), 0.75, 0.55, 0.6, 0, col(0x3a6a34));
+  }
+  // street lamps along the main street and the lanes
+  for (let z = VIL.gate - 14; z > -880; z -= 32) { lamp(7.5, z); lamp(-7.5, z - 16); }
+  for (const lz of VIL.lanes) for (let x = -laneEnd(lz) + 12; x < laneEnd(lz) - 6; x += 34) if (Math.abs(x) > 14) lamp(x, lz + (x > 0 ? 5.8 : -5.8));
+  // the square: the shop, the club and a playground
+  boxB(B.walk, -84, 0.005, -605, -9, 0.02, -522, { sides: false, col: col(0xa8a49c) });
+  boxB(B.trim, -80, 0, -600, -52, 5, -584, { col: col(0xe8d8b8) }); boxB(B.roof, -81, 5, -601, -51, 5.5, -583, { col: col(0x7a3a32) }); vSolid(-80, -600, -52, -584, 5);
+  boxB(B.bankL, -78, 0.8, -583.95, -54, 3.6, -583.9, { col: HDR(0xffe2a8, 1.4) });
+  const shTex = cityText(512, 96, (q, w, h) => { q.fillStyle = '#7a3a32'; q.fillRect(0, 0, w, h); q.fillStyle = '#fff2d8'; q.font = 'bold 64px Arial'; q.fillText('ПРОДУКТЫ', w / 2, h / 2 + 3); });
+  textPlane(shTex, 10, 1.9, -66, 4.4, -583.6, 0);
+  boxB(B.trim, -48, 0, -540, -16, 7, -526, { col: col(0xc8dcf0) }); boxB(B.roof, -49, 7, -541, -15, 7.6, -525, { col: col(0x3a4a5a) }); vSolid(-48, -540, -16, -526, 7);
+  boxB(B.bankL, -46, 2, -540.06, -18, 5.4, -540.02, { col: HDR(0xffd8a0, 1.2) });
+  const clTex = cityText(512, 96, (q, w, h) => { q.fillStyle = '#2a3a5a'; q.fillRect(0, 0, w, h); q.fillStyle = '#e8f0ff'; q.font = 'bold 60px Arial'; q.fillText('КЛУБ «БОР»', w / 2, h / 2 + 3); });
+  textPlane(clTex, 10, 1.9, -32, 6, -540.4, PI);
+  for (const sx of [-74, -66]) { putB(B.metal, G.box, sx, 1.4, -575, 0.12, 2.8, 0.12, 0, metal); putB(B.metal, G.box, sx + 3, 1.4, -575, 0.12, 2.8, 0.12, 0, metal); putB(B.metal, G.box, sx + 1.5, 2.8, -575, 3.2, 0.12, 0.12, 0, metal); }
+  // the sawmill in the north-west corner: sheds, log piles, a chimney
+  boxB(B.wood, -300, 0, -455, -250, 7, -420, { us: 1 / 3, vs: 1 / 3 }); boxB(B.roof, -302, 7, -457, -248, 7.6, -418, { col: col(0x4a4a50) }); vSolid(-300, -455, -250, -420, 7);
+  for (let k = 0; k < 4; k++) for (let j = 0; j < 3; j++) putB(B.wood, G.cyl, -235 + k * 0.1, 0.5 + j * 0.9, -440 + k * 6, 0.9, 12, 0.9, 0, col(0x9a6a40), 0, PI / 2);
+  vSolid(-242, -446, -228, -418, 3);
+  putB(B.trim, G.cyl, -255, 9, -425, 1.6, 18, 1.6, 0, col(0x6a5a50)); vBox(-255, -425, 2, 2, 18);
+  // the poultry yard: a farmhouse and a pen (x −252…−226, z −702…−678) with an open gate towards the lane (x −243…−235)
+  boxB(B.trim, -300, 0, -712, -280, 5, -692, { col: col(0xe8d4a8) }); for (const s of [-1, 1]) putB(B.roof, G.box, -290, 5 + 2.6, -702 + s * 5, 21, 0.22, 14.8, 0, col(0x7a3a32), s * PI / 4, 0); vSolid(-300, -712, -280, -692, 5);
+  putB(B.trim, G.box, -290, 5, -702, 19.9, 14.1, 14.1, 0, col(0xe8d4a8), PI / 4, 0);
+  for (const [x0, z0, x1, z1] of [[-252, -702, -226, -701.6], [-252, -678.4, -243, -678], [-235, -678.4, -226, -678], [-252, -702, -251.6, -678], [-226.4, -702, -226, -678]]) { boxB(B.wood, x0, 0.1, z0, x1, 1.1, z1, { col: col(0xc8b48a) }); vSolid(x0, z0, x1, z1, 1.1, true); }
+  boxB(B.grass, -251.6, -0.01, -701.6, -226.4, 0.0, -678.4, { sides: false, topWorld: 1 / 4, col: col(0x8a7a4a) });
+  // the security office «Периметр» by the gate, with its car park
+  boxB(B.trim, 30, 0, -460, 70, 6, -436, { col: col(0x5a6070) }); boxB(B.roof, 29, 6, -461, 71, 6.6, -435, { col: col(0x2a2c34) }); vSolid(30, -460, 70, -436, 6);
+  boxB(B.bankL, 32, 2, -435.94, 68, 4.4, -435.9, { col: HDR(0xd8f0ff, 1.1) });
+  const pTex = cityText(512, 96, (q, w, h) => { q.fillStyle = '#16161c'; q.fillRect(0, 0, w, h); q.fillStyle = '#ff6a4a'; q.font = 'bold 56px Arial'; q.fillText('ЧОП «ПЕРИМЕТР»', w / 2, h / 2 + 3, w - 30); });
+  textPlane(pTex, 14, 2.6, 50, 5, -435.6, 0);
+  boxB(B.asph, 20, 0.012, -434, 80, 0.024, -414, { topWorld: 1 / 10, sides: false });
+  putB(B.metal, G.cyl6, 76, 6, -456, 0.5, 12, 0.5, 0, metal); putB(B.metal, G.box, 76, 12.2, -456, 2.4, 1.0, 2.4, 0, metal);
+  // the lake with a pier and a boathouse
+  boxB(B.water, VIL.lake.x0, -0.25, VIL.lake.z0, VIL.lake.x1, -0.05, VIL.lake.z1, { sides: false });
+  boxB(B.stone, VIL.lake.x0 - 2, -0.3, VIL.lake.z1, VIL.lake.x1, 0.12, VIL.lake.z1 + 2, { col: col(0x8a8478) });
+  vSolid(VIL.lake.x0 + 3, VIL.lake.z0, VIL.lake.x1, VIL.lake.z1 - 3, 0.5);
+  boxB(B.wood, 200, 0.2, -810, 206, 0.45, -772, { us: 1 / 2, vs: 1 / 2 }); for (let z = -808; z < -772; z += 6) for (const s of [200.3, 205.7]) putB(B.wood, G.cyl6, s, -0.2, z, 0.3, 1.2, 0.3, 0, woodD);
+  boxB(B.wood, 214, 0, -786, 232, 4.5, -772, { us: 1 / 3, vs: 1 / 3 }); boxB(B.roof, 213, 4.5, -787, 233, 5, -771, { col: col(0x3a4a3a) }); vSolid(214, -786, 232, -772, 4.5);
+  asph(128, -772, 212, -735);
+  // forest all round, outside the village fence and in the empty corners
+  for (let k = 0; k < 520; k++) {
+    const x = VIL.x0 - 28 + rr() * (VIL.x1 - VIL.x0 + 56), z = VIL.z0 - 28 + rr() * (VIL.z1 - VIL.z0 + 40);
+    const inside = x > VIL.x0 + 2 && x < VIL.x1 - 2 && z > VIL.z0 + 2 && z < VIL.z1 - 2;
+    if (inside) { if (Math.abs(x) < 14 || VIL.lanes.some((lz) => Math.abs(z - lz) < 12 && Math.abs(x) < laneEnd(lz) + 2) || VPLOTS.some((p) => Math.abs(p.x - x) < 19 && Math.abs(p.z - z) < 19)) continue;
+      if ((x < -170 && z > -470) || (x > 15 && x < 85 && z > -470) || (x > -90 && x < -5 && z < -515 && z > -610) || (x < -170 && z < -655 && z > -720) || (x > 120 && z < -755) || z > VIL.gate - 25) continue; }
+    else if (Math.abs(x) < 12 && z > VIL.z1 - 5) continue;
+    (rr() < 0.75 ? pine : birch)(x, z, 8 + rr() * 8);
+  }
+}
 function buildTrack() {
   const N = TRK.N, P = TRK.pts, NR = TRK.nrm, metal = col(0x3a3c44), white = col(0xe8e8ec), red = col(0xd83a2a), conc = col(0xb8b8c0);
   const solid = (x0, z0, x1, z1, h) => addBox((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, h);
@@ -1833,7 +1978,7 @@ function buildWorld() {
   kitInstances('streetlight', lamps, KIT.prop, true);
   buildSignals(tlights); buildRoadSigns();
 
-  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack();
+  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage();
 
   // one material per batch: a few draw calls for the whole city
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -3597,6 +3742,7 @@ function updateNav(pos, goal) {
     || (vert && Math.abs(pos.x - GA[0]) < 9 && pos.z >= Math.min(GA[1], GB[1]) - 2 && pos.z <= Math.max(GA[1], GB[1]) + 2)
     || Math.hypot(pos.x - NG.x, pos.z - NG.z) < 12;
   if (TRK.on) trkNavPts(pos, goal || GOAL, NAV.pts);
+  else if (VIL.on) vilNavPts(pos, goal || GOAL, NAV.pts);
   else if (onGoalRoad || AIR.on || STA.on) NAV.pts.push(NG.clone());
   else {
     const cand = [];
@@ -3635,11 +3781,13 @@ function setBeam(v) { beam.visible = !!v; if (v) beam.position.set(v.x, 45, v.z)
 // ---------------- physics helpers ----------------
 function inColliders(p, y) {
   for (const c of colliders) if (p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
+  if (p.z < -330) for (const c of VCOLS) if (p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
   return false;
 }
+const COLL_C = [colliders], COLL_V = [colliders, VCOLS];   // south of the city the village colliders are checked too
 function collideCircle(pos, vel, r) {
   let impact = 0;
-  for (const c of colliders) {
+  for (const L of (pos.z < -330 ? COLL_V : COLL_C)) for (const c of L) {
     if (pos.x < c.minX - r || pos.x > c.maxX + r || pos.z < c.minZ - r || pos.z > c.maxZ + r) continue;
     const cx = clamp(pos.x, c.minX, c.maxX), cz = clamp(pos.z, c.minZ, c.maxZ);
     let dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
@@ -3651,10 +3799,10 @@ function collideCircle(pos, vel, r) {
     } else { const d = Math.sqrt(d2); nx = dx / d; nz = dz / d; pen = r - d; }
     pos.x += nx * pen; pos.z += nz * pen;
     const vn = vel.x * nx + vel.z * nz;
-    if (vn < 0) { vel.x -= nx * vn * 1.35; vel.z -= nz * vn * 1.35; vel.multiplyScalar(0.94); impact = Math.max(impact, -vn); }
+    if (vn < 0) { vel.x -= nx * vn * 1.35; vel.z -= nz * vn * 1.35; vel.multiplyScalar(0.94); impact = Math.max(impact, c.soft ? -vn * 0.35 : -vn); }
   }
   if (TRK.on) impact = Math.max(impact, trkWall(pos, vel, r));
-  if (AIR.on || STA.on || TRK.on) { const Z = AIR.on ? AIR : STA.on ? STA : TRK; pos.x = clamp(pos.x, Z.x0, Z.x1); pos.z = clamp(pos.z, Z.z0, Z.z1); }
+  if (AIR.on || STA.on || TRK.on || VIL.on) { const Z = AIR.on ? AIR : STA.on ? STA : TRK.on ? TRK : VIL; pos.x = clamp(pos.x, Z.x0, Z.x1); pos.z = clamp(pos.z, Z.z0, Z.z1); }
   else { pos.x = clamp(pos.x, -LIM, LIM); pos.z = clamp(pos.z, -LIM, LIM + 2); }
   return impact;
 }
@@ -3827,6 +3975,10 @@ const WHO = {
   blesk: { name: 'Блеск, пилот «Глянца»', color: '#b8c8ff', init: 'Б' },
   marshal: { name: 'Зуев, старший маршал', color: '#ffd23a', init: 'З' },
   comment: { name: 'Комментатор трассы', color: '#7ad6ff', init: 'К' },
+  galina: { name: 'Галина Аркадьевна, председатель посёлка', color: '#e8a8d0', init: 'Г' },
+  suhov: { name: 'Сухов, начальник охраны «Периметр»', color: '#ff6a4a', init: 'С' },
+  nastya: { name: 'Настя, соседка', color: '#ffc8a8', init: 'Н' },
+  semyon: { name: 'Дед Семён', color: '#c8b48a', init: 'С' },
   kravets: { name: 'Кравец, заместитель мэра', color: '#b0a0c8', init: 'К' },
   maska: { name: 'Маска', color: '#e8e8e8', init: 'М' },
   tower: { name: 'Вышка «Северный»', color: '#7ad6ff', init: 'В' },
@@ -4199,7 +4351,7 @@ const LOOKS = {
 let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
   if (ONL.on) leaveRoom();
-  removeHeli(); AIR.on = false; STA.on = false; TRK.on = false; TR.field = []; TR.count = 0; if (TRKX.lights.length) trkLights(0); tMarksClear();
+  removeHeli(); AIR.on = false; STA.on = false; TRK.on = false; VIL.on = false; state.lightsOff = false; TR.field = []; TR.count = 0; if (TRKX.lights.length) trkLights(0); tMarksClear();
   for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
@@ -4659,7 +4811,7 @@ function startEpisode(ep, ch) {
   else startGen(ep, ch - 1, true);
 }
 function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else startMission(); }
-const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол', 12: 'Похищение мэра', 13: 'Последний рейс', 14: 'Северный экспресс', 15: 'Северное кольцо' };
+const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол', 12: 'Похищение мэра', 13: 'Последний рейс', 14: 'Северный экспресс', 15: 'Северное кольцо', 16: 'Сосновый Бор' };
 function renderChapters() {
   const eb = $('epChips');
   eb.innerHTML = Object.keys(EP_NAMES).map((k) => `<button class="chip${selEp === +k ? ' active' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
@@ -5265,7 +5417,7 @@ const EPS = {
     title: 'Северное кольцо', faction: 'night', zone: 'track', chaseMsg: 'Хвост!',
     logline: 'Банк дал таксопарку Петра Семёныча неделю: либо долг, либо молоток. Спасти парк может только Ночной кубок таксистов на пригородной трассе «Северное кольцо» — призовые как раз на долг. Но трассу хочет закрыть девелопер Глянцев, и его команда «Глянец» не привыкла проигрывать.',
     endTitle: 'Кубок у таксопарка', endLead: 'Призовые ушли на долг, таксопарк остался у Петра Семёныча, а «Северное кольцо» снова принимает ночные заезды. Глянцев объясняет капитану Орловой, откуда у стюардов его конверты и чей песок оказался в баке.',
-    teaser: 'По пятницам на кольце открытые заезды. Приезжай.',
+    teaser: 'А за южным шоссе, в коттеджном посёлке, по ночам пропадают машины…',
     chapters: [
       { t: 'Пассажирка', type: 'deliver', zone: 'city', start: [80, -80, 'W'], chase: 0, fragile: 60, fragileTitle: 'Пассажирка вышла', fragileText: 'Тамара Павловна попросила остановить: «Кто так бьёт машину, тот и на трассе её разобьёт». Объезжай углы и машины.',
         pts: [
@@ -5344,6 +5496,101 @@ const EPS = {
         about: 'Глянцев увёз кассу кубка. Капитану Орловой нужен адрес, куда он её спрячет: проследить за его машиной через весь город, не ближе 15 м — спугнёшь.',
         intro: [['orlova', 'Держись за ним, но не ближе пятнадцати метров. Увидит такси в зеркале — свернёт, и касса пропадёт.'], ['hero', 'Понял. Я просто такси. Нас в городе тысяча.']],
         outro: [['orlova', 'Склад у южной развязки. Касса здесь, и конверты с фамилиями стюардов тоже. Эдуард Глянцев, вы задержаны.'], ['glyantsev', 'Мои адвокаты…'], ['orlova', '…расскажут суду про песок в баке машины безопасности.'], ['lanskaya', 'Призовые — таксопарку. А кольцо остаётся кольцом.'], ['host', 'Таксопарк спасён! Всем по смене за мой счёт. То есть… по смене. Работать-то надо.']] },
+    ],
+  },
+  16: {
+    title: 'Сосновый Бор', faction: 'night', zone: 'village', chaseMsg: 'Хвост! Машины «Периметра»',
+    logline: 'Глянцев под следствием, а его коттеджный посёлок «Сосновый Бор» за южным шоссе живёт своей жизнью. По ночам там пропадают машины жильцов, частная охрана «Периметр» разводит руками, а полиция без доказательств за шлагбаум не заходит. Председатель посёлка зовёт таксиста.',
+    endTitle: 'В посёлке тихо', endLead: 'Угнанные машины вернулись к хозяевам, «Периметр» лишился лицензии, а его начальник Сухов дал показания капитану Орловой. В «Сосновом Бору» снова слышно только сосны и гусей.',
+    teaser: 'Город спит. Такси свободно — до следующего вызова.',
+    chapters: [
+      { t: 'Пропуск', type: 'deliver', zone: 'city', start: [-160, -40, 'S'], chase: 0,
+        pts: [
+          { p: [-120, -80], name: 'Рынок', say: [['galina', 'Вы таксист Петра Семёныча? Галина Аркадьевна, председатель «Соснового Бора». Мне сказали, вы умеете находить то, что пропало.'], ['hero', 'Смотря что пропало.'], ['galina', 'Машины. Семь штук за месяц. Едем, по дороге расскажу.']] },
+          { p: [0, -160], name: 'Южное шоссе', t: 55 },
+        ],
+        about: 'Забрать председателя коттеджного посёлка у рынка и успеть к южному шоссе, пока на въезде в «Сосновый Бор» не сменилась охрана.',
+        intro: [['mark', 'Заказ необычный: дама с рынка просит не такси, а тебя лично. Говорит, по рекомендации Тамары Ланской.'], ['hero', 'Слава бежит впереди машины.']],
+        outro: [['galina', 'Охрана «Периметр» в посёлке с весны. С весны и пропадают машины. Начальник охраны, Сухов, говорит — «гастролёры из города».'], ['galina', 'Полиция без доказательств за шлагбаум не идёт. Посёлок частный. Значит, доказательства добудем сами.'], ['hero', 'Тогда мне нужен пропуск. И парковка.']] },
+      { t: 'Парковка', type: 'parking', start: [0, -415, 'N'], secs: 170,
+        spots: [
+          { p: [-62, -573], h: 'E', any: true, name: 'У магазина, между машинами', cars: [[-70.5, -573, 'E'], [-53.5, -573, 'E']] },
+          { p: [-32, -547], h: 'S', name: 'У клуба, носом к двери', cars: [[-35.8, -547, 'S'], [-28.2, -547, 'S']] },
+          { p: [50, -424], h: 'S', name: 'У «Периметра», задом к офису', cars: [[45.6, -424, 'S'], [54.4, -424, 'S']] },
+        ],
+        about: 'В «Сосновом Бору» своя этика: машину ставят ровно, иначе соседи напишут в общий чат. Три парковки: у магазина между машинами, у клуба и задом к офису охраны.',
+        intro: [['galina', 'Первое правило посёлка: паркуйтесь ровно. Иначе вас обсудят раньше, чем вы заглушите мотор.'], ['hero', 'А второе?'], ['galina', 'Не задавать вопросов охране. Его мы как раз нарушим. Встаньте у «Периметра» задом к окнам — пусть видят, что мы не прячемся.']],
+        outro: [['suhov', 'Таксист? В посёлке? У нас своя служба доставки. Покатайтесь и уезжайте.'], ['galina', 'Это Сухов. Начальник охраны. Видите, какой гостеприимный.'], ['hero', 'Вижу. И вижу, что у него новые часы. Дорогие.']] },
+      { t: 'Гуси', type: 'herd', start: [-120, -650, 'W'], at: [-196, -650], r: 6, n: 7, pen: [-252, -226, -702, -678], gate: [-239, -674], secs: 240, need: 6,
+        about: 'Ночью кто-то открыл загон деда Семёна, и гуси разбрелись по Липовой улице. Загнать всех семерых обратно — они разбегаются от машины, значит, машиной и пасти.',
+        intro: [['semyon', 'Кто-то ночью открыл мне загон! Гуси по всей улице. А охрана говорит — «не наш профиль».'], ['galina', 'Это не случайность. Кто-то проходил задами к озеру — через двор Семёна.'], ['semyon', 'Гусь от машины бежит. Заходи сзади, дави на них потихоньку к калитке. Не задави только!']],
+        outro: [['semyon', 'Все семеро! Спасибо, сынок. Кстати: ночью в сторону озера проехал фургон без фар. Гуси подняли такой крик, что я выглянул.'], ['hero', 'Без фар. К озеру. Запомню.']] },
+      { t: 'Газеты', type: 'paperboy', start: [0, -640, 'N'], lanes: [-650, -740], every: 2, n: 10, maxKmh: 40, secs: 180,
+        about: 'Свежий номер «Вестника Бора» с объявлением о собрании жителей: развезти по десяти ящикам на Липовой и Кленовой. Галина бросает газеты из окна на ходу — не быстрее 40 км/ч.',
+        intro: [['galina', 'Собрание жителей завтра. Объявление — в «Вестнике». Я бросаю газеты, вы ведёте. Медленно мимо ящиков, но без остановок: к рассвету надо успеть.'], ['hero', 'Ни разу не был почтальоном.'], ['galina', 'Я тоже. Но в молодости метала диск.']],
+        outro: [['galina', 'Десять из десяти. Завтра весь посёлок будет в клубе.'], ['nastya', 'Галина Аркадьевна! У меня схватки. Муж в командировке, а охрана говорит — ждите скорую у шлагбаума.']] },
+      { t: 'Мягкий ход', type: 'comfort', start: [60, -650, 'E'], limit: 45, ouch: ['Ой… Потише!', 'Аккуратнее на повороте!', 'Ох, как трясёт…'], failTitle: 'Насте плохо', failText: 'Слишком резко: разгоняйся и тормози плавно, повороты — на малой скорости, лежачих полицейских в посёлке хватает и без тебя.',
+        pts: [
+          { p: [150, -740], name: 'Дом Насти', say: [['nastya', 'Только не гоните. Мне нельзя трясти.'], ['hero', 'Как на облаке. Пристегнитесь.']] },
+          { p: [0, -410], name: 'КПП — там ждёт скорая' },
+        ],
+        about: 'Отвезти Настю к шлагбауму, где ждёт скорая: плавно, без рывков, резких поворотов и не быстрее 45 км/ч. Шкала комфорта падает от каждого резкого движения.',
+        intro: [['galina', 'Скорую на территорию не пускают — «распоряжение охраны». Везём Настю к шлагбауму. Медленно и нежно.'], ['hero', 'Распоряжение охраны, значит.']],
+        outro: [['nastya', 'Спасибо… Вы самый мягкий таксист в мире.'], ['galina', 'Скорую не пустили, а вот грузовик ночью пустили. Я видела из окна.'], ['hero', 'Значит, пора посмотреть, куда ездит охрана.']] },
+      { t: 'Обход', type: 'tail', start: [0, -405, 'N'], car: [0, -445, 'N'], speed: 12, name: 'Машина «Периметра»', stops: { 1: 4 },
+        route: [[0, -560], [0, -740], [170, -740], [200, -760]],
+        about: 'Ночной обход охраны «Периметр»: проследить за патрульной машиной и понять, куда она ездит. Не ближе 15 метров — Сухов знает такси в лицо.',
+        intro: [['galina', 'Патруль выезжает в полночь. Обычно — круг по посёлку. Посмотрим, обычно ли сегодня.']],
+        outro: [['hero', 'Лодочная станция у озера. Патруль встал, фары погасил. У пирса — баржа.'], ['galina', 'Баржа? У нас озеро без выхода в реку.'], ['hero', 'Без выхода — по воде. А по берегу — старая дорога через лес. Её с поста не видно.']] },
+      { t: 'Без фар', type: 'sneak', start: [0, -680, 'N'], goal: [196, -760], name: 'лодочная станция', quiet: 38,
+        patrols: [{ at: [150, -740, 'W'], route: [[-120, -740], [210, -740]], speed: 6, range: 22 }],
+        towers: [[226, -752, 0.55, 30]],
+        about: 'Выключить фары и пробраться к лодочной станции мимо патруля и прожектора на вышке: не попадать в лучи и не газовать рядом с постами.',
+        intro: [['hero', 'Фары выключаю. Если что — я просто заблудился.'], ['galina', 'В «Сосновом Бору» не блуждают. Здесь все улицы — прямые. Прожектор на вышке крутится, жди, пока отвернётся.']],
+        outro: [['hero', 'Под брезентом на барже — три машины. Синий кроссовер Ивановых, «Нива» Семёна и чей-то седан.'], ['galina', 'Ивановы завтра переезжают. Если их машина уплывёт, они даже не узнают куда.'], ['hero', 'Значит, переезд — под охраной. Нашей.']] },
+      { t: 'Переезд', type: 'escort', start: [-252, -830, 'E'], car: [-226, -830, 'E'], speed: 10, far: 40, name: 'Грузовик Ивановых',
+        route: [[-120, -830], [0, -830], [0, -560], [0, -410], [0, -398]],
+        about: 'Семья Ивановых переезжает в город. Проводить их грузовик до шоссе и не отставать больше чем на 40 метров: всё, что едет одно, в этом посёлке пропадает.',
+        intro: [['galina', 'Ивановы уезжают. Их кроссовер уже на барже, так пусть хоть мебель доедет.'], ['hero', 'Еду следом. Ближе, чем тень.']],
+        outro: [['galina', 'Доехали. Ивановы обещали написать заявление — машина-то их. Это первое доказательство.'], ['mark', 'Таксист, срочно: на лесопилке у посёлка пожар! Ветер на улицу Берёзовую.']] },
+      { t: 'Пожар', type: 'shuttle', start: [0, -430, 'N'], cap: 3, secs: 240, base: [12, -418], baseName: 'КПП, пункт сбора', fire: [-275, -437],
+        houses: [{ p: [-32, -470], name: 'Берёзовая, 2', n: 2 }, { p: [-70, -470], name: 'Берёзовая, 4', n: 3 }, { p: [-108, -470], name: 'Берёзовая, 6', n: 2 }, { p: [-146, -470], name: 'Берёзовая, 8', n: 3 }],
+        about: 'Горит лесопилка, ветер несёт дым на Берёзовую улицу. Вывезти к пункту сбора у КПП десять жителей: в такси за раз влезают трое.',
+        intro: [['galina', 'Пожарные едут из города, им двадцать минут. А дым уже на Берёзовой. Там старики и дети.'], ['hero', 'Трое за рейс. Поехали.']],
+        outro: [['galina', 'Все десять у КПП. Пожарные уже здесь.'], ['marshal', 'Это я, Зуев, — я теперь в пожарной охране. Лесопилку подожгли: канистра у забора. Кто-то хотел, чтобы весь посёлок смотрел на огонь, а не на озеро.'], ['hero', 'Пока все тушили, баржа ушла бы с машинами. Не ушла?'], ['galina', 'Не ушла: дед Семён перегородил причал своей лодкой.']] },
+      { t: 'Гараж', type: 'parking', start: [0, -470, 'N'], secs: 120, bonus: 10,
+        spots: [
+          { p: [0, -420], h: 'E', any: true, name: 'Поперёк выезда у КПП', cars: [] },
+          { p: [170, -752], h: 'E', any: true, name: 'Поперёк дороги к пирсу', cars: [] },
+        ],
+        about: 'Пока охрана занята пожаром, перекрыть два выезда, по которым можно увезти машины с баржи: встать поперёк дороги у КПП и поперёк дороги к пирсу.',
+        intro: [['galina', 'Сухов понял, что мы его видели. Он попробует вывезти машины по суше, пока все у пожара.'], ['hero', 'Тогда встанем поперёк. Такси — лучший шлагбаум.']],
+        outro: [['suhov', 'Таксист, убери машину. Это частная дорога.'], ['hero', 'А это частное такси. Стою, жду пассажира. Капитана Орлову.'], ['orlova', 'Еду. Но ордер мне дадут только с доказательствами: фото машин на барже и документы из офиса «Периметра».']] },
+      { t: 'Фото', type: 'photo', start: [150, -745, 'E'], secs: 130,
+        pts: [[196, -760], [210, -748], [140, -765], [100, -742]], names: ['Кроссовер Ивановых на барже', 'Номера под брезентом', 'Баржа у причала', 'Следы колёс от леса'],
+        about: 'Сфотографировать улики для ордера: машины на барже, номера под брезентом, саму баржу и следы колёс со старой лесной дороги. Подъехать к каждому месту и замереть.',
+        intro: [['orlova', 'Мне нужны снимки с привязкой к месту: машины, номера, баржа, следы. Четыре кадра.'], ['hero', 'Фотограф из меня так себе, но я буду стараться не дышать.']],
+        outro: [['orlova', 'Снимки получила. Этого хватит на баржу. Но чтобы взять Сухова, нужны документы из офиса: кому и за сколько он продавал машины.'], ['galina', 'Офис ночью охраняют. Прожектор, патруль, камеры.'], ['hero', 'Значит, снова без фар.']] },
+      { t: 'Офис', type: 'sneak', start: [-150, -470, 'E'], goal: [50, -428], name: 'офис «Периметра»', quiet: 34,
+        patrols: [{ at: [150, -470, 'W'], route: [[20, -470], [230, -470]], speed: 6, range: 20 }, { at: [0, -560, 'N'], route: [[0, -640], [0, -520]], speed: 7, range: 22 }],
+        towers: [[76, -456, 0.7, 34]],
+        about: 'Снова без фар: подобраться к офису «Периметра» мимо двух патрулей и прожектора на вышке у парковки. Галина знает, где ключ от архива.',
+        intro: [['galina', 'Ключ от архива под третьим горшком с геранью. Я тридцать лет была завхозом, я знаю, где люди прячут ключи.'], ['hero', 'Тогда главное — доехать до герани.']],
+        outro: [['galina', 'Вот: журнал «выездов». Каждая пропавшая машина — с датой, суммой и фамилией покупателя. Почерк Сухова.'], ['orlova', 'Это ордер. Еду. Но Сухов уже знает: его люди грузят машины на тягачи у озера.']] },
+      { t: 'Листовки', type: 'paperboy', start: [0, -555, 'N'], lanes: [-560, -830], every: 1, n: 12, maxKmh: 45, secs: 170,
+        about: 'Пока Орлова в пути, поднять посёлок: развезти листовки «Все к озеру!» по двенадцати ящикам на Ольховой и Сосновой — чем больше свидетелей, тем меньше шансов, что Сухов уйдёт тихо.',
+        intro: [['galina', 'Один свидетель — это слово. Сто свидетелей — это посёлок. Листовки уже напечатаны.'], ['hero', 'Медленно у ящиков, быстро между ними. Я теперь профессионал.']],
+        outro: [['galina', 'Люди выходят. Смотрите — все с фонариками идут к озеру.'], ['semyon', 'И гуси со мной! Пусть только попробуют проехать.'], ['hero', 'Тягачи заводятся. Сейчас пойдут на выезд.']] },
+      { t: 'Тягачи', type: 'stop', start: [0, -700, 'N'], car: [0, -760, 'S'], convoy: 2, hp: 120, speed: 15, shoot: false, scale: 1.1, name: 'Тягач с угнанными машинами', chase: 0,
+        route: [[0, -470], [0, -420], [0, -560], [-200, -560], [0, -560], [0, -740], [200, -740], [0, -740]],
+        about: 'Два тягача с угнанными машинами пытаются вырваться из посёлка. Остановить обоих тараном и огнём по колёсам, не дав уйти дальше 150 метров. Стрелять — только по тягачам.',
+        intro: [['orlova', 'Я на шоссе, через пять минут у шлагбаума. Задержи их!'], ['suhov', 'Таксист, у тебя ещё есть шанс уехать домой.'], ['hero', 'У меня смена. Домой я поеду утром.']],
+        outro: [['orlova', 'Оба тягача стоят. Сухов, вы задержаны: угон, сбыт, поджог.'], ['suhov', 'Это всё гастролёры из города…'], ['semyon', 'Гусей не обманешь, Сухов. Они тебя сразу невзлюбили.']] },
+      { t: 'Возвращение', type: 'comfort', start: [196, -748, 'W'], limit: 50, k: 0.8, failTitle: 'Галину укачало', failText: 'Плавнее: Галина Аркадьевна сегодня и так много пережила.',
+        pts: [{ p: [150, -740], name: 'Дом Ивановых — вернуть ключи' }, { p: [-200, -650], name: 'Двор деда Семёна' }, { p: [-32, -547], name: 'Клуб — собрание жителей' }],
+        about: 'Утро. Развезти Галину Аркадьевну по делам — вернуть ключи от машины Ивановых, заехать к деду Семёну и успеть к собранию в клубе. Плавно: председатель всю ночь не спала.',
+        intro: [['galina', 'Ну вот и утро. Отвезите меня, пожалуйста, по делам — и без ваших гоночных штучек.'], ['hero', 'Как на облаке.']],
+        outro: [['galina', 'Собрание решило: охрану набираем из своих. Семён — начальник, гуси — сигнализация.'], ['orlova', 'Машины вернём хозяевам через неделю. А Сухов уже рассказывает, кто ему платил за лесопилку.'], ['hero', 'Смена окончена. Город спит. Такси свободно.']] },
     ],
   },
 };
@@ -5493,7 +5740,7 @@ function startGen(ep, i, withIntro) {
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
   };
-  AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track';
+  AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village';
   resetJet(c.jetAt);
   MIS = GEN[c.type](c, title, done, E);
   if (c.carStyle || E.carStyle) MIS.carStyle = c.carStyle || E.carStyle; if (c.chaseMsg || E.chaseMsg) MIS.chaseMsg = c.chaseMsg || E.chaseMsg;
@@ -5927,7 +6174,7 @@ function cineTitle(kicker, title) {
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); CINE.titleT = 3.4;
 }
 function cineUpdate(dt) {
-  if (pc && pc.g.userData.beams) { const on = state.act === 1 || state.mode === 'preview' || state.mode === 'select'; if (pc.g.userData.beams[0].visible !== on) pc.g.userData.beams.forEach((b) => { b.visible = on; }); }
+  if (pc && pc.g.userData.beams) { const on = (state.act === 1 && !state.lightsOff) || state.mode === 'preview' || state.mode === 'select'; if (pc.g.userData.beams[0].visible !== on) pc.g.userData.beams.forEach((b) => { b.visible = on; }); }
   // a title card the first time a chapter goes live
   const live = (state.mode === 'drive' || state.mode === 'foot') && state.ep >= 2 && MIS && MIS.title && !MIS.online && !ONL.on;
   const key = live ? state.ep + ':' + state.ch : CINE.key;
@@ -6040,6 +6287,19 @@ function drawStaMap() {
   g.fillStyle = '#e8ecf6'; g.font = 'bold 16px Arial'; g.textAlign = 'center'; const t = (s2, x, z) => { const [a, b] = P(x, z); g.fillText(s2, a, b); };
   t('ВОКЗАЛ', 495, 4); t('ДЕПО', 808, -100); t('ТОВАРНЫЙ', 725, 125); t('ПЛОЩАДЬ', 434, -60);
 }
+let mmVil = null;
+function drawVilMap() {
+  const X0 = VIL.x0 - 20, Z0 = -905 - 20, W = VIL.x1 - VIL.x0 + 40, H = 905 - 318 + 40;
+  mmVil = document.createElement('canvas'); mmVil.width = W; mmVil.height = H;
+  const g = mmVil.getContext('2d'), R = (x0, z0, x1, z1, c) => { g.fillStyle = c; g.fillRect(x0 - X0, z0 - Z0, x1 - x0, z1 - z0); };
+  R(X0, Z0, X0 + W, Z0 + H, '#16241c');
+  for (const p of VPLOTS) R(p.x - 17, p.z - 17, p.x + 17, p.z + 17, '#1e3a26');
+  R(-7, VIL.gate, 7, -318, '#4a5078'); R(-6, -880, 6, VIL.gate, '#4a5078'); for (const lz of VIL.lanes) R(-laneEnd(lz), lz - 4.5, laneEnd(lz), lz + 4.5, '#4a5078');
+  R(VIL.lake.x0, VIL.lake.z0, VIL.lake.x1, VIL.lake.z1, '#2a6a9a'); R(128, -772, 212, -735, '#4a5078');
+  R(-80, -600, -52, -584, '#c8bca8'); R(-48, -540, -16, -526, '#c8bca8'); R(-300, -455, -250, -420, '#8a6a4a'); R(-252, -702, -226, -678, '#8a7a4a'); R(30, -460, 70, -436, '#a8a8b0');
+  g.fillStyle = '#e8ecf6'; g.font = 'bold 14px Arial'; g.textAlign = 'center'; const t = (s2, x, z) => g.fillText(s2, x - X0, z - Z0);
+  t('КПП', 24, VIL.gate + 4); t('ЛЕСОПИЛКА', -275, -462); t('ОЗЕРО', 226, -830); t('ПЛОЩАДЬ', -48, -612); t('ГУСИ', -239, -708);
+}
 let mmTrk = null;
 function drawTrkMap() {
   const X0 = TRK.x0 - 20, Z0 = TRK.z0 - 20, W = TRK.x1 - TRK.x0 + 100, H = TRK.z1 - TRK.z0 + 40;
@@ -6078,6 +6338,7 @@ function drawMinimap() {
   mctx.save(); mctx.translate(W / 2, W / 2); mctx.rotate(rot); mctx.scale(k, k); mctx.translate(-me.pos.x, -me.pos.z);
   mctx.drawImage(mmStatic, -180, -180, 360, 360);
   if (STA.on || me.pos.x > 300) { if (!mmSta) drawStaMap(); mctx.drawImage(mmSta, STA.x0 - 40, STA.z0 - 15, STA.x1 - STA.x0 + 55, STA.z1 - STA.z0 + 30); }
+  if (VIL.on || me.pos.z < -330) { if (!mmVil) drawVilMap(); mctx.drawImage(mmVil, VIL.x0 - 20, -925, VIL.x1 - VIL.x0 + 40, 905 - 318 + 40); }
   if (TRK.on || me.pos.x < -400) { if (!mmTrk) drawTrkMap(); mctx.drawImage(mmTrk, TRK.x0 - 20, TRK.z0 - 20, TRK.x1 - TRK.x0 + 100, TRK.z1 - TRK.z0 + 40); }
   if (AIR.on || (me.pos.z > 380)) { if (!mmAir) drawAirMap(); mctx.drawImage(mmAir, AIR.x0 - 15, AIR.z0 - 15, AIR.x1 - AIR.x0 + 30, AIR.z1 - AIR.z0 + 30); }
   if (state.act === 1 && pc && NAV.pts.length) {
@@ -8318,6 +8579,198 @@ Object.assign(GEN, {
         if (t > c.secs) return failChapter('Не хватило обгонов', `Обгонов ${passed.size} из ${c.need}. Ищи место на выходе из поворотов и на длинной прямой.`);
       },
       hud() { return { timer: `Обгоны ${passed.size}/${c.need} · ${fmt(Math.max(0, c.secs - t))}`, bad: c.secs - t < 20 }; } };
+  },
+});
+// ---------------- missions of the village (episode 16): parking, geese, newspapers, a smooth ride, lights off, evacuation ----------------
+const vV = (p) => new V3(p[0], 0, p[1]);
+function vMarkBox(x, z, h, w, l) {
+  const g = new THREE.Group(); g.position.set(x, 0.05, z); g.rotation.y = h;
+  const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 2.2, 2.4) });
+  for (const [px, pz, sx, sz] of [[-w / 2, 0, 0.18, l], [w / 2, 0, 0.18, l], [0, -l / 2, w, 0.18], [0, l / 2, w, 0.18]]) { const b = new THREE.Mesh(box1, m); b.scale.set(sx, 0.04, sz); b.position.set(px, 0, pz); g.add(b); }
+  const fill = new THREE.Mesh(new THREE.PlaneGeometry(w, l), new THREE.MeshBasicMaterial({ color: 0x4dffa6, transparent: true, opacity: 0.16, depthWrite: false })); fill.rotation.x = -PI / 2; g.add(fill);
+  const ar = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.4, 3), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.6, 1.8) })); ar.rotation.x = PI / 2; ar.position.set(0, 0.02, l / 2 - 1.2); ar.scale.y = 0.15; g.add(ar);
+  g.userData.fill = fill; scene.add(g); TMARKS.push(g); return g;
+}
+function vParked(x, z, h, color) {
+  const m = makeCar(color, 'civ'); m.g.position.set(x, 0, z); m.g.rotation.y = h; scene.add(m.g); TMARKS.push(m.g);
+  const ax = Math.abs(Math.sin(h)) > 0.7; stageCols.push(addBox(x, z, ax ? 4.6 : 2.1, ax ? 2.1 : 4.6, 1.5));
+}
+const GOOSE = {};
+function vGoose(x, z) {
+  if (!GOOSE.body) { GOOSE.body = new THREE.SphereGeometry(0.5, 12, 9); GOOSE.neck = new THREE.CylinderGeometry(0.1, 0.13, 0.6, 8); GOOSE.head = new THREE.SphereGeometry(0.16, 10, 8); GOOSE.beak = new THREE.ConeGeometry(0.07, 0.26, 8); GOOSE.w = std(0xf4f2ea, { roughness: 0.7 }); GOOSE.o = std(0xff8a1a, { roughness: 0.5 }); }
+  const g = new THREE.Group(), b = new THREE.Mesh(GOOSE.body, GOOSE.w); b.scale.set(0.75, 0.62, 1.0); b.position.y = 0.45; g.add(b);
+  const n = new THREE.Mesh(GOOSE.neck, GOOSE.w); n.position.set(0, 0.85, 0.36); n.rotation.x = 0.35; g.add(n);
+  const hd = new THREE.Mesh(GOOSE.head, GOOSE.w); hd.position.set(0, 1.16, 0.46); g.add(hd);
+  const bk = new THREE.Mesh(GOOSE.beak, GOOSE.o); bk.rotation.x = PI / 2; bk.position.set(0, 1.13, 0.64); g.add(bk);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  g.position.set(x, 0, z); scene.add(g); TMARKS.push(g);
+  return { g, pos: new V3(x, 0, z), vel: new V3(), h: rand(-PI, PI), wt: 0, pen: false, honkT: 0 };
+}
+// a searchlight cone (a security car's or a tower's): additive, faded near the camera
+function vCone(range, ang) {
+  const geo = new THREE.ConeGeometry(Math.tan(ang) * range, range, 20, 1, true); geo.translate(0, -range / 2, 0); geo.rotateX(-PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.5, 0.32), transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  nearFade(mat, 2, 9); const m = new THREE.Mesh(geo, mat); m.renderOrder = 3; return m;
+}
+Object.assign(GEN, {
+  // park exactly inside the marked box, nose the right way, and stop
+  parking(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const S = c.spots.map((o) => Object.assign({}, o, { v: vV(o.p), hh: hdg(o.h) }));
+    let i = 0, left = c.secs, hold = 0, box = null;
+    const show = () => {
+      if (box) { scene.remove(box); TMARKS.splice(TMARKS.indexOf(box), 1); }
+      const q = S[i]; box = vMarkBox(q.v.x, q.v.z, q.hh, q.w || 3.6, q.l || 6.8); setBeam(q.v);
+      for (const [x, z, h] of q.cars || []) vParked(x, z, hdg(h), pick([0x8a2a2a, 0x2a4a8a, 0x3a3a40, 0xd8d8d0, 0x2a6a4a]));
+      setObjective(`Парковка ${i + 1} из ${S.length}: ${q.name}. Встань ровно в рамку${q.rev ? ' задним ходом' : ''} и остановись.`);
+    };
+    show();
+    return { title, noFire: true, noFireMsg: 'Тут не стреляют', chase: { max: 0 }, get navName() { return S[i] ? S[i].name : ''; }, navGoal: () => (S[i] ? S[i].v : pc.pos),
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Не успел', 'Время вышло. Подъезжай медленно, выравнивай машину заранее, а в рамке — тормози.');
+        const q = S[i], f = new V3(Math.sin(q.hh), 0, Math.cos(q.hh)), r = new V3(Math.cos(q.hh), 0, -Math.sin(q.hh)), d = pc.pos.clone().sub(q.v);
+        const along = d.dot(f), side = d.dot(r), w = q.w || 3.6, l = q.l || 6.8;
+        let err = Math.abs(wrapA(pc.h - q.hh)); if (q.any) err = Math.min(err, PI - err); else if (q.rev) err = Math.abs(wrapA(pc.h - q.hh - PI));
+        const inside = Math.abs(along) < l / 2 - 1.7 && Math.abs(side) < w / 2 - 0.85, straight = err < 0.28;
+        box.userData.fill.material.color.set(inside && straight ? 0x4dffa6 : inside ? 0xffd23a : 0x4dffa6); box.userData.fill.material.opacity = inside ? 0.38 : 0.16;
+        if (inside && straight && Math.abs(pc.vf || 0) < 0.7) { hold += dt; if (hold > 1.0) { hold = 0; sfx.bell(); toast(`${q.name} — идеально`, 1.4); i++; if (i >= S.length) return done(); left += c.bonus || 0; show(); } }
+        else hold = 0;
+      },
+      hud() { return { timer: `${fmt(left)} · место ${Math.min(i + 1, S.length)}/${S.length}${hold > 0 ? ' · держи…' : ''}`, bad: left < 12 }; } };
+  },
+  // geese ran out onto the street: drive them back into their pen — they run away from the car
+  herd(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P = c.pen, gate = vV(c.gate), geese = [];
+    for (let k = 0; k < c.n; k++) geese.push(vGoose(c.at[0] + rand(-c.r, c.r), c.at[1] + rand(-c.r, c.r)));
+    let left = c.secs; const mk = tMark(gate.x, gate.z, 0x4dffa6, 6);
+    setObjective(`Загони гусей в загон: хотя бы ${c.need || c.n} из ${c.n}. Они убегают от машины — заходи сзади и подталкивай к открытой калитке.`);
+    const inPen = (p, m) => p.x > P[0] + m && p.x < P[1] - m && p.z > P[2] + m && p.z < P[3] - m;
+    const stray = () => { let b = null, bd = 1e9; for (const g of geese) if (!g.pen) { const d = g.pos.distanceTo(pc.pos); if (d < bd) { bd = d; b = g; } } return b; };
+    return { title, geese, gate, noFire: true, noFireMsg: 'Это гуси, а не бандиты', chase: { max: 0 }, navName: 'Гуси', navGoal: () => { const g = stray(); return g ? g.pos : gate; },
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Гуси разбежались', 'Время вышло. Подъезжай медленно и сзади: гуси бегут прочь от машины — направляй их к калитке.');
+        const sp = Math.hypot(pc.vel.x, pc.vel.z);
+        for (const g of geese) {
+          const dx = g.pos.x - pc.pos.x, dz = g.pos.z - pc.pos.z, d = Math.hypot(dx, dz) || 1;
+          let tx = 0, tz = 0, spd = 0.8;
+          if (g.pen) { g.wt -= dt; if (g.wt <= 0) { g.wt = rand(1, 3); g.h = rand(-PI, PI); } tx = Math.sin(g.h); tz = Math.cos(g.h); spd = 0.5; }
+          else if (d < 12) { tx = dx / d; tz = dz / d; spd = Math.min(5.5, 2.2 + 4 * (1 - d / 12) + sp * 0.1); if (g.honkT <= 0 && d < 7) { g.honkT = rand(1.5, 3); sfx.key(); }
+            // near their own gate the geese remember the way home and slip in
+            const hg = Math.hypot(g.pos.x - gate.x, g.pos.z - gate.z); if (hg < 24) { const ix = gate.x - g.pos.x, iz = (hg < 5 ? (P[2] + P[3]) / 2 : gate.z) - g.pos.z, il = Math.hypot(ix, iz) || 1, w = 2.4 * (1 - hg / 24) + 0.5; tx += ix / il * w; tz += iz / il * w; } }
+          else { g.wt -= dt; if (g.wt <= 0) { g.wt = rand(1, 3); g.h += rand(-1.2, 1.2); } tx = Math.sin(g.h) * 0.4; tz = Math.cos(g.h) * 0.4; spd = 0.45; }
+          // a loose flock: a little pull towards the others
+          if (!g.pen) { let cx = 0, cz = 0, n = 0; for (const o of geese) if (o !== g && !o.pen && o.pos.distanceTo(g.pos) < 9) { cx += o.pos.x; cz += o.pos.z; n++; } if (n) { tx += (cx / n - g.pos.x) * 0.09; tz += (cz / n - g.pos.z) * 0.09; } }
+          const l = Math.hypot(tx, tz) || 1; g.vel.x += (tx / l * spd - g.vel.x) * Math.min(1, dt * 4); g.vel.z += (tz / l * spd - g.vel.z) * Math.min(1, dt * 4);
+          if (d < 2.2 && sp > 3) { g.vel.x += pc.vel.x * 0.6; g.vel.z += pc.vel.z * 0.6; for (let q = 0; q < 6; q++) spawnP(g.pos.clone().add(new V3(0, 0.8, 0)), { color: 0xf4f2ea, size: 0.18, vel: new V3(rand(-3, 3), rand(2, 5), rand(-3, 3)), life: 1, opacity: 0.9 }); }
+          g.pos.addScaledVector(g.vel, dt); collideCircle(g.pos, g.vel, 0.5); g.honkT -= dt;
+          if (!g.pen && inPen(g.pos, 1.2)) { g.pen = true; sfx.bell(); toast(`В загоне: ${geese.filter((o) => o.pen).length}/${c.n}`, 1); }
+          if (g.pen) { g.pos.x = clamp(g.pos.x, P[0] + 1.2, P[1] - 1.2); g.pos.z = clamp(g.pos.z, P[2] + 1.2, P[3] - 1.2); }
+          const vl = Math.hypot(g.vel.x, g.vel.z); if (vl > 0.2) g.g.rotation.y = Math.atan2(g.vel.x, g.vel.z);
+          g.g.position.set(g.pos.x, Math.abs(Math.sin(state.t * 9 + g.h)) * Math.min(0.12, vl * 0.03), g.pos.z);
+        }
+        const inside = geese.filter((g) => g.pen).length;
+        if (inside >= (c.need || c.n)) { if (inside < c.n) toast('Последний гусь зашёл сам — за компанию', 1.6); scene.remove(mk); return done(); }
+      },
+      hud() { return { timer: `${fmt(left)} · в загоне ${geese.filter((g) => g.pen).length}/${c.need || c.n}`, bad: left < 20 }; } };
+  },
+  // newspapers: the passenger throws them into mailboxes as the taxi rolls past — not too fast
+  paperboy(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const boxes = VMAIL.filter((m) => c.lanes.includes(VPLOTS[m.plot].lane)).filter((m, k) => k % (c.every || 2) === 0).slice(0, c.n);
+    const got = boxes.map(() => false), marks = boxes.map((m) => tMark(m.x, m.z, 0xffd23a, 5)); let left = c.secs, warn = 0;
+    setObjective(`Газеты: ${boxes.length} ящиков. Проезжай рядом не быстрее ${c.maxKmh} км/ч — газету бросят на ходу.`);
+    const next = () => { let b = -1, bd = 1e9; boxes.forEach((m, k) => { if (!got[k]) { const d = Math.hypot(m.x - pc.pos.x, m.z - pc.pos.z); if (d < bd) { bd = d; b = k; } } }); return b; };
+    return { title, noFire: true, noFireMsg: 'Тут не стреляют', chase: { max: 0 }, navName: 'Почтовый ящик', navGoal: () => { const k = next(); return k >= 0 ? vV([boxes[k].x, boxes[k].z]) : pc.pos; },
+      update(dt) {
+        left -= dt; warn -= dt; if (left <= 0) return failChapter('Утро наступило', `Газеты не доехали до ${got.filter((g) => !g).length} домов. Держи скорость ниже ${c.maxKmh} и не пропускай ящики.`);
+        boxes.forEach((m, k) => {
+          if (got[k] || Math.hypot(m.x - pc.pos.x, m.z - pc.pos.z) > 7.5) return;
+          if (kmh() > c.maxKmh) { if (warn <= 0) { warn = 1.2; toast('Быстро! Газета улетела в кусты', 1); } return; }
+          got[k] = true; scene.remove(marks[k]); sfx.bell();
+          for (let q = 0; q < 8; q++) spawnP(new V3(m.x, 1.4, m.z), { color: 0xf2eee0, size: 0.22, vel: new V3(rand(-2, 2), rand(1, 4), rand(-2, 2)), life: 0.8, opacity: 0.95 });
+          if (got.every(Boolean)) done(); else toast(`Газета ${got.filter(Boolean).length}/${boxes.length}`, 0.8);
+        });
+      },
+      hud() { const v = Math.round(kmh()); return { bars: [{ label: `Скорость ${v} км/ч (не больше ${c.maxKmh})`, frac: clamp(v / (c.maxKmh * 1.6), 0, 1), color: v > c.maxKmh ? '#ff4d6d' : '#4dffa6' }], timer: `${fmt(left)} · газет ${got.filter(Boolean).length}/${boxes.length}`, bad: left < 20 }; } };
+  },
+  // a smooth ride: no hard braking, no sharp turns, no bumps and not too fast — the passenger's comfort runs down otherwise
+  comfort(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.pts.map((q) => Object.assign({}, q, { v: vV(q.p) }));
+    let leg = 0, comfort = 100, lastV = 0, lastH = pc.h, ouch = 0, hold = 0;
+    const start = () => { setBeam(P_[leg].v); setObjective(`Довези плавно: ${P_[leg].name}. Не быстрее ${c.limit} км/ч, без рывков и резких поворотов.`); };
+    start();
+    return { title, noFire: true, noFireMsg: 'С пассажиркой не стреляют', chase: { max: 0 }, get navName() { return P_[leg].name; }, navGoal: () => P_[leg].v,
+      update(dt) {
+        const v = pc.vf || 0, acc = (v - lastV) / Math.max(dt, 1e-3), yaw = wrapA(pc.h - lastH) / Math.max(dt, 1e-3), lat = Math.abs(yaw * v);
+        lastV = v; lastH = pc.h; ouch -= dt;
+        let pen = Math.max(0, Math.abs(acc) - 22) * 0.12 + Math.max(0, lat - 10) * 0.8 + Math.max(0, kmh() - c.limit) * 0.3;
+        if (pc.hp < (this.hp0 === undefined ? (this.hp0 = pc.hp) : this.hp0)) { pen += (this.hp0 - pc.hp) * 12; this.hp0 = pc.hp; }
+        if (pen > 6 && ouch <= 0) { ouch = 1.6; toast(pick(c.ouch || ['Ой! Потише!', 'Аккуратнее, прошу…', 'Мне нехорошо…']), 1.2); }
+        this.dbg = [Math.round(acc), Math.round(lat), Math.round(kmh())]; comfort = Math.max(0, comfort - pen * dt * (c.k || 1));
+        if (comfort <= 0) return failChapter(c.failTitle || 'Пассажирке плохо', c.failText || 'Слишком резко. Разгоняйся и тормози плавно, повороты — на малой скорости.');
+        if (pc.pos.distanceTo(P_[leg].v) < 10 && kmh() < 12) { hold += dt; if (hold > 0.6) { hold = 0; const q = P_[leg]; leg++; if (leg >= P_.length) return done(); if (q.say) playDialog(q.say.map(fixLine), () => { state.mode = 'drive'; start(); }); else { toast(`${q.name} — приехали`, 1.2); start(); } } }
+        else hold = 0;
+      },
+      hud() { return { bars: [{ label: `Комфорт пассажирки: ${Math.round(comfort)}%`, frac: comfort / 100, color: comfort < 35 ? '#ff4d6d' : '#7ad6ff' }], timer: `Не быстрее ${c.limit} км/ч`, bad: kmh() > c.limit }; } };
+  },
+  // lights off: slip past the security patrols and searchlights to the goal without being seen
+  sneak(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2])); state.lightsOff = true;
+    const goal = vV(c.goal), mk = tMark(goal.x, goal.z, 0x7ad6ff, 8); let seen = 0, warn = 0;
+    const eyes = [];
+    for (const r of c.patrols || []) { const e = makeScripted('tail', r.route, r.at[0], r.at[1], hdg(r.at[2]), { speed: r.speed || 8, loop: true }); const cone = vCone(r.range || 24, 0.42); cone.position.set(0, 1.4, 2.2); e.g.add(cone); eyes.push({ car: e, range: r.range || 24, ang: 0.42 }); }
+    for (const t of c.towers || []) {
+      const g = new THREE.Group(); g.position.set(t[0], 0, t[1]); scene.add(g); TMARKS.push(g);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 9, 8), std(0x3a3c44)); pole.position.y = 4.5; g.add(pole);
+      const head = new THREE.Group(); head.position.y = 9; g.add(head); const lampM = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.8, 10), basic(new THREE.Color(5, 4.6, 3.6))); lampM.rotation.x = PI / 2; head.add(lampM);
+      const cone = vCone(t[3] || 30, 0.32); cone.rotation.x = 0.32; head.add(cone);
+      eyes.push({ tower: head, x: t[0], z: t[1], speed: t[2], range: t[3] || 30, ang: 0.32 });
+    }
+    setObjective(`Фары выключены. Проберись к цели: ${c.name}. Не попадай в лучи охраны и не гони рядом с ними.`);
+    return { title, noFire: true, noFireMsg: 'Тихо! Никакой стрельбы', chase: { max: 0 }, navName: c.name, navGoal: () => goal,
+      update(dt) {
+        warn -= dt; let see = 0;
+        for (const e of eyes) {
+          let ex, ez, h;
+          if (e.car) { ex = e.car.pos.x; ez = e.car.pos.z; h = e.car.h; if (e.car.pos.distanceTo(pc.pos) < 4.6) see = 9; }
+          else { e.tower.rotation.y += dt * e.speed; ex = e.x; ez = e.z; h = e.tower.rotation.y; }
+          const dx = pc.pos.x - ex, dz = pc.pos.z - ez, d = Math.hypot(dx, dz);
+          if (d < e.range && Math.abs(wrapA(Math.atan2(dx, dz) - h)) < e.ang + 0.1 && los(new V3(ex, 0, ez), pc.pos)) see = Math.max(see, 1.6 - d / e.range);
+          if (d < 26 && kmh() > (c.quiet || 40)) see = Math.max(see, 0.35);
+        }
+        if (see > 0) { seen += see * 34 * dt; if (warn <= 0) { warn = 1.4; toast(see >= 0.5 ? 'Тебя видят! Уходи из луча' : 'Тише! Мотор слышно', 1); } } else seen = Math.max(0, seen - 12 * dt);
+        if (seen >= 100) { state.lightsOff = false; return failChapter(c.failTitle || 'Заметили', c.failText || 'Охрана увидела такси. Объезжай лучи по краю, жди, пока прожектор отвернётся, и не газуй рядом с постами.'); }
+        if (pc.pos.distanceTo(goal) < 9) { state.lightsOff = false; scene.remove(mk); return done(); }
+      },
+      hud() { return { bars: [{ label: 'Заметность', frac: seen / 100, color: seen > 60 ? '#ff4d6d' : '#ffd23a' }], timer: seen > 0 ? 'Тебя замечают…' : 'Тихо…', bad: seen > 50 }; } };
+  },
+  // evacuation: the taxi takes three people at a time from the houses to the safe point
+  shuttle(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const H = c.houses.map((q) => ({ v: vV(q.p), name: q.name, n: q.n, mk: tMark(q.p[0], q.p[1], 0xff8a3a, 9) })), base = vV(c.base), bmk = tMark(base.x, base.z, 0x4dffa6, 12);
+    const total = H.reduce((a, q) => a + q.n, 0), cap = c.cap || 3; let aboard = 0, saved = 0, left = c.secs, hold = 0;
+    const fire = c.fire ? vV(c.fire) : null;
+    setObjective(`Эвакуация: ${total} человек из ${H.length} домов. В такси влезает ${cap}. Пункт сбора — ${c.baseName}.`);
+    const target = () => {
+      if (aboard >= cap || (aboard > 0 && !H.some((q) => q.n > 0))) return { v: base, name: c.baseName };
+      let b = null, bd = 1e9; for (const q of H) if (q.n > 0) { const d = q.v.distanceTo(pc.pos); if (d < bd) { bd = d; b = q; } }
+      return b ? { v: b.v, name: b.name } : { v: base, name: c.baseName };
+    };
+    return { title, noFire: true, noFireMsg: 'Тут не стреляют', chase: { max: 0 }, get navName() { return target().name; }, navGoal: () => target().v,
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Не успели', `Время вышло: ждут ещё ${total - saved - aboard}. Бери по ${cap} и не теряй ни секунды.`);
+        if (fire) for (let k = 0; k < 2; k++) { if (Math.random() < dt * 40) spawnP(fire.clone().add(new V3(rand(-22, 22), rand(1, 7), rand(-14, 14))), { color: pick([0xff6a1a, 0xffa030, 0xffd060]), size: rand(0.8, 1.6), vel: new V3(rand(-1, 1), rand(4, 8), rand(-1, 1)), life: 0.9, add: true }); if (Math.random() < dt * 14) spawnP(fire.clone().add(new V3(rand(-20, 20), 9, rand(-12, 12))), { color: 0x2a2a30, size: 2.2, vel: new V3(rand(-1, 1), 5, rand(-1, 1)), life: 3, grow: 3, opacity: 0.55 }); }
+        const slow = kmh() < 8;
+        let at = null; for (const q of H) if (q.n > 0 && aboard < cap && q.v.distanceTo(pc.pos) < 11) at = q;
+        const atBase = aboard > 0 && base.distanceTo(pc.pos) < 11;
+        if ((at || atBase) && slow) { hold += dt; if (hold > 0.8) { hold = 0;
+          if (atBase) { saved += aboard; toast(`Высадили ${aboard} · спасено ${saved}/${total}`, 1.4); sfx.bell(); aboard = 0; if (saved >= total) { scene.remove(bmk); return done(); } }
+          else { const n = Math.min(cap - aboard, at.n); at.n -= n; aboard += n; toast(`Сели ${n} · в машине ${aboard}/${cap}`, 1.2); sfx.key(); if (at.n <= 0) scene.remove(at.mk); }
+        } } else hold = 0;
+      },
+      hud() { return { timer: `${fmt(left)} · в машине ${aboard}/${cap} · спасено ${saved}/${total}${hold > 0 ? ' · сажаем…' : ''}`, bad: left < 25 }; } };
   },
 });
 function GEN_many(c, title, done, smash) {
