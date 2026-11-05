@@ -51,7 +51,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 #minimap { width: 150px; height: 150px; border-radius: 50%; border: 2px solid var(--line); background: var(--ink); box-shadow: 0 0 24px rgba(0,0,0,.6); }
 .stats { background: var(--panel); padding: 5px 10px; border-radius: 6px; font-size: 13px; }
 .stats b { color: var(--taxi); font-weight: 700; }
-.mute { pointer-events: auto; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: 12px var(--font-body); cursor: pointer; }
+.snd-chip { padding: 3px 9px; line-height: 0; } .snd-chip svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } .snd-chip .x { display: none; } .snd-chip.off { color: #ff8a8a; border-color: rgba(255,138,138,.6); } .snd-chip.off .x { display: inline; } .snd-chip.off .w { display: none; }
 .speedo { position: absolute; right: calc(18px + var(--sar)); bottom: calc(18px + var(--sab)); text-align: right; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
 .speedo b { font-family: var(--font-display); font-weight: 400; font-size: 54px; line-height: 1; color: var(--text); }
 .speedo small { display: block; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; font-size: 11px; }
@@ -137,7 +137,7 @@ body.voice-on .tbtn.talk { display: grid; }
 .tbtn.shield { right: calc(98px + var(--sar)); bottom: calc(214px + var(--sab)); width: 62px; height: 62px; background: rgba(120,140,255,.35); font-size: 11px; }
 .boosts { font-size: 12px; opacity: .9; } .stats.god { background: #b8233a; color: #fff; font-weight: 700; }
 .touch-on .boosts { display: none; }
-.hud-btns { display: flex; gap: 6px; pointer-events: auto; } .hud-chip { font-size: 11px; padding: 5px 10px; background: rgba(11,13,31,.7); }
+.hud-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; pointer-events: auto; max-width: calc(100vw - 24px); } .hud-chip { font-size: 11px; padding: 5px 10px; background: rgba(11,13,31,.7); }
 .prof-chip { align-self: flex-start; margin-bottom: 6px; } .prof-chip b { color: var(--taxi); }
 .gate { position: fixed; inset: 0; z-index: 50; display: grid; padding: calc(12px + var(--sat)) calc(12px + var(--sar)) calc(12px + var(--sab)) calc(12px + var(--sal)); background: radial-gradient(ellipse at 50% 30%, rgba(30,24,70,.55), rgba(5,6,16,.9)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .gate-card { margin: auto; box-sizing: border-box; width: min(480px, 100%); max-height: 100%; overflow: auto; background: rgba(18,20,44,.92); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.5), 0 0 40px rgba(255,196,61,.12); }
@@ -185,6 +185,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   .joy { width: 116px; height: 116px; bottom: calc(16px + var(--sab)); }
 }
 @media (orientation: landscape) and (max-height: 480px) { .touch-on .speedo { right: 50%; transform: translateX(50%); bottom: calc(8px + var(--sab)); text-align: center; } .touch-on .speedo b { font-size: 34px; } }
+@media (orientation: landscape) and (max-height: 480px) { .hud .hud-btns { gap: 4px; } .hud .hud-btns .hud-chip { padding: 5px 7px; } .hud .hud-btns .snd-chip { padding: 3px 6px; } }
 .touch-on .hint { display: none; }
 
 /* Screens */
@@ -322,8 +323,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
     <div class="stats"><b id="coins">0</b> монет · <b id="kills">0</b> сбито</div>
     <div id="boosts" class="stats boosts"></div>
     <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
-    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnJob" class="chip hud-chip" type="button" hidden>Отказаться от заказа</button><button id="btnTask" class="chip hud-chip" type="button" hidden>Задания</button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
-    <button id="mute" class="mute" type="button">Звук: вкл</button>
+    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnJob" class="chip hud-chip" type="button" hidden>Отказаться от заказа</button><button id="btnTask" class="chip hud-chip" type="button" hidden>Задания</button><button id="mute" class="chip hud-chip snd-chip" type="button" aria-label="Звук" title="Звук"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="w" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="x" d="m16 9 6 6M22 9l-6 6"/></svg></button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
   </div>
   <div id="bars" class="bars" hidden></div>
   <div id="nav" class="nav" hidden><svg id="navArrow" viewBox="-50 -50 100 100" aria-hidden="true"><path d="M0 -42 L32 0 L13 0 L13 40 L-13 40 L-13 0 L-32 0 Z" fill="#4dffa6" stroke="#0b0d1f" stroke-width="5" stroke-linejoin="round"/></svg><div><b id="navTurn">Прямо</b><span id="navDist"></span></div></div>
@@ -422,7 +422,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v30'; window.__errs = [];
+window.APP_VER = 'v31'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -2960,7 +2960,13 @@ function setEngine(speed, on) {
   audio.eg.gain.setTargetAtTime(on && !muted ? 0.05 : 0, t, 0.1);
   audio.osc.frequency.setTargetAtTime(38 + Math.abs(speed) * 2.6, t, 0.08);
 }
-$('mute').addEventListener('click', () => { muted = !muted; $('mute').textContent = muted ? 'Звук: выкл' : 'Звук: вкл'; });
+// the sound chip sits in the row of HUD buttons (it used to hang under «Задания»/«Пауза», where a slightly low tap switched the sound off)
+function setMuted(v) {
+  muted = v; const b = $('mute'); b.classList.toggle('off', muted); b.setAttribute('aria-label', muted ? 'Звук выключен' : 'Звук'); b.title = muted ? 'Звук выключен — нажми, чтобы включить' : 'Выключить звук';
+  if (!muted) { initAudio(); wakeAudio(); }
+  if (typeof toast === 'function') toast(muted ? 'Звук выключен' : 'Звук включён', 1.2);
+}
+$('mute').addEventListener('click', () => setMuted(!muted));
 
 // ---------------- input ----------------
 const keys = {};
@@ -7062,7 +7068,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, sfx, audioSwap, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
