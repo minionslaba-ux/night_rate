@@ -153,7 +153,7 @@ body.online:not(.task) .hud-tl > .bar, body.online .care-txt:not(.bad), body.onl
 body.online #objective { pointer-events: auto; cursor: pointer; } body.online .hud-tl { max-width: min(40vw, 320px); } .obj.min { padding-top: 7px; padding-bottom: 7px; } .obj.min > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; opacity: .85; }
 .onl-stat { color: #4dffa6; font-weight: 600; }
 .pitem.wpn .wimg { height: 92px; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(255,255,255,.08), transparent 70%); border-radius: 8px; } .pitem.wpn img { max-width: 100%; max-height: 92px; object-fit: contain; }
-.pitem.wpn.locked { opacity: .55; } .wperk { color: var(--taxi); } .wlock { color: var(--muted); } .wpn-stat { font-size: 11.5px; }
+.pitem.wpn.locked { opacity: .55; } .pitem.car .cimg { height: 110px; display: grid; place-items: center; border-radius: 8px; background: radial-gradient(ellipse at center, rgba(255,255,255,.07), transparent 70%); } .pitem.car .cimg img { max-width: 100%; max-height: 110px; object-fit: contain; } .wperk { color: var(--taxi); } .wlock { color: var(--muted); } .wpn-stat { font-size: 11.5px; }
 .care-txt { font-size: 11px; color: var(--muted); background: var(--panel); padding: 4px 10px; border-radius: 6px; } .care-txt.bad { color: #ffb08a; } .hud-chip.tow { color: #ffb08a; border-color: rgba(255,154,61,.6); } .ptitle { display: flex; justify-content: space-between; align-items: center; } .pbody { overflow-y: auto; display: grid; gap: 8px; align-content: start; font-size: 14px; }
 .prow2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; } .plist { display: grid; gap: 6px; }
 .tbtn.talk { display: none; --c: #7aff9a; right: calc(266px + var(--sar)); bottom: calc(40px + var(--sab)); width: 72px; height: 72px; }
@@ -2539,31 +2539,42 @@ function addPoliceLights(g, bar) {
     const gl = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), gm); gl.rotation.x = -PI / 2; gl.position.set(sx * 1.4, 0.07, B.z); g.add(gl);
   }
 }
-// the patrol car model (assets/models/police.glb): loaded after the people, used whenever it is ready
-const POLM = { scene: null, bar: null, s: 1 };
-function polLoad() {
+// car models from the garage pack (assets/models/cars/<key>.glb, the patrol car: assets/models/police.glb):
+// loaded when needed (the player's car, the police), used whenever ready; until then the old kit car stands in.
+// The body texture is grey where the paint goes, so the garage paint is the body material's color.
+const GLBC = {}, GLBC_LEN = { van: 5.0 };
+const POLM = { get scene() { return GLBC.police && GLBC.police.scene; }, get bar() { return GLBC.police && GLBC.police.bar; } };
+function glbCarLoad(key, then) {
+  const G = GLBC[key]; if (G) { if (G.scene && then) then(); else if (then && G.wait) G.wait.push(then); return; }
   if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') return;
+  GLBC[key] = { wait: then ? [then] : [] };
   const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-  loader.load('assets/models/police.glb', (gl) => {
+  loader.load(key === 'police' ? 'assets/models/police.glb' : 'assets/models/cars/' + key + '.glb', (gl) => {
     const sc = gl.scene; sc.updateMatrixWorld(true);
-    const b = new THREE.Box3().setFromObject(sc), sz = b.getSize(new V3()); POLM.s = 4.6 / Math.max(sz.z, 0.1);
-    // the light bar: the highest part of the roof
+    const b = new THREE.Box3().setFromObject(sc), sz = b.getSize(new V3()), s = (GLBC_LEN[key] || 4.6) / Math.max(sz.z, 0.1);
+    // the roof: its highest part (the light bar of the patrol car)
     let top = -1e9; const v = new V3(), pts = [];
     sc.traverse((m) => { if (!m.isMesh || /wheel|window/i.test(m.name)) return; const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld); if (v.y > top) top = v.y; pts.push(v.x, v.y, v.z); } });
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
     for (let i = 0; i < pts.length; i += 3) if (pts[i + 1] > top - 0.06) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); z0 = Math.min(z0, pts[i + 2]); z1 = Math.max(z1, pts[i + 2]); }
-    const s = POLM.s, cz = (b.min.z + b.max.z) / 2;
-    POLM.bar = { y: (top - b.min.y) * s + 0.03, z: ((z0 + z1) / 2 - cz) * s, w: Math.max(0.6, (x1 - x0) * s), d: Math.max(0.18, (z1 - z0) * s) };
-    sc.traverse((m) => { if (m.isMesh) { m.castShadow = true; if (/glass|window/i.test(m.material.name)) { m.material = m.material.clone(); m.material.metalness = 0.4; m.material.roughness = 0.08; } } });
-    POLM.box = b; POLM.scene = sc;
-  }, undefined, () => {});
+    const cz = (b.min.z + b.max.z) / 2;
+    sc.traverse((m) => { if (!m.isMesh) return; m.castShadow = true; for (const mt of [].concat(m.material)) if (/glass|window/i.test(mt.name)) { mt.metalness = 0.4; mt.roughness = 0.08; } });
+    const wait = GLBC[key].wait;
+    GLBC[key] = { scene: sc, box: b, s, len: sz.z * s, H: (top - b.min.y) * s, bar: { y: (top - b.min.y) * s + 0.03, z: ((z0 + z1) / 2 - cz) * s, w: Math.max(0.6, (x1 - x0) * s), d: Math.max(0.18, (z1 - z0) * s) } };
+    for (const f of wait) f();
+  }, undefined, () => { GLBC[key] = { failed: true }; });
 }
-function polModel() {
-  const inner = POLM.scene.clone(true), b = POLM.box, wrap = new THREE.Group(); wrap.add(inner);
-  inner.scale.setScalar(POLM.s); inner.position.set(-(b.min.x + b.max.x) / 2 * POLM.s, -b.min.y * POLM.s, -(b.min.z + b.max.z) / 2 * POLM.s);
+const polLoad = () => glbCarLoad('police');
+// a copy of a loaded model: length along +z, wheels on the ground, the body painted (paint: THREE.Color or null)
+function glbCarModel(key, paint) {
+  const G = GLBC[key], inner = G.scene.clone(true), b = G.box, wrap = new THREE.Group(); wrap.add(inner);
+  inner.scale.setScalar(G.s); inner.position.set(-(b.min.x + b.max.x) / 2 * G.s, -b.min.y * G.s, -(b.min.z + b.max.z) / 2 * G.s);
   const wheels = []; inner.traverse((o) => { if (/wheel_(fl|fr|rl|rr)$/i.test(o.name)) wheels.push(o); });
-  return { m: wrap, wheels };
+  if (paint) inner.traverse((o) => { if (!o.isMesh) return; const ms = [].concat(o.material).map((mt) => { if (!/body_pbr/.test(mt.name)) return mt; const c = mt.clone(); c.color.copy(paint); return c; }); o.material = ms.length > 1 ? ms : ms[0]; });
+  return { m: wrap, wheels, G };
 }
+// garage paint as a color for the models: the kit paints are brighter than 1, scaled back into range
+function paintColor(id) { const P_ = PAINTS[id] || PAINTS.yellow, k = Math.max(1, Math.max(...P_.c) / 1.25); return new THREE.Color(P_.c[0] / k, P_.c[1] / k, P_.c[2] / k); }
 // light pattern: a double flash red, then a double flash blue
 function updatePoliceLights(dt) {
   dt = dt || 1 / 60;
@@ -3372,12 +3383,15 @@ function makeCar(color, kind, forceModel) {
   const name = forceModel || (player ? PLAYER_CAR.model : wreck ? 'car_sedan' : pol ? 'car_police' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon', 'nine']));
   // the realistic sports car for the taxi, the gangs, traffic and wrecks; the police, vans and garage cars keep their own
   // detailed model: the player's taxi always; the gang cars on computers (on phones they would cost too much speed); traffic and wrecks stay light
-  const real = NR.ready && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' : kind === false && !isTouch && perf.level === 0);
-  const polReal = pol && !!POLM.scene && !forceModel;
-  const m0 = real || polReal || name === 'nine' ? null : ASSETS.kit[name].clone(true);
+  const real = NR.ready && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' && !(PLAYER_CAR.glb && GLBC[PLAYER_CAR.glb] && GLBC[PLAYER_CAR.glb].scene) : kind === false && !isTouch && perf.level === 0);
+  const gkey = forceModel && forceModel.indexOf('glb:') === 0 ? forceModel.slice(4) : player ? PLAYER_CAR.glb : pol && !forceModel ? 'police' : null;
+  const gm = gkey && GLBC[gkey] && GLBC[gkey].scene ? glbCarModel(gkey, player ? PLAYER_CAR.paintC : forceModel ? new THREE.Color(color) : null) : null;
+  if (gkey && !gm) glbCarLoad(gkey);
+  const polReal = !!gm;
+  const m0 = real || gm || name === 'nine' ? null : ASSETS.kit[name === undefined || forceModel && forceModel.indexOf('glb:') === 0 ? 'car_sedan' : name].clone(true);
   const mat = wreck ? KIT.carWreck : player ? (PLAYER_CAR.mat || KIT.taxi) : pol ? KIT.car : civ ? civMat(color) : KIT.carDark;
   let wheels = [], m, rc = null;
-  if (polReal) { const pm = polModel(); m = pm.m; wheels = pm.wheels; g.add(m); }
+  if (gm) { m = gm.m; wheels = gm.wheels; g.add(m); g.userData.glb = gm.G; }
   else if (real) { rc = nrCar({ wreck, color: player ? 0xffb703 : civ ? color : pick([0x1a1a20, 0x2a1418, 0x14161e]) }); m = rc.inner; wheels = rc.wheels; g.add(m); g.userData.real = rc; }
   else {
     m = name === 'nine' ? buildNine(mat) : m0;
@@ -3387,7 +3401,7 @@ function makeCar(color, kind, forceModel) {
   const box = (mt, x, y, z, sx, sy, sz) => { const b = new THREE.Mesh(box1, mt); b.position.set(x, y, z); b.scale.set(sx, sy, sz); g.add(b); return b; };
   if (!wreck) {
     const head = basic(new THREE.Color(5, 4.6, 3.8)), tail = basic(new THREE.Color(5, 0.25, 0.3));
-    if (polReal) { box(head, -0.62, 0.66, 2.29, 0.3, 0.1, 0.03); box(head, 0.62, 0.66, 2.29, 0.3, 0.1, 0.03); box(tail, -0.66, 0.78, -2.29, 0.28, 0.1, 0.03); box(tail, 0.66, 0.78, -2.29, 0.28, 0.1, 0.03); }
+    if (gm) { const hl = gm.G.len / 2 - 0.01, hy = gkey === 'van' ? 0.8 : 0.66; box(head, -0.62, hy, hl, 0.3, 0.1, 0.03); box(head, 0.62, hy, hl, 0.3, 0.1, 0.03); box(tail, -0.66, hy + 0.12, -hl, 0.28, 0.1, 0.03); box(tail, 0.66, hy + 0.12, -hl, 0.28, 0.1, 0.03); }
     else if (!rc) { box(head, -0.6, 0.62, 2.23, 0.36, 0.14, 0.04); box(head, 0.6, 0.62, 2.23, 0.36, 0.14, 0.04); box(tail, -0.7, 0.7, -2.23, 0.32, 0.12, 0.04); box(tail, 0.7, 0.7, -2.23, 0.32, 0.12, 0.04); }
     // headlight beams in the rain and a warm pool of light on the road ahead
     if (!HEADBEAM.mat) {
@@ -3403,8 +3417,11 @@ function makeCar(color, kind, forceModel) {
     const hp = new THREE.Mesh(HEADBEAM.pool, HEADBEAM.poolMat); hp.position.set(0, 0.05, 7.5); g.add(hp); g.userData.beams.push(hp);
   }
   if (player) {
-    if (PLAYER_CAR.model === 'car_taxi') box(basic(new THREE.Color(3, 2.4, 0.7)), 0, rc ? rc.H + 0.09 : 1.98, rc ? rc.Z : -0.15, rc ? 0.7 : 0.5, rc ? 0.17 : 0.12, rc ? 0.22 : 0.3);
-    if (PLAYER_CAR.scale && !rc) m.scale.multiply(new V3(...PLAYER_CAR.scale));
+    if (gm && PLAYER_CAR.armor) { const L = gm.G.len, Hh = gm.G.H, pl = std(0x1e2024, { metalness: 0.9, roughness: 0.35 });
+      for (const sd of [-1, 1]) for (let i = 0; i < 3; i++) box(pl, sd * 1.2, Hh * 0.32, -L * 0.28 + i * L * 0.2, 0.05, Hh * 0.2, L * 0.18);
+      box(pl, 0, Hh * 0.2, L / 2 + 0.04, 2.0, Hh * 0.1, 0.1); }
+    if (PLAYER_CAR.model === 'car_taxi' && !gm) box(basic(new THREE.Color(3, 2.4, 0.7)), 0, rc ? rc.H + 0.09 : 1.98, rc ? rc.Z : -0.15, rc ? 0.7 : 0.5, rc ? 0.17 : 0.12, rc ? 0.22 : 0.3);
+    if (PLAYER_CAR.scale && !rc && !gm) m.scale.multiply(new V3(...PLAYER_CAR.scale));
     if (PLAYER_CAR.neon) { const ng = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 6.4), new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(...PLAYER_CAR.neon), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); ng.rotation.x = -PI / 2; ng.position.y = 0.06; g.add(ng); }
     const spot = new THREE.SpotLight(0xfff0d0, 3.2, 60, 0.5, 0.55, 1.2);
     spot.position.set(0, 0.9, 2.1); spot.target.position.set(0, 0, 18); g.add(spot, spot.target);
@@ -3413,7 +3430,7 @@ function makeCar(color, kind, forceModel) {
     glow.rotation.x = -PI / 2; glow.position.y = 0.06; g.add(glow);
     box(basic(new THREE.Color(4, 0.2, 0.9)), -0.99, 0.5, 0, 0.03, 0.06, 3.4); box(basic(new THREE.Color(4, 0.2, 0.9)), 0.99, 0.5, 0, 0.03, 0.06, 3.4);
   }
-  if (pol) addPoliceLights(g, polReal ? POLM.bar : null);
+  if (pol) addPoliceLights(g, gm ? gm.G.bar : null);
   scene.add(g);
   return { g, wheels };
 }
@@ -6910,13 +6927,15 @@ async function cloudSave() {
 function cloudSaveSoon() { if (!PROF.cloud || CLOUD.saveT) return; CLOUD.saveT = setTimeout(cloudSave, 2500); }
 window.addEventListener('pagehide', () => { if (CLOUD.saveT) { clearTimeout(CLOUD.saveT); cloudSave(); } });
 const CARS = {
-  taxi: { name: 'Такси «Классика»', model: 'car_taxi', price: 0, speed: 0, armor: 1, paint: 'yellow', desc: 'Рабочая лошадка таксопарка. Ничего лишнего.' },
+  taxi: { name: 'Такси «Классика»', model: 'car_taxi', glb: 'taxi', price: 0, speed: 0, armor: 1, paint: 'yellow', desc: 'Рабочая лошадка таксопарка. Ничего лишнего.' },
+  taxi90: { name: 'Такси «Девяностые»', model: 'car_taxi', glb: 'taxi90', price: 1200, speed: 1, armor: 0.95, paint: 'yellow', desc: 'Угловатый седан с шашечками. Помнит каждый спальный район.' },
   nine: { name: 'Хэтч «Девятка»', model: 'nine', price: 2000, speed: 2, armor: 1.0, paint: 'blue', desc: 'Пятидверный клин из девяностых. Дёшев в ремонте, бодро разгоняется, любим всем районом.' },
-  hatch: { name: 'Хэтч «Шустрик»', model: 'car_hatchback', price: 1500, speed: 3, armor: 1.12, paint: 'red', desc: 'Лёгкий и быстрый, но мнётся от каждого тарана.' },
-  sedan: { name: 'Седан «Бизнес»', model: 'car_sedan', price: 2500, speed: 1.5, armor: 0.9, paint: 'black', desc: 'Тихий, солидный, крепче такси.' },
-  wagon: { name: 'Универсал «Семейный»', model: 'car_stationwagon', price: 3500, speed: 0, armor: 0.78, paint: 'green', desc: 'Тяжёлый кузов держит удары.' },
-  police: { name: 'Перехватчик', model: 'car_police', price: 6000, speed: 5, armor: 0.85, paint: 'white', desc: 'Списанный полицейский перехватчик. Самый быстрый в городе.' },
-  van: { name: 'Броневан', model: 'car_stationwagon', scale: [1.12, 1.2, 1.12], price: 9000, speed: -2, armor: 0.55, paint: 'black', desc: 'Почти броневик: медленный, зато пули ему нипочём.' },
+  hatch: { name: 'Хэтч «Шустрик»', model: 'car_hatchback', glb: 'hatch', price: 1500, speed: 3, armor: 1.12, paint: 'red', desc: 'Лёгкий и быстрый, но мнётся от каждого тарана.' },
+  sedan: { name: 'Купе «Бизнес»', model: 'car_sedan', glb: 'sedan', price: 2500, speed: 1.5, armor: 0.9, paint: 'black', desc: 'Длинный капот и низкий рык мотора. Солидный и крепче такси.' },
+  wagon: { name: 'Универсал «Семейный»', model: 'car_stationwagon', glb: 'wagon', price: 3500, speed: 0, armor: 0.78, paint: 'green', desc: 'Тяжёлый кузов держит удары.' },
+  wagon2: { name: 'Универсал «Дача»', model: 'car_stationwagon', glb: 'wagon', price: 4200, speed: 0.5, armor: 0.75, paint: 'white', desc: 'Тот же универсал в белом, с деревянными панелями: чуть резвее и крепче «Семейного».' },
+  police: { name: 'Перехватчик', model: 'car_police', glb: 'police', price: 6000, speed: 5, armor: 0.85, paint: 'white', desc: 'Списанный полицейский перехватчик. Самый быстрый в городе.' },
+  van: { name: 'Броневан', model: 'car_stationwagon', glb: 'van', plates: true, scale: [1.12, 1.2, 1.12], price: 9000, speed: -2, armor: 0.55, paint: 'black', desc: 'Почти броневик: медленный, зато пули ему нипочём.' },
 };
 const PAINTS = {
   yellow: { name: 'Жёлтый', c: [1.6, 1.25, 0.45] }, white: { name: 'Белый', c: [1.35, 1.35, 1.38] }, black: { name: 'Чёрный', c: [0.22, 0.22, 0.26] },
@@ -7141,12 +7160,14 @@ function checkAch() {
   achBusy = false; updateProfChip();
 }
 // loadout: the player's car model, paint, neon and the hero's outfit
-const PLAYER_CAR = { model: 'car_taxi', mat: null, neon: null, scale: null };
+const PLAYER_CAR = { model: 'car_taxi', mat: null, neon: null, scale: null, glb: null, paintC: null, armor: false };
 function paintMat(id) { const P_ = PAINTS[id] || PAINTS.yellow, m = KIT.car.clone(); m.color = new THREE.Color(...P_.c); if (P_.metal) { m.metalness = P_.metal; m.roughness = 0.25; } return m; }
 function applyLoadout() {
   if (!KIT.car) return;
   const car = CARS[PROF.car] || CARS.taxi;
   PLAYER_CAR.model = car.model; PLAYER_CAR.mat = paintMat(PROF.paint[PROF.car] || car.paint); PLAYER_CAR.scale = car.scale || null;
+  PLAYER_CAR.glb = car.glb || null; PLAYER_CAR.paintC = paintColor(PROF.paint[PROF.car] || car.paint); PLAYER_CAR.armor = !!car.plates;
+  if (car.glb && !(GLBC[car.glb] && GLBC[car.glb].scene)) glbCarLoad(car.glb, () => { if ((CARS[PROF.car] || CARS.taxi).glb === car.glb) applyLoadout(); });
   PLAYER_CAR.neon = PROF.neon && NEONS[PROF.neon] ? NEONS[PROF.neon].c : null;
   if (pc) {
     const m = makeCar(0, true), vis = pc.g.visible;
@@ -7430,7 +7451,7 @@ function renderProfile() {
     h = '<div class="pitems cars">' + Object.entries(CARS).map(([id, c]) => {
       const own = PROF.cars.includes(id), on = PROF.car === id;
       const paints = own ? Object.entries(PAINTS).map(([pid, p]) => { const have = (PROF.paints[id] || []).includes(pid) || (p.pass && PROF.pass), sel = (PROF.paint[id] || c.paint) === pid; const rgb = p.c.map((v) => Math.min(255, Math.round(v * 150))).join(','); return `<button class="swatch${sel ? ' on' : ''}${have ? '' : ' locked'}" style="background:rgb(${rgb})" data-act="${have ? 'paint' : p.pass ? 'nopass' : 'buy-paint'}" data-id="${id}:${pid}" title="${p.name}${have ? '' : p.pass ? ' — сезонный пропуск' : ' — 300 монет'}" type="button"></button>`; }).join('') : '';
-      return `<div class="pitem car${on ? ' on' : ''}"><b>${c.name}</b><span>${c.desc}</span>
+      return `<div class="pitem car${on ? ' on' : ''}"><div class="wimg cimg"><img src="assets/shop/img/car-${id}.webp" alt="" loading="lazy" onerror="this.remove()"></div><b>${c.name}</b><span>${c.desc}</span>
         <div class="cstat"><small>Скорость</small>${bar(c.speed + 3, 8)}<small>Прочность</small>${bar(1.6 - c.armor, 1.1)}</div>
         ${own ? `<div class="swatches">${paints}</div>` : ''}${priceBtn('car', id, c.price, own, on ? 'В гараже · выбрано' : 'Выбрать')}</div>`;
     }).join('') + '</div>' +
@@ -8122,7 +8143,7 @@ function onlinePos(q) {
   if (!q || !q.i || q.i === ONL.id || typeof q.x !== 'number') return;
   let o = ONL.others.get(q.i);
   if (!o) {
-    const m = makeCar(PAINTS[q.p] ? new THREE.Color(...PAINTS[q.p].c).getHex() : 0xffc43d, 'civ', CARS[q.c] ? CARS[q.c].model : 'car_taxi');
+    const m = makeCar(PAINTS[q.p] ? paintColor(q.p).getHex() : 0xffc43d, 'civ', CARS[q.c] ? (CARS[q.c].glb && GLBC[CARS[q.c].glb] && GLBC[CARS[q.c].glb].scene ? 'glb:' + CARS[q.c].glb : CARS[q.c].model) : 'car_taxi');
     const tag = nameTag(String(q.n || 'Игрок').slice(0, 20), '#ffe9a8'); tag.position.set(0, 3.0, 0); m.g.add(tag);
     o = Object.assign(m, { id: q.i, pos: new V3(q.x, 0, q.z), h: q.h || 0, vx: 0, vz: 0, t: performance.now(), name: q.n, tag, bubble: null, bubbleT: 0 });
     m.g.position.copy(o.pos); ONL.others.set(q.i, o); partyTag(o);
@@ -8373,7 +8394,7 @@ function botSpawn(i) {
   if (BOTS.list.some((q) => q.name === name)) return null;
   const carKeys = Object.keys(CARS), car = carKeys[Math.floor(Math.random() * carKeys.length)], paints = Object.keys(PAINTS).filter((k) => !PAINTS[k].pass);
   const paint = paints[Math.floor(Math.random() * paints.length)];
-  const m = makeCar(new THREE.Color(...PAINTS[paint].c).getHex(), 'civ', CARS[car].model);
+  const gk = CARS[car].glb, m = makeCar(gk ? paintColor(paint).getHex() : new THREE.Color(...PAINTS[paint].c).getHex(), 'civ', gk && GLBC[gk] && GLBC[gk].scene ? 'glb:' + gk : CARS[car].model);
   const tag = nameTag(name, '#dfe4f2', 'бот'); tag.position.set(0, 3.0, 0); m.g.add(tag);
   // start on a random street, away from the player
   let a, bb;
@@ -9841,7 +9862,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { NR, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { NR, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
