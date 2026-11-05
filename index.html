@@ -1255,7 +1255,7 @@ const STA = { x0: 398, x1: 875, z0: -255, z1: 255, on: false };
 const SP = {
   bld: { x0: 470, x1: 520, z0: -70, z1: 70, h: 17 }, hall: { z0: -38, z1: 38 },
   tracks: [534, 546, 566, 578, 598, 610, 630, 645], plats: [[522, 529], [552, 560], [584, 592]],
-  depot: { x0: 770, x1: 845, z0: -150, z1: -60 }, yard: { x0: 680, x1: 770, z0: 40, z1: 210 }, box: { x: 668, z: -205 },
+  depot: { x0: 770, x1: 845, z0: -150, z1: -60 }, yard: { x0: 680, x1: 770, z0: 40, z1: 210 }, box: { x: 681, z: -205 },
 };
 const inStation = (x, z) => x > STA.x0 - 40 && x < STA.x1 + 40 && z > STA.z0 - 40 && z < STA.z1 + 40;
 const STX = { clock: null, signals: [], trains: [] };
@@ -3488,6 +3488,7 @@ const diffSpread = () => (state.act === 2 ? Math.min(0.2, (1 - diffMult()) * 0.2
 function diffLoad() { try { if (cloudInit()) CLOUD.sb.from('nf_diff').select('ch_key, mult').then(({ data }) => { for (const r of data || []) DIFF.srv[r.ch_key] = r.mult; }); } catch (e) { /* offline: no server multipliers */ } }
 function runEnd(result, reason) {
   if (MIS && MIS.online) return;
+  DIFF.last = { key: diffKey(), result, reason };
   const key = diffKey(), all = store.get('nf-tries') || {}, tries = all[key] || 0, mult = Math.round(diffMult() * 100) / 100;
   if (result === 'win') delete all[key]; else all[key] = Math.min(9, tries + 1);
   store.set('nf-tries', all);
@@ -4962,12 +4963,12 @@ const EPS = {
         about: 'Машины «Стрелочников» мечутся между контейнерами и под краном товарного двора. Сбить шесть.',
         intro: [['orlova', 'Если они уйдут на перегон, у них будет свой поезд впереди экспресса. Не выпускай их со двора.'], ['hero', 'Не выпущу.']],
         outro: [['mark', 'Двор чист. Но с поста централизации пропал сигнал. Кто-то перевёл все стрелки на ручное.'], ['sonya', 'Значит, им уже не нужны ключи: они управляют стрелками прямо с поста. Мне нужно туда.']] },
-      { t: 'Пост ЭЦ', type: 'arena', arena: 'signal', ally: { who: 'sonya', at: [668, -198], hp: 230, name: 'Соня', fem: true }, waves: [4], heavyFrom: 1,
-        drill: { kind: 'laptop', at: [668, -196], label: 'Перезапуск централизации', secs: 75, jam: [14, 20], fixT: 2, startMsg: 'Соня подключилась к посту централизации', jamMsg: 'Сбой связи! Перезапусти ноутбук', jamShort: 'Перезапуск прерван — подойди к ноутбуку', obj: 'Соня возвращает стрелки диспетчеру. Не подпускай «Стрелочников».', fixObj: 'Сбой связи. Подойди к ноутбуку и перезапусти.', okMsg: 'Перезапуск продолжается', doneMsg: 'Стрелки снова у диспетчера!', doneObj: 'Стрелки возвращены. Добей охрану поста.' },
+      { t: 'Пост ЭЦ', type: 'arena', arena: 'signal', ally: { who: 'sonya', at: [681, -198], hp: 230, name: 'Соня', fem: true }, waves: [4], heavyFrom: 1,
+        drill: { kind: 'laptop', at: [681, -196], label: 'Перезапуск централизации', secs: 75, jam: [14, 20], fixT: 2, startMsg: 'Соня подключилась к посту централизации', jamMsg: 'Сбой связи! Перезапусти ноутбук', jamShort: 'Перезапуск прерван — подойди к ноутбуку', obj: 'Соня возвращает стрелки диспетчеру. Не подпускай «Стрелочников».', fixObj: 'Сбой связи. Подойди к ноутбуку и перезапусти.', okMsg: 'Перезапуск продолжается', doneMsg: 'Стрелки снова у диспетчера!', doneObj: 'Стрелки возвращены. Добей охрану поста.' },
         about: 'Пост электрической централизации у южной горловины. Соня возвращает стрелки дежурной по станции, а «Стрелочники» глушат связь.',
         intro: [['stancia', 'Говорит дежурная по вокзалу. Я не управляю ни одной стрелкой! Табло показывает, что экспресс пойдёт на тупиковый путь!'], ['sonya', 'Сейчас исправим. Только прикрой меня.']],
         outro: [['stancia', 'Стрелки снова мои. Экспресс пойдёт по главному пути, как положено.'], ['orlova', 'Таксист, плохо дело! Автозак с копией улик угнали прямо со стоянки!']] },
-      { t: 'Угнанный автозак', type: 'stop', start: [664, -150, 'S'], car: [853, -200, 'S'], hp: 540, speed: 25, scale: 1.15, shoot: false, name: 'Угнанный автозак', chase: 2,
+      { t: 'Угнанный автозак', type: 'stop', start: [760, -240, 'E'], car: [853, -200, 'S'], hp: 540, speed: 25, scale: 1.15, shoot: false, name: 'Угнанный автозак', chase: 2,
         route: [[853, 240], [700, 240], [664, 200], [664, -240], [800, -240], [853, -200]],
         stopObj: 'Автозак встал. Подъезжай.',
         about: 'Угнанный полицейский автозак с копией улик кружит по служебным дорогам вокзала. Остановить, не взрывая.',
@@ -5073,7 +5074,7 @@ function arenaDef(a) {
     inner: [[790, -90], [810, -120], [825, -90], [830, -130], [792, -125], [805, -75]], docs: [[838, -144], [838, -66], [778, -144], [778, -66]], mid: [792, -105], boss: [832, -105] };
   if (a === 'signal') return { r: { x0: 640, x1: 700, z0: -240, z1: -170 }, start: [668, -172, PI], car: [664, -160, PI],
     edges: [[642, -238], [698, -238], [642, -200], [698, -190], [642, -172], [698, -172], [670, -239]],
-    inner: [[650, -225], [690, -225], [650, -185], [690, -185], [668, -190]], docs: [[645, -236], [695, -236], [645, -175], [695, -175]], mid: [668, -192], boss: [668, -232] };
+    inner: [[650, -225], [690, -225], [650, -185], [692, -185], [681, -190]], docs: [[645, -236], [695, -236], [645, -175], [695, -175]], mid: [681, -192], boss: [681, -232] };
   if (a === 'freight') return { r: { x0: 676, x1: 772, z0: 42, z1: 208 }, start: [678, 125, PI / 2], car: [664, 125, PI],
     edges: [[770, 44], [770, 206], [740, 206], [700, 206], [770, 125], [740, 44], [690, 44]],
     inner: [[696, 90], [720, 130], [745, 110], [725, 170], [760, 170], [710, 60]], docs: [[680, 46], [768, 46], [680, 204], [768, 204]], mid: [720, 100], boss: [750, 190] };
@@ -5252,7 +5253,7 @@ const GEN = {
     beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
     const P_ = c.pts.map((q) => Object.assign({}, q, { v: new V3(q.p[0], 0, q.p[1]) })), chase = { max: c.chase === undefined ? 2 : c.chase };
     let leg = 0, left = 0, loot = c.loot || 0, lastHp = pc.hp;
-    const startLeg = () => { const q = P_[leg]; left = q.t || 0; setBeam(q.v); setObjective(`Доберись: ${q.name}${q.t ? ` за ${fmt(q.t)}` : ''}.${c.fragile ? ' Береги машину.' : ''}`); };
+    const startLeg = () => { const q = P_[leg]; left = q.t ? Math.round(q.t * (1 + (1 - diffMult()) * 0.6)) : 0; setBeam(q.v); setObjective(`Доберись: ${q.name}${q.t ? ` за ${fmt(q.t)}` : ''}.${c.fragile ? ' Береги машину.' : ''}`); };
     startLeg();
     return { title, chase, get navName() { return P_[leg].name; }, navGoal: () => P_[leg].v,
       update(dt) {
@@ -8052,7 +8053,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, NAV, GOAL, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
