@@ -9,3 +9,5 @@ insert into public.nf_settings (k, v) values ('autopost', 'on') on conflict (k) 
 create extension if not exists pg_cron;
 select cron.unschedule('nf-daily-post') where exists (select 1 from cron.job where jobname = 'nf-daily-post');
 select cron.schedule('nf-daily-post', '7 16 * * *', $$select net.http_post(url := 'https://xqgibyazilueurdqufso.supabase.co/functions/v1/nf-bot', body := jsonb_build_object('daily', (select v from public.nf_settings where k = 'cron_key')), headers := '{"Content-Type": "application/json"}'::jsonb, timeout_milliseconds := 30000)$$);
+-- дубль постов на стену группы ВК: номер поста ВК
+alter table public.nf_posts add column if not exists vk_id bigint;

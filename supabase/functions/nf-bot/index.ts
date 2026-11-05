@@ -5,6 +5,7 @@
 // • Подключение вебхука и меню команд (один раз и после изменений): GET …/functions/v1/nf-bot?setup=1. Чужой вебхук не перезаписывается без &force=1.
 // • Канал @nightfaregame: ежедневный пост (pg_cron, 19:07 МСК, POST {daily: ключ из nf_settings.cron_key}; не больше одного в день — nf_posts),
 //   /news — новость в канал с превью, /postnow — сегодняшний пост сейчас, /autopost on|off, /pin — закреплённое сообщение с быстрым меню.
+// • Те же посты синхронно уходят на стену группы ВК (club242985713), если владелец добавил секрет VK_WALL_TOKEN. /vk — проверка и вкл/выкл.
 // Запросы от Telegram проверяются секретом, выведенным из токена бота (TELEGRAM_BOT_TOKEN в секретах функций; его добавляет владелец).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import * as XLSX from 'npm:xlsx@0.18.5';
@@ -19,6 +20,24 @@ const channelBtn = { inline_keyboard: [[{ text: '🚕 Играть в Telegram',
 const setting = async (k: string) => ((await db.from('nf_settings').select('v').eq('k', k).maybeSingle()).data?.v ?? null) as string | null;
 const setSetting = (k: string, v: string) => db.from('nf_settings').upsert({ k, v });
 const toChannel = (text: string) => api('sendMessage', { chat_id: CHANNEL, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: channelBtn });
+// ---- стена группы ВКонтакте: тот же текст без HTML + ссылки ----
+const VK_TOKEN = Deno.env.get('VK_WALL_TOKEN') || '', VK_GID = 242985713;
+const vkApi = async (method: string, params: Record<string, string | number>) => {
+  const body = new URLSearchParams({ ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])), access_token: VK_TOKEN, v: '5.199' });
+  for (const host of ['api.vk.ru', 'api.vk.com']) {
+    try { const r = await fetch(`https://${host}/method/${method}`, { method: 'POST', body }); return await r.json(); } catch (_) { /* следующий адрес */ }
+  }
+  return { error: { error_code: 0, error_msg: 'нет связи с ВК' } };
+};
+const unHtml = (h: string) => h.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+async function toVk(html: string): Promise<{ ok: boolean; id?: number; skipped?: string; error?: string }> {
+  if (!VK_TOKEN) return { ok: false, skipped: 'no_token' };
+  if ((await setting('vkpost')) === 'off') return { ok: false, skipped: 'off' };
+  const message = `${unHtml(html)}\n\n🚕 Играть: ${SITE}\n📢 Канал в Telegram: https://t.me/nightfaregame`;
+  const r = await vkApi('wall.post', { owner_id: -VK_GID, from_group: 1, message, attachments: SITE });
+  return r.response?.post_id ? { ok: true, id: r.response.post_id } : { ok: false, error: `${r.error?.error_code}: ${r.error?.error_msg}` };
+}
+const vkNote = (v: { ok: boolean; skipped?: string; error?: string }) => v.ok ? '✅ ВК: опубликовано на стене группы.' : v.skipped === 'no_token' ? 'ℹ️ ВК: не подключено (нет секрета VK_WALL_TOKEN).' : v.skipped === 'off' ? 'ℹ️ ВК: выключено (/vk on).' : `⚠️ ВК: не вышло — ${v.error}`;
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 const api = async (method: string, body: Record<string, unknown> = {}) => {
@@ -62,6 +81,7 @@ const ADMIN_COMMANDS = [
   { command: 'postnow', description: 'Сегодняшний автопост в канал — сейчас' },
   { command: 'autopost', description: 'Автопосты в канал: /autopost on|off' },
   { command: 'pin', description: 'Закреплённое меню в канале' },
+  { command: 'vk', description: 'Посты в группу ВК: проверка, /vk on|off' },
   { command: 'broadcast', description: 'Сообщение подписчикам бота: /broadcast текст' },
   { command: 'export', description: 'Игроки в Excel' },
   { command: 'idea', description: 'Что поправить в игре: /idea текст' },
@@ -93,6 +113,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 /postnow — сегодняшний автопост сейчас (обычно сам выходит в 19:07 МСК)
 /autopost on · off — включить или выключить ежедневные посты
 /pin — опубликовать или обновить закреплённое меню с кнопками
+/vk — дубль постов в группу ВК: проверка · /vk on · /vk off
 
 📣 <b>Рассылка</b> (сначала превью, потом кнопка «Отправить»)
 /broadcast текст — личное сообщение всем, кто нажал /start в боте
@@ -163,7 +184,9 @@ async function dailyRun(force = false) {
   const r = await toChannel(text);
   if (!r.ok) return { ok: false, error: r.description };
   await db.from('nf_posts').insert({ day, kind: 'daily', message_id: r.result.message_id });
-  return { ok: true };
+  const v = await toVk(text);
+  if (v.ok) await db.from('nf_posts').update({ vk_id: v.id }).eq('day', day);
+  return { ok: true, vk: v };
 }
 
 async function exportUsers(chatId: number) {
@@ -310,6 +333,17 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
       await say(r.ok ? (r.updated ? '📌 Закреплённое меню в канале обновлено.' : r.pinned ? '📌 Меню опубликовано и закреплено в канале.' : `📌 Меню опубликовано, но закрепить не вышло: ${esc(r.error)}. Дайте боту в канале право «Закреплять сообщения» (или «Редактировать сообщения») и повторите /pin.`) : `Не удалось опубликовать в канал: ${esc(r.error)}. Проверьте, что бот — админ канала с правом публикации.`);
       return true;
     }
+    case 'vk': {
+      const v = arg.toLowerCase();
+      if (v === 'on' || v === 'off') { await setSetting('vkpost', v); await say(v === 'on' ? '✅ Посты дублируются в группу ВК.' : '⏸ Посты в группу ВК выключены. Включить — /vk on'); return true; }
+      if (!VK_TOKEN) { await say('ВК не подключено: нет секрета <b>VK_WALL_TOKEN</b> (Supabase → night-fare → Edge Functions → Secrets). Ключ в чат не присылайте.'); return true; }
+      // проверка без публикации: пустой wall.post. «нет текста» (код 100) — значит ключ может постить на стену
+      const g = await vkApi('groups.getById', { group_id: VK_GID });
+      const w = await vkApi('wall.post', { owner_id: -VK_GID, from_group: 1 });
+      const can = w.error?.error_code === 100;
+      await say(`🔎 <b>Проверка ВК</b> (ничего не публикуется)\n${g.response ? '✅' : '❌'} Ключ принят${g.error ? `: ${esc(g.error.error_msg)}` : ''}\n${can ? '✅ Ключ может публиковать на стене группы' : `❌ Публиковать на стене нельзя: ${esc(String(w.error?.error_code))} ${esc(w.error?.error_msg || '')}`}\nДубль постов: <b>${(await setting('vkpost')) === 'off' ? 'выключен' : 'включён'}</b>`);
+      return true;
+    }
     case 'broadcast': {
       if (arg.length < 3) { await say('Напишите текст: <code>/broadcast Вышла новая глава — «Северный экспресс»!</code>\nСначала покажу превью.'); return true; }
       const { count } = await db.from('nf_bot_users').select('*', { count: 'exact', head: true }).eq('blocked', false);
@@ -350,9 +384,10 @@ async function onCallback(cq: any) {
     if (m[2] !== 'send') return;
     await db.from('nf_drafts').delete().eq('id', d.id);
     const r = await toChannel(html);
-    if (r.ok && d.kind === 'post') await db.from('nf_posts').upsert({ day: mskNow().toISOString().slice(0, 10), kind: 'daily', message_id: r.result.message_id });
+    const v = r.ok ? await toVk(html) : null;
+    if (r.ok && d.kind === 'post') await db.from('nf_posts').upsert({ day: mskNow().toISOString().slice(0, 10), kind: 'daily', message_id: r.result.message_id, vk_id: v?.ok ? v.id : null });
     await done(r.ok ? 'Опубликовано' : 'Ошибка');
-    return api('sendMessage', { chat_id: chatId, text: r.ok ? '✅ Опубликовано в канале @nightfaregame.' : `Не удалось опубликовать: ${r.description}. Проверьте, что бот — админ канала.` });
+    return api('sendMessage', { chat_id: chatId, text: r.ok ? `✅ Опубликовано в канале @nightfaregame.\n${vkNote(v!)}` : `Не удалось опубликовать: ${r.description}. Проверьте, что бот — админ канала.` });
   }
   const text = `🚕 <b>Ночной тариф</b>\n\n${esc(d.payload?.text)}`;
   if (m[2] === 'me') { await api('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', reply_markup: playBtn }); return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Отправил только вам' }); }
