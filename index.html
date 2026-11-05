@@ -1339,7 +1339,7 @@ function trkNear(x, z, hint) {
 const trkSide = (x, z, i) => (x - TRK.pts[i].x) * TRK.nrm[i].x + (z - TRK.pts[i].z) * TRK.nrm[i].z;
 // the walls: push a car back inside the corridor and return the impact speed
 function trkWall(pos, vel, r) {
-  if (inTrkPad(pos.x, pos.z)) return 0;
+  if (inTrkPad(pos.x, pos.z) || pos.x > TRK.pad.x1 - 1) return 0;   // the paddock and the highway into it have no track walls
   const N = TRK.N, i = trkNear(pos.x, pos.z), P = TRK.pts;
   let best = null, bd = 1e18;
   for (const [a, b] of [[P[(i - 1 + N) % N], P[i]], [P[i], P[(i + 1) % N]]]) {
@@ -1412,6 +1412,11 @@ function buildVillage() {
   // ground, the highway from the city, the gate
   boxB(B.grass, VIL.x0 - 30, -0.06, VIL.z0 - 30, VIL.x1 + 30, -0.04, -318, { topWorld: 1 / 8, sides: false });
   asph(-7, VIL.gate, 7, -318); for (let z = -330; z > VIL.gate; z -= 10) mk(-0.15, z - 5, 0.15, z, white);
+  // the south highway from the city edge to the village
+  asph(-7, -318, 7, -168); for (let z = -178; z > -318; z -= 10) mk(-0.15, z - 5, 0.15, z, white);
+  const hwSign = (x, z, ry, t1, t2) => { const tx = cityText(512, 160, (q, w, h) => { q.fillStyle = '#1a5a3a'; q.fillRect(0, 0, w, h); q.strokeStyle = '#fff'; q.lineWidth = 6; q.strokeRect(8, 8, w - 16, h - 16); q.fillStyle = '#fff'; q.font = 'bold 50px Arial'; q.fillText(t1, w / 2, 58, w - 30); q.font = '38px Arial'; q.fillText(t2, w / 2, 116, w - 30); });
+    putB(B.metal, G.cyl6, x, 2.2, z, 0.16, 4.4, 0.16, 0, metal); textPlane(tx, 4.6, 1.45, x, 4.6, z, ry); textPlane(tx, 4.6, 1.45, x, 4.6, z, ry + PI); };
+  hwSign(9.5, -190, 0, 'Сосновый Бор', 'коттеджный посёлок · 0,2 км');
   asph(-6, -880, 6, VIL.gate); for (let z = VIL.gate - 8; z > -875; z -= 10) mk(-0.12, z - 5, 0.12, z, col(0xf0c040));
   for (const lz of VIL.lanes) { const e = laneEnd(lz); asph(-e, lz - 4.5, e, lz + 4.5); for (let x = -e + 8; x < e - 8; x += 10) if (Math.abs(x) > 9) mk(x, lz - 0.1, x + 5, lz + 0.1, white); }
   // the gate: a guard booth, a red-and-white barrier (up), the village sign
@@ -1585,16 +1590,18 @@ function buildTrack() {
   boxB(B.asph, TRK.pad.x0 + 2, 0.005, TRK.pad.z0, TRK.pad.x1, 0.017, TRK.pad.z1, { topWorld: 1 / 10, sides: false });
   boxB(B.trim, -509.2, 0, -131, -507.4, 1.1, 131, { col: col(0xd8d8de) }); solid(-509.2, -131, -507.4, 131, 1.1);
   for (let z = -128; z <= 128; z += 8) putB(B.mark, G.box, -508.3, 1.13, z, 1.8, 0.04, 4, 0, (z / 8) % 2 ? red : white);
-  boxB(B.trim, -476, 0, -132, -456, 7.5, 132, { col: col(0x6a6e7a) }); boxB(B.roof, -477, 7.5, -133, -455, 8.2, 133, { col: col(0x23252c) }); solid(-476, -132, -456, 132, 7.5);
+  // two blocks of garages with a drive-through between them: the highway from the city comes in here
+  for (const [z0, z1] of [[-132, -12], [12, 132]]) { boxB(B.trim, -476, 0, z0, -456, 7.5, z1, { col: col(0x6a6e7a) }); boxB(B.roof, -477, 7.5, z0 - 1, -455, 8.2, z1 + 1, { col: col(0x23252c) }); solid(-476, z0, -456, z1, 7.5); }
+  putB(B.metal, G.box, -466, 7.6, 0, 20, 0.7, 24, 0, col(0x2a2c34));
   const teams = [0xffc43d, 0xd83a2a, 0x2a6ad8, 0x2ab86a, 0xe8e8ec, 0x8a3ad8, 0xff8a1a, 0x1ac8d8, 0xc0c0c8, 0xffc43d];
   for (let k = 0; k < 10; k++) {
-    const z = -117 + k * 26;
+    const z = -117 + k * 26; if (Math.abs(z) < 20) continue;
     boxB(B.trim, -476.3, 0.2, z - 9, -476, 4.6, z + 9, { col: col(0x15161c) });
     putB(B.neon, G.box, -476.35, 5.1, z, 0.1, 0.35, 17, 0, HDR(teams[k], 2.2));
     boxB(B.walk, -476, 0.02, z - 9, -470, 0.03, z + 9, { sides: false, col: col(0x8a8a90) });
   }
   const pTex = cityText(512, 96, (q, w, h) => { q.fillStyle = '#16161c'; q.fillRect(0, 0, w, h); q.fillStyle = '#7ad6ff'; q.font = 'bold 60px Arial'; q.fillText('БОКСЫ · ПАДДОК', w / 2, h / 2 + 3, w - 30); });
-  textPlane(pTex, 14, 2.6, -476.5, 6.2, 0, -PI / 2);
+  textPlane(pTex, 14, 2.6, -476.5, 6.2, -40, -PI / 2); textPlane(pTex, 14, 2.6, -476.5, 6.2, 40, -PI / 2);
   // grandstand west of the straight: stepped concrete with coloured seats, a roof on columns, the track name
   const seat = [0xd83a2a, 0xffc43d, 0x2a6ad8, 0xe8e8ec];
   for (let s = 0; s < 8; s++) {
@@ -1638,7 +1645,10 @@ function buildTrack() {
     if (pine) putB(B.leaf, G.cone, x, h * 0.62, z, h * 0.42, h * 0.85, h * 0.42, 0, col(0x1d3f2a)); else putB(B.leaf, G.sph, x, h * 0.75, z, h * 0.24, h * 0.32, h * 0.24, 0, col(0x3a6a34));
   }
   // the service road from the paddock to the highway into the city
-  boxB(B.asph, -456, 0.01, -9, -380, 0.022, 9, { topWorld: 1 / 10, sides: false });
+  boxB(B.asph, -456, 0.01, -9, -168, 0.022, 9, { topWorld: 1 / 10, sides: false });
+  for (let x = -180; x > -450; x -= 10) boxB(B.mark, x - 5, 0.04, -0.15, x, 0.06, 0.15, { sides: false, col: white });
+  { const tx = cityText(512, 160, (q, w, h) => { q.fillStyle = '#1a5a3a'; q.fillRect(0, 0, w, h); q.strokeStyle = '#fff'; q.lineWidth = 6; q.strokeRect(8, 8, w - 16, h - 16); q.fillStyle = '#fff'; q.font = 'bold 50px Arial'; q.fillText('Северное кольцо', w / 2, 58, w - 30); q.font = '38px Arial'; q.fillText('гоночная трасса · 0,3 км', w / 2, 116, w - 30); });
+    putB(B.metal, G.cyl6, -190, 2.2, 11, 0.16, 4.4, 0.16, 0, metal); textPlane(tx, 4.6, 1.45, -190, 4.6, 11, PI / 2); textPlane(tx, 4.6, 1.45, -190, 4.6, 11, -PI / 2); }
 }
 // the five start lights: n lit red (0–5), or 'go' for a moment of green
 function trkLights(n) { TRKX.lights.forEach((m, k) => { m.material = n === 'go' ? TRKX.goMat : k < n ? TRKX.lightOn : TRKX.lightMat; }); }
@@ -3783,6 +3793,16 @@ function inColliders(p, y) {
   if (p.z < -330) for (const c of VCOLS) if (p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
   return false;
 }
+// the open city reaches the suburbs: the city square, the south highway to the village, the west highway to the track
+const FREE_ZONES = [[-LIM, LIM, -LIM, LIM + 2], [-6.5, 6.5, -386, -LIM], [VIL.x0, VIL.x1, VIL.z0, VIL.z1], [TRK.x1 - 6, -LIM, -7.5, 7.5], [TRK.x0, TRK.x1, TRK.z0, TRK.z1]];
+function freeClamp(pos) {
+  let bx = pos.x, bz = pos.z, bd = 1e18;
+  for (const [x0, x1, z0, z1] of FREE_ZONES) {
+    const cx = clamp(pos.x, x0, x1), cz = clamp(pos.z, z0, z1), d = (cx - pos.x) ** 2 + (cz - pos.z) ** 2;
+    if (d === 0) return; if (d < bd) { bd = d; bx = cx; bz = cz; }
+  }
+  pos.x = bx; pos.z = bz;
+}
 const COLL_C = [colliders], COLL_V = [colliders, VCOLS];   // south of the city the village colliders are checked too
 function collideCircle(pos, vel, r) {
   let impact = 0;
@@ -3800,8 +3820,9 @@ function collideCircle(pos, vel, r) {
     const vn = vel.x * nx + vel.z * nz;
     if (vn < 0) { vel.x -= nx * vn * 1.35; vel.z -= nz * vn * 1.35; vel.multiplyScalar(0.94); impact = Math.max(impact, c.soft ? -vn * 0.35 : -vn); }
   }
-  if (TRK.on) impact = Math.max(impact, trkWall(pos, vel, r));
-  if (AIR.on || STA.on || TRK.on || VIL.on) { const Z = AIR.on ? AIR : STA.on ? STA : TRK.on ? TRK : VIL; pos.x = clamp(pos.x, Z.x0, Z.x1); pos.z = clamp(pos.z, Z.z0, Z.z1); }
+  if (TRK.on && pos.x < TRK.x1 + 15) impact = Math.max(impact, trkWall(pos, vel, r));
+  if ((AIR.on || STA.on || TRK.on || VIL.on) && !ONL.on) { const Z = AIR.on ? AIR : STA.on ? STA : TRK.on ? TRK : VIL; pos.x = clamp(pos.x, Z.x0, Z.x1); pos.z = clamp(pos.z, Z.z0, Z.z1); }
+  else if (ONL.on) freeClamp(pos);
   else { pos.x = clamp(pos.x, -LIM, LIM); pos.z = clamp(pos.z, -LIM, LIM + 2); }
   return impact;
 }
@@ -6173,6 +6194,7 @@ function cineTitle(kicker, title) {
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); CINE.titleT = 3.4;
 }
 function cineUpdate(dt) {
+  if (ONL.on && pc && state.act === 1) { TRK.on = pc.pos.x < TRK.x1 + 2 && pc.pos.x > TRK.x0 - 2 && Math.abs(pc.pos.z) < TRK.z1 + 2; VIL.on = pc.pos.z < VIL.z1 + 2; }
   if (pc && pc.g.userData.beams) { const on = (state.act === 1 && !state.lightsOff) || state.mode === 'preview' || state.mode === 'select'; if (pc.g.userData.beams[0].visible !== on) pc.g.userData.beams.forEach((b) => { b.visible = on; }); }
   // a title card the first time a chapter goes live
   const live = (state.mode === 'drive' || state.mode === 'foot') && state.ep >= 2 && MIS && MIS.title && !MIS.online && !ONL.on;
@@ -8818,7 +8840,8 @@ function taskStart(id, fromGroup) {
 }
 function taskDone(ok, fromGroup) {
   const t = TASK.cur; if (!t) return;
-  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0; clearBullets(); tMarksClear();
+  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0; clearBullets(); tMarksClear(); state.lightsOff = false; TR.field = []; TR.count = 0;
+  for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
   if (ok) {
     addCoins(t.reward); profStat('tasks');
     if (isT2(t.id)) { if (t.group) PROF.gtask2N = Math.max(PROF.gtask2N || 0, t.id - T2_SOLO); else PROF.task2N = Math.max(PROF.task2N || 0, t.id - T2_FROM); }
@@ -8829,6 +8852,33 @@ function taskDone(ok, fromGroup) {
   TASK.cur = null; MIS = TASK.free; state.invuln = 1e9; state.mode = 'drive'; pc.hp = Math.max(pc.hp, 60);
   document.body.classList.remove('task'); beam.visible = false; $('btnTask').textContent = 'Задания';
   setObjective('Открытый город: бери задания и заказы такси, сигналь (H) и общайся в чате.'); JOBS.wait = 10;
+}
+// local activities in the suburbs: the same missions as in episodes 15 and 16, repeatable for coins
+function zoneTasks() {
+  if (!pc) return [];
+  const E15 = EPS[15].chapters, E16 = EPS[16].chapters, cp = (o, x) => Object.assign(JSON.parse(JSON.stringify(o)), x || {});
+  if (TRK.on) return [
+    { key: 't-lap', title: 'Круг на время', brief: 'Один круг по «Северному кольцу» быстрее 1:25.', reward: 120, type: 'lap', c: { laps: 1, secs: 85, grid: 0 } },
+    { key: 't-slalom', title: 'Слалом в паддоке', brief: 'Семнадцать ворот туда и обратно: конус — плюс секунда, мимо ворот — плюс три.', reward: 100, type: 'slalom', c: cp(E15[2], { secs: 66 }) },
+    { key: 't-race', title: 'Гонка таксистов', brief: 'Три круга против семи машин — финишируй в тройке.', reward: 260, type: 'circuit', c: { laps: 3, place: 3, grid: 3, skill: 0.86 } },
+    { key: 't-fuel', title: 'Экономия бензина', brief: 'Два круга на остатке бензина: газ на прямых, накат перед поворотами.', reward: 150, type: 'fuel', c: { laps: 2, fuel: 130, secs: 210, grid: 0 } },
+  ];
+  if (VIL.on) return [
+    { key: 'v-paper', title: 'Газеты по посёлку', brief: 'Десять ящиков на Липовой и Кленовой — бросаем на ходу, не быстрее 40 км/ч.', reward: 120, type: 'paperboy', c: cp(E16[3]) },
+    { key: 'v-geese', title: 'Гуси деда Семёна', brief: 'Гуси опять на улице: загони хотя бы шестерых из семи.', reward: 150, type: 'herd', c: cp(E16[2]) },
+    { key: 'v-park', title: 'Парковка по-соседски', brief: 'Три места: между машинами, у клуба и задом к офису.', reward: 120, type: 'parking', c: cp(E16[1]) },
+    { key: 'v-fire', title: 'Учения: эвакуация', brief: 'Отвезти десять жителей с Берёзовой к КПП, по трое за рейс.', reward: 200, type: 'shuttle', c: cp(E16[8], { fire: null }) },
+  ];
+  return [];
+}
+function zoneTaskStart(key) {
+  if (TASK.cur || !ONL.on || state.mode !== 'drive') return;
+  const z = zoneTasks().find((q) => q.key === key); if (!z) return;
+  if (JOBS.cur) jobEnd();
+  const t = Object.assign({ id: 0, group: false, tier: 1 }, z); TASK.cur = t; TASK.free = MIS;
+  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
+  const m = GEN[t.type](Object.assign({}, t.c), t.title, () => taskDone(true)); m.online = true; m.task = true;
+  MIS = m; state.invuln = 2; document.body.classList.add('task'); toggleTasks(false); toast(t.title, 2.2); $('btnTask').textContent = 'Задание: идёт';
 }
 function taskFail(title) { if (!TASK.cur) return; toast(`Задание провалено: ${title}. Можно взять его заново`, 3); taskDone(false); }
 // the panel with the next task
@@ -8846,7 +8896,9 @@ function renderTasks() {
     <div class="btns">${lead ? `<button class="btn sm primary" data-ta="go" data-id="${id}" type="button">${inGroup ? 'Начать для группы' : 'Взять'}</button><button class="btn sm" data-ta="skip" data-id="${id}" type="button">Пропустить</button>` : '<span class="note">Задание выбирает тот, кто первым зашёл в группу.</span>'}</div></div>`;
   };
   box.innerHTML = TASK.cur ? `<div class="kicker">Сейчас: задание №${TASK.cur.id.toLocaleString('ru-RU')}</div><b>${esc(TASK.cur.title)}</b><p class="note">${esc(TASK.cur.brief)}</p><div class="btns"><button class="btn sm" data-ta="quit" type="button">Бросить задание</button></div>`
-    : card(task2OfferId(), 2) + card(taskOfferId(), 1) + `<div class="note">Выполнено заданий: ${done} из 60 000. Заказы такси приходят сами, задания — здесь.</div>`;
+    : zoneTasks().map((z) => `<div class="tcard"><div class="kicker">${TRK.on ? 'Трасса «Северное кольцо»' : 'Посёлок «Сосновый Бор»'} · можно повторять</div><b>${esc(z.title)}</b><p class="note">${esc(z.brief)}</p><div class="prow2"><span>Награда: <b>${z.reward}</b> монет</span></div><div class="btns"><button class="btn sm primary" data-zt="${z.key}" type="button">Начать</button></div></div>`).join('')
+      + card(task2OfferId(), 2) + card(taskOfferId(), 1) + `<div class="note">Выполнено заданий: ${done} из 60 000. Заказы такси приходят сами, задания — здесь. За городом — гоночная трасса (западное шоссе) и коттеджный посёлок (южное шоссе) со своими заездами.</div>`;
+  box.querySelectorAll('[data-zt]').forEach((b) => { b.onclick = () => zoneTaskStart(b.dataset.zt); });
   box.querySelectorAll('[data-ta]').forEach((b) => { b.onclick = () => {
     const a = b.dataset.ta, id = +b.dataset.id;
     if (a === 'go') taskStart(id); else if (a === 'quit') taskFail('брошено');
@@ -9238,7 +9290,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
