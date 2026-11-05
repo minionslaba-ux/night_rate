@@ -48,6 +48,11 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 [hidden] { display: none !important; }
 #stage { position: fixed; inset: 0; }
 #stage canvas { display: block; width: 100%; height: 100%; }
+.fs-hint { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(5,6,16,.93); color: var(--text); font: 700 18px var(--font-body); text-align: center; padding: 0 24px; touch-action: pan-y; }
+.fs-hint[hidden] { display: none; } .fs-hint small { font-weight: 400; font-size: 14px; color: var(--muted); max-width: 420px; }
+.fs-hint .fs-arrow { font-size: 46px; line-height: 1; animation: fsUp 1.1s ease-in-out infinite; } @keyframes fsUp { 0%, 100% { transform: translateY(10px); opacity: .5; } 50% { transform: translateY(-10px); opacity: 1; } }
+.fs-hint .fs-x { position: absolute; top: calc(10px + var(--sat, 0px)); right: calc(14px + var(--sar, 0px)); border: 0; background: rgba(255,255,255,.12); color: var(--text); width: 36px; height: 36px; border-radius: 50%; font-size: 18px; }
+html.fs-scroll, html.fs-scroll body { overflow: auto; height: auto; touch-action: pan-y; } html.fs-scroll body { min-height: calc(100vh + 240px); }
 
 /* HUD */
 .hud { position: fixed; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; }
@@ -6493,6 +6498,47 @@ let deferredInstall = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; if (!$('gate').hidden && gateStep === 'install') renderGate(); });
 window.addEventListener('appinstalled', () => { store.set('nf-installed', true); deferredInstall = null; if (!$('gate').hidden && gateStep === 'install') gateNext(); });
 const isStandalone = () => { try { return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true; } catch (e) { return false; } };
+// full screen on a phone turned sideways: Android and others get the Fullscreen API on the next tap;
+// iPhone Safari has no such API — there the address bar folds away when the page is swiped up, so we let it scroll and show a hint;
+// mini apps are left to their messenger. The installed app is full screen already.
+const FS = { declined: false, iosHid: false };
+const fsLand = () => window.innerWidth > window.innerHeight;
+const fsApi = () => document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const isIPhone = /iPhone|iPod/.test(navigator.userAgent);
+function fsTry() {
+  if (PLATFORM !== 'web' || isStandalone() || !isTouch || !fsLand() || FS.declined || fsEl()) return;
+  const el = document.documentElement, f = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!f) return;
+  try { const r = f.call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) { /* not allowed here */ }
+}
+// the toolbar is showing when the visible height is clearly less than the short side of the screen
+const fsBarShown = () => window.innerHeight < Math.min(screen.width, screen.height) - 24;
+function fsIosCheck() {
+  const el = $('fsHint'); if (!el) return;
+  // the page stays scrollable for the whole landscape session: if it shrank back, Safari would bring the bar back
+  const ios = isIPhone && PLATFORM === 'web' && !isStandalone() && fsLand();
+  const was = document.documentElement.classList.contains('fs-scroll');
+  document.documentElement.classList.toggle('fs-scroll', ios);
+  if (was && !ios) window.scrollTo(0, 0);
+  el.hidden = !(ios && fsBarShown() && !FS.iosHid);
+}
+(function fsInit() {
+  const h = document.createElement('div'); h.id = 'fsHint'; h.className = 'fs-hint'; h.hidden = true;
+  h.innerHTML = '<div class="fs-arrow">↑</div><div>Смахни вверх — игра займёт весь экран</div><small>Так Safari прячет адресную строку. Без неё всегда: «Поделиться» → «На экран Домой».</small><button class="fs-x" type="button" aria-label="Закрыть">✕</button>';
+  h.querySelector('.fs-x').addEventListener('click', () => { FS.iosHid = true; fsIosCheck(); });
+  document.body.appendChild(h);
+  const onTurn = () => { if (!fsLand()) FS.declined = false; fsIosCheck(); setTimeout(() => { fsIosCheck(); resize(); }, 350); };
+  window.addEventListener('orientationchange', onTurn);
+  window.addEventListener('resize', fsIosCheck);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fsIosCheck);
+  window.addEventListener('scroll', () => { fsIosCheck(); resize(); }, { passive: true });
+  // a tap is the user gesture the Fullscreen API needs
+  window.addEventListener('pointerup', fsTry, true); window.addEventListener('touchend', fsTry, true);
+  const onFs = () => { if (!fsEl() && fsLand()) FS.declined = true; setTimeout(resize, 120); };
+  document.addEventListener('fullscreenchange', onFs); document.addEventListener('webkitfullscreenchange', onFs);
+  fsIosCheck();
+})();
 function platformHint() {
   const ua = navigator.userAgent || '';
   if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document)) return 'На iPhone и iPad: откройте игру в Safari, нажмите «Поделиться» (квадрат со стрелкой) и выберите «На экран „Домой“».';
