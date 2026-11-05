@@ -447,7 +447,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v53'; window.__errs = [];
+window.APP_VER = 'v55'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -3474,10 +3474,33 @@ function updateBullets(dt) {
 }
 function clearBullets() { for (const b of bullets) scene.remove(b.m); bullets.length = 0; }
 
+// ---------------- difficulty: keep chapters passable ----------------
+// Каждая попытка главы (прошёл / погиб / провалил) записывается на сервер (nf_runs). Урон по игроку умножается на:
+//  • множитель главы с сервера (nf_diff: раз в сутки глава с проходимостью ниже 75% становится легче — функция nf_tune);
+//  • личную помощь: после каждого провала этой главы урон −15% (до −55%); после победы помощь сбрасывается.
+const DIFF = { srv: {}, dmg: 0 };
+const diffKey = () => `${state.ep}:${state.ep >= 2 ? 'c' + state.ch : 'a' + state.act}`;
+const diffTries = () => (store.get('nf-tries') || {})[diffKey()] || 0;
+// пешие бои: базовый урон ×0.6 (автотест: стоящий и стреляющий игрок без укрытий погибал за 6–8 секунд); машина — ×1
+const FOOT_BASE = 0.6;
+function diffMult() { const s = DIFF.srv[diffKey()]; return Math.max(0.2, (state.act === 2 ? FOOT_BASE : 1) * (typeof s === 'number' ? s : 1) * Math.max(0.45, 1 - 0.15 * diffTries())); }
+// чем легче глава, тем чаще враги пешком промахиваются: дополнительный разброс выстрела (рад)
+const diffSpread = () => (state.act === 2 ? Math.min(0.2, (1 - diffMult()) * 0.22) : 0);
+function diffLoad() { try { if (cloudInit()) CLOUD.sb.from('nf_diff').select('ch_key, mult').then(({ data }) => { for (const r of data || []) DIFF.srv[r.ch_key] = r.mult; }); } catch (e) { /* offline: no server multipliers */ } }
+function runEnd(result, reason) {
+  if (MIS && MIS.online) return;
+  const key = diffKey(), all = store.get('nf-tries') || {}, tries = all[key] || 0, mult = Math.round(diffMult() * 100) / 100;
+  if (result === 'win') delete all[key]; else all[key] = Math.min(9, tries + 1);
+  store.set('nf-tries', all);
+  if (result !== 'win' && all[key] >= 2) setTimeout(() => toast('Глава стала чуть легче: враги бьют слабее', 3), 600);
+  if (PROF.cloud && !PROF.god && CLOUD.sb) CLOUD.sb.from('nf_runs').insert({ ch_key: key, result, reason: reason ? String(reason).slice(0, 60) : null, tries, mult }).then(() => {}, () => {});
+}
+
 // ---------------- damage ----------------
 let hurt = 0;
 function damagePlayer(d) {
   if (state.act === 1 && typeof ONL !== 'undefined' && ONL.on) { careWear(d); if (d >= 1.5) HITS.n++; }
+  else if (d > 0) { d *= diffMult(); DIFF.dmg += d; }
   if (state.invuln > 0 || PROF.god) return;
   if (state.act === 1) { pc.hp -= d * P.carArmor; } else { hero.hp -= d * P.footArmor; }
   hurt = Math.min(1, hurt + d / 20); shake = Math.min(1.2, shake + 0.15);
@@ -3841,10 +3864,10 @@ function updateFoot(dt) {
         const shots = e.burst || (e.boss ? 3 : 1);
         for (let k = 0; k < shots; k++) {
           const dir = to.clone(); const sp = shots > 1 ? (k - (shots - 1) / 2) * 0.12 : rand(-0.09, 0.09);
-          dir.applyAxisAngle(new V3(0, 1, 0), sp + rand(-0.04, 0.04));
+          const sx = diffSpread(); dir.applyAxisAngle(new V3(0, 1, 0), sp + rand(-0.04 - sx, 0.04 + sx));
           fire(e.pos.clone().add(new V3(0, 1.02 * (e.boss ? 1.18 : 1), 0)).addScaledVector(dir, 0.9), dir, 48, e.dmg || (e.boss ? 9 : 7), 'e');
         }
-        e.fireCd = e.boss ? rand(1.0, 1.4) : rand(1.0, 1.7);
+        e.fireCd = (e.boss ? rand(1.0, 1.4) : rand(1.0, 1.7)) * (1 + (1 - diffMult()) * 0.9);   // на облегчённой главе враги стреляют реже
       }
     }
   }
@@ -4064,6 +4087,7 @@ function finishChapter(n, coins, lines, next) {
 }
 function failChapter(title, text) {
   if (MIS && MIS.online) { taskFail(title); return; }
+  runEnd('fail', title);
   state.mode = 'dead'; setEngine(0, false);
   showModal(`
     <div class="kicker">Эпизод ${state.ep} · ${MIS.title}</div>
@@ -5882,7 +5906,7 @@ let achBusy = false;
 function walletAdd(n) { if (!n) return; PROF.coins += n; PROF.st.earned += Math.max(0, n); saveProfile(); checkAch(); }
 function canPay(price) { return PROF.god || PROF.coins >= price; }
 function pay(price) { if (!canPay(price)) return false; if (!PROF.god) PROF.coins -= price; saveProfile(); return true; }
-function profStat(k, n) { PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
+function profStat(k, n) { if (k === 'chapters') runEnd('win'); PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
 const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: 'https://t.me/nightfaregame', maxUrl: '' };
@@ -7850,7 +7874,7 @@ function startMission() {
 }
 function showDead() {
   if (MIS && MIS.online) { taskFail('машина разбита'); pc.hp = 100; pc.dead = false; pc.g.visible = true; state.mode = 'drive'; return; }
-  state.mode = 'dead'; setEngine(0, false);
+  state.mode = 'dead'; setEngine(0, false); runEnd('death', state.act === 1 ? 'машина' : 'пешком');
   const act = state.act, rk = state.ep >= 2 ? 'c' + state.ch : act, used = state.reviveUsed[rk];
   showModal(`
     <div class="kicker">${state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ` + MIS.title : act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
@@ -8021,6 +8045,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   $('loading').hidden = true;
   showPreview(); $('ageBadge').hidden = PLATFORM !== 'vk';
   // a signed-in player skips the entry screen; wait for the server at most 4 s
+  diffLoad();
   const restoring = cloudRestore();
   restoring.then(() => { if (PROF.login && !$('gate').hidden && gateStep === 'register' && !CLOUD.busy) { finishGate(); updateProfChip(); } }).catch(() => {});
   Promise.race([restoring, new Promise((r) => setTimeout(() => r(false), 4000))]).then(() => { updateProfChip(); startGate(); });
@@ -8028,7 +8053,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
