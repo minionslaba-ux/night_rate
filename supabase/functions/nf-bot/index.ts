@@ -5,11 +5,13 @@
 // • Подключение вебхука и меню команд (один раз и после изменений): GET …/functions/v1/nf-bot?setup=1. Чужой вебхук не перезаписывается без &force=1.
 // • Канал @nightfaregame: ежедневный пост (pg_cron, 19:07 МСК, POST {daily: ключ из nf_settings.cron_key}; не больше одного в день — nf_posts),
 //   /news — новость в канал с превью, /postnow — сегодняшний пост сейчас, /autopost on|off, /pin — закреплённое сообщение с быстрым меню.
+// • И в канал игры в MAX — с кнопкой «▶ Играть», которая открывает игру прямо в MAX (max.ts). /maxsetup — найти канал.
 // • Те же посты синхронно уходят на стену группы ВК (club242985713), если владелец добавил секрет VK_WALL_TOKEN. /vk — проверка и вкл/выкл.
 // Запросы от Telegram проверяются секретом, выведенным из токена бота (TELEGRAM_BOT_TOKEN в секретах функций; его добавляет владелец).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import * as XLSX from 'npm:xlsx@0.18.5';
 import { dailyPost, msk as mskNow } from './posts.ts';
+import { maxBroadcast, maxPin, maxOn } from './max.ts';
 
 const token = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const SELF = `${Deno.env.get('SUPABASE_URL')}/functions/v1/nf-bot`;
@@ -81,6 +83,7 @@ const ADMIN_COMMANDS = [
   { command: 'postnow', description: 'Сегодняшний автопост в канал — сейчас' },
   { command: 'autopost', description: 'Автопосты в канал: /autopost on|off' },
   { command: 'pin', description: 'Закреплённое меню в канале' },
+  { command: 'maxsetup', description: 'Канал MAX: подключить и проверить' },
   { command: 'vk', description: 'Посты в группу ВК: проверка, /vk on|off' },
   { command: 'broadcast', description: 'Сообщение подписчикам бота: /broadcast текст' },
   { command: 'export', description: 'Игроки в Excel' },
@@ -114,6 +117,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 /autopost on · off — включить или выключить ежедневные посты
 /pin — опубликовать или обновить закреплённое меню с кнопками
 /vk — дубль постов в группу ВК: проверка · /vk on · /vk off
+/maxsetup — канал MAX: посты туда уходят с кнопкой «▶ Играть» (игра открывается прямо в MAX); /pin закрепляет такую кнопку и там
 
 📣 <b>Рассылка</b> (сначала превью, потом кнопка «Отправить»)
 /broadcast текст — личное сообщение всем, кто нажал /start в боте
@@ -164,6 +168,8 @@ async function weekStats() {
   return `📊 <b>Неделя в Порт-Северном</b>\n\n👥 Водителей за рулём: <b>${n(act)}</b>${nw ? ` (новых — ${n(nw)})` : ''}\n🚕 Поездок такси у них всего: ${n(fares)}\n📋 Выполнено заданий: ${n(tasks)}${t3 ? `\n\n<b>Лучшие водители</b> (заработано всего)\n${t3}` : ''}\n\nНовая неделя — новые заказы. До встречи на смене!`;
 }
 const PIN_TEXT = `🚕 <b>«Ночной тариф»</b> — ночной город, такси, погони и перестрелки.\n\n• Сюжет из 14 эпизодов\n• Открытый город: другие игроки, чат, группы с друзьями\n• 60 000 заданий, гараж и тюнинг\n\nИграйте в Telegram или на сайте — профиль общий. Новости игры — здесь, в канале.`;
+// закреплённое сообщение в канале MAX: игра открывается прямо здесь, без ссылок на другие площадки
+const MAX_PIN_TEXT = `🚕 <b>«Ночной тариф»</b> — ночной город, такси, погони и перестрелки.\n\n• Сюжет из 14 эпизодов\n• Открытый город: другие игроки, чат, группы с друзьями\n• 60 000 заданий, гараж и тюнинг\n\nИграйте прямо здесь, в MAX, без регистрации — кнопка «▶ Играть» ниже. Новости игры — в этом канале.`;
 const pinBtn = { inline_keyboard: [[{ text: '🚕 Играть в Telegram', url: BOT_START }], [{ text: '🌐 Играть на сайте', url: SITE }], [{ text: '👥 Группа ВКонтакте', url: VK_GROUP }]] };
 async function pinMenu() {
   const old = Number(await setting('pin_msg')) || 0;
@@ -186,7 +192,8 @@ async function dailyRun(force = false) {
   await db.from('nf_posts').insert({ day, kind: 'daily', message_id: r.result.message_id });
   const v = await toVk(text);
   if (v.ok) await db.from('nf_posts').update({ vk_id: v.id }).eq('day', day);
-  return { ok: true, vk: v };
+  const mx = await maxBroadcast(db, text, true).catch((e) => ({ ok: 0, note: String(e) }));
+  return { ok: true, vk: v, max: mx.note };
 }
 
 async function exportUsers(chatId: number) {
@@ -330,7 +337,18 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
     }
     case 'pin': {
       const r = await pinMenu();
+      const mp = maxOn() ? await maxPin(db, MAX_PIN_TEXT).catch((e) => [String(e)]) : [];
+      if (mp.length) await say(`💬 <b>Канал MAX</b>\n${mp.map(esc).join('\n')}`);
       await say(r.ok ? (r.updated ? '📌 Закреплённое меню в канале обновлено.' : r.pinned ? '📌 Меню опубликовано и закреплено в канале.' : `📌 Меню опубликовано, но закрепить не вышло: ${esc(r.error)}. Дайте боту в канале право «Закреплять сообщения» (или «Редактировать сообщения») и повторите /pin.`) : `Не удалось опубликовать в канал: ${esc(r.error)}. Проверьте, что бот — админ канала с правом публикации.`);
+      return true;
+    }
+    case 'maxsetup': {
+      if (!maxOn()) { await say('Нет токена бота MAX (MAX_BOT_TOKEN в секретах Supabase).'); return true; }
+      // подписка вебхука MAX (он живёт в nf-login и сам сохраняет каналы, куда добавлен бот)
+      const sub = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/nf-login?max_setup=1`).then((r) => r.json()).catch(() => null);
+      const { data: rows } = await db.from('nf_max_chats').select('chat_id, is_channel, title, enabled, last_post').order('added_at');
+      const list = (rows || []).map((r: any) => `${r.enabled ? '🟢' : '⚪️'} ${r.is_channel ? 'канал' : 'чат'} «${esc(r.title || r.chat_id)}»${r.last_post ? ` · пост ${msk(r.last_post).slice(5)}` : ''}`);
+      await say(`💬 <b>MAX</b> · бот: ${esc(sub?.bot || '?')} · вебхук: ${sub?.subscribed?.success ? '✅' : '❌ ' + esc(JSON.stringify(sub?.subscribed || sub || 'нет ответа').slice(0, 120))}\n\n${list.length ? list.join('\n') + '\n\nВ каналы 🟢 уходят те же посты, что в Telegram, с кнопкой «▶ Играть». Закрепить кнопку «Играть» в канале MAX — /pin.' : 'Канал пока не найден. Добавьте бота игры в администраторы канала MAX (если уже добавлен — уберите и добавьте снова или опубликуйте в канале любой пост), подождите полминуты и повторите /maxsetup.'}`);
       return true;
     }
     case 'vk': {
@@ -385,9 +403,10 @@ async function onCallback(cq: any) {
     await db.from('nf_drafts').delete().eq('id', d.id);
     const r = await toChannel(html);
     const v = r.ok ? await toVk(html) : null;
+    const mx = r.ok ? await maxBroadcast(db, html).catch((e) => ({ ok: 0, note: String(e) })) : null;
     if (r.ok && d.kind === 'post') await db.from('nf_posts').upsert({ day: mskNow().toISOString().slice(0, 10), kind: 'daily', message_id: r.result.message_id, vk_id: v?.ok ? v.id : null });
     await done(r.ok ? 'Опубликовано' : 'Ошибка');
-    return api('sendMessage', { chat_id: chatId, text: r.ok ? `✅ Опубликовано в канале @nightfaregame.\n${vkNote(v!)}` : `Не удалось опубликовать: ${r.description}. Проверьте, что бот — админ канала.` });
+    return api('sendMessage', { chat_id: chatId, text: r.ok ? `✅ Опубликовано в канале @nightfaregame.\n${vkNote(v!)}\n${mx!.note}` : `Не удалось опубликовать: ${r.description}. Проверьте, что бот — админ канала.` });
   }
   const text = `🚕 <b>Ночной тариф</b>\n\n${esc(d.payload?.text)}`;
   if (m[2] === 'me') { await api('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', reply_markup: playBtn }); return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Отправил только вам' }); }

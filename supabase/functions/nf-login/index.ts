@@ -84,10 +84,10 @@ async function vkIdUser(token: unknown) {
 }
 
 // ---- MAX: бот и вебхук ----
-const MAX_BOT = 'se14877440_1_bot', MAX_HOSTS = ['https://platform-api2.max.ru', 'https://platform-api.max.ru'];
+const MAX_BOT = 'se14877440_1_bot', MAX_HOSTS = ['https://platform-api.max.ru', 'https://platform-api2.max.ru'];
 const maxToken = () => (Deno.env.get('MAX_BOT_TOKEN') || '').trim();
 const maxSecret = async () => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode('nf-max-hook:' + maxToken())))).slice(0, 48);
-// new address first; the old one stays as a fallback (the new one may use a certificate the runtime does not trust)
+// platform-api first (platform-api2 may use a certificate the runtime does not trust), the other as a fallback
 const maxApi = async (path: string, init: RequestInit = {}) => {
   let last: any = null;
   for (const host of MAX_HOSTS) {
@@ -102,6 +102,19 @@ const newNonce = () => [...crypto.getRandomValues(new Uint8Array(32))].map((x) =
 // вебхук MAX: «Начать» по ссылке входа (или метка, присланная текстом)
 async function maxHook(db: any, up: any) {
   const ty = up?.update_type;
+  // каналы MAX, где админ бот игры (для постов с кнопкой «Играть»): chat_id приходит только в событиях
+  const chatTitle = async (id: number) => { const c = await maxApi(`/chats/${id}`); return c?.title ? String(c.title).slice(0, 100) : null; };
+  if (ty === 'bot_added' && up.chat_id) { await db.from('nf_max_chats').upsert({ chat_id: Number(up.chat_id), is_channel: !!up.is_channel, enabled: true, title: await chatTitle(Number(up.chat_id)) }); return; }
+  if (ty === 'bot_removed' && up.chat_id) { await db.from('nf_max_chats').update({ enabled: false }).eq('chat_id', up.chat_id); return; }
+  if (ty === 'chat_title_changed' && up.chat_id) { await db.from('nf_max_chats').update({ title: String(up.title || '').slice(0, 100) }).eq('chat_id', up.chat_id); return; }
+  const rcp = up?.message?.recipient;
+  if (ty === 'message_created' && rcp?.chat_type && rcp.chat_type !== 'dialog') {   // пост в канале или сообщение в чате — не личка боту
+    if (rcp.chat_type === 'channel' && rcp.chat_id) {
+      const { data } = await db.from('nf_max_chats').select('chat_id').eq('chat_id', rcp.chat_id).maybeSingle();
+      if (!data) await db.from('nf_max_chats').upsert({ chat_id: Number(rcp.chat_id), is_channel: true, enabled: true, title: await chatTitle(Number(rcp.chat_id)) });
+    }
+    return;
+  }
   const user = ty === 'bot_started' ? up.user : ty === 'message_created' ? up.message?.sender : null;
   const uid = Number(user?.user_id); if (!(uid > 0) || user?.is_bot) return;
   const raw = String(ty === 'bot_started' ? up.payload || '' : up.message?.body?.text || '').trim().replace(/^\/start\s+/, '');
@@ -160,7 +173,7 @@ Deno.serve(async (req) => {
       if (qs.get('max_setup') !== '1') return json({ ok: true });
       if (!maxToken()) return json({ error: 'not_configured' }, 503);
       const me = await maxApi('/me');
-      const sub = await maxApi('/subscriptions', { method: 'POST', body: JSON.stringify({ url: `${URL0}/functions/v1/nf-login`, secret: await maxSecret(), update_types: ['bot_started', 'message_created'] }) });
+      const sub = await maxApi('/subscriptions', { method: 'POST', body: JSON.stringify({ url: `${URL0}/functions/v1/nf-login`, secret: await maxSecret(), update_types: ['bot_started', 'message_created', 'bot_added', 'bot_removed', 'chat_title_changed'] }) });
       return json({ bot: me?.username || me?.name || null, subscribed: sub });
     }
     const hookSecret = req.headers.get('x-max-bot-api-secret');
