@@ -13,6 +13,11 @@
 // action 'delete_account' + access_token — удалить аккаунт целиком (правила VK Mini Apps: удаление прямо из приложения).
 // action 'links' + access_token — какие площадки привязаны к аккаунту; action 'link' + access_token + подтверждение площадки —
 //   привязать площадку к своему аккаунту. Если она уже входила в другой, пустой аккаунт (без прогресса), тот удаляется; с прогрессом — отказ.
+// • MAX на сайте (бота @se14877440_1_bot): action 'max_start' выдаёт одноразовую метку и ссылку max.ru/<бот>?start=<метка>.
+//   Игрок открывает бота и жмёт «Начать»; MAX присылает сюда вебхук bot_started с меткой и user_id (заголовок X-Max-Bot-Api-Secret
+//   сверяется с секретом, выведенным из MAX_BOT_TOKEN). Сайт опрашивает { max_nonce }: пока игрок не подтвердил — { pending: true },
+//   потом — обычный вход MAX (тот же max_id, что в мини-приложении). Метка живёт 10 минут и срабатывает один раз.
+//   Подписка вебхука: GET …/nf-login?max_setup=1.
 // action 'tg_config' — номер бота для кнопки «Войти через Telegram» (публичная часть токена до двоеточия, не секрет).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -78,6 +83,46 @@ async function vkIdUser(token: unknown) {
   return id > 0 ? { id, first_name: String(u.first_name || '').slice(0, 24), last_name: String(u.last_name || '').slice(0, 24) } : null;
 }
 
+// ---- MAX: бот и вебхук ----
+const MAX_BOT = 'se14877440_1_bot', MAX_HOSTS = ['https://platform-api2.max.ru', 'https://platform-api.max.ru'];
+const maxToken = () => (Deno.env.get('MAX_BOT_TOKEN') || '').trim();
+const maxSecret = async () => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode('nf-max-hook:' + maxToken())))).slice(0, 48);
+// new address first; the old one stays as a fallback (the new one may use a certificate the runtime does not trust)
+const maxApi = async (path: string, init: RequestInit = {}) => {
+  let last: any = null;
+  for (const host of MAX_HOSTS) {
+    try { const r = await fetch(host + path, { ...init, headers: { Authorization: maxToken(), 'Content-Type': 'application/json', ...(init.headers || {}) } }); return await r.json().catch(() => ({ status: r.status })); }
+    catch (e) { last = { error: String(e).slice(0, 200), host }; }
+  }
+  return last;
+};
+const maxSay = (userId: number, text: string) => maxApi(`/messages?user_id=${userId}`, { method: 'POST', body: JSON.stringify({ text }) }).catch(() => null);
+const NONCE_RE = /^[A-Za-z0-9]{32}$/;
+const newNonce = () => [...crypto.getRandomValues(new Uint8Array(32))].map((x) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[x % 62]).join('');
+// вебхук MAX: «Начать» по ссылке входа (или метка, присланная текстом)
+async function maxHook(db: any, up: any) {
+  const ty = up?.update_type;
+  const user = ty === 'bot_started' ? up.user : ty === 'message_created' ? up.message?.sender : null;
+  const uid = Number(user?.user_id); if (!(uid > 0) || user?.is_bot) return;
+  const raw = String(ty === 'bot_started' ? up.payload || '' : up.message?.body?.text || '').trim().replace(/^\/start\s+/, '');
+  if (NONCE_RE.test(raw)) {
+    const name = [user.first_name, user.last_name].filter(Boolean).join(' ').slice(0, 24) || user.username || 'MAX';
+    const { data } = await db.from('nf_max_auth').update({ max_id: uid, name, done_at: new Date().toISOString() })
+      .eq('nonce', raw).is('max_id', null).gt('created_at', new Date(Date.now() - 600e3).toISOString()).select('nonce');
+    await maxSay(uid, data?.length ? '✅ Вход в «Ночной тариф» подтверждён. Вернитесь на сайт — игра продолжится сама.' : 'Ссылка для входа устарела. Нажмите «Войти через MAX» на сайте ещё раз.');
+    return;
+  }
+  if (ty === 'bot_started') await maxSay(uid, '🚕 «Ночной тариф» — ночной город, такси, погони и перестрелки. Откройте игру кнопкой мини-приложения этого бота.');
+}
+// сайт: метка подтверждена в MAX → пользователь MAX (один раз)
+async function maxNonceUser(db: any, nonce: string) {
+  const { data } = await db.from('nf_max_auth').select('max_id, name, used_at, created_at').eq('nonce', nonce).maybeSingle();
+  if (!data || data.used_at || Date.now() - Date.parse(data.created_at) > 600e3) return { gone: true };
+  if (!data.max_id) return { pending: true };
+  const { data: took } = await db.from('nf_max_auth').update({ used_at: new Date().toISOString() }).eq('nonce', nonce).is('used_at', null).select('nonce');
+  return took?.length ? { user: { id: Number(data.max_id), first_name: data.name } } : { gone: true };
+}
+
 const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((x) => CODE_ABC[x % CODE_ABC.length]).join('');
 const URL0 = Deno.env.get('SUPABASE_URL')!, OPTS = { auth: { persistSession: false, autoRefreshToken: false } };
@@ -104,6 +149,20 @@ async function useCode(db: any, code: string): Promise<string | null> {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
+    if (req.method === 'GET') {
+      if (new URL(req.url).searchParams.get('max_setup') !== '1') return json({ ok: true });
+      if (!maxToken()) return json({ error: 'not_configured' }, 503);
+      const me = await maxApi('/me');
+      const sub = await maxApi('/subscriptions', { method: 'POST', body: JSON.stringify({ url: `${URL0}/functions/v1/nf-login`, secret: await maxSecret(), update_types: ['bot_started', 'message_created'] }) });
+      return json({ bot: me?.username || me?.name || null, subscribed: sub });
+    }
+    const hookSecret = req.headers.get('x-max-bot-api-secret');
+    if (hookSecret !== null) {   // вебхук MAX
+      if (!maxToken() || hookSecret !== (await maxSecret())) return json({ error: 'forbidden' }, 403);
+      const up = await req.json().catch(() => null);
+      try { await maxHook(createClient(URL0, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, OPTS), up); } catch (e) { console.error('max hook', e); }
+      return json({ ok: true });
+    }
     const body = await req.json();
     if (body.action === 'tg_config') {
       const t = (Deno.env.get('TELEGRAM_BOT_TOKEN') || '').trim();
@@ -132,11 +191,18 @@ Deno.serve(async (req) => {
       const has = async (t: string) => ((await db.from(t).select('user_id', { count: 'exact', head: true }).eq('user_id', cur.id)).count || 0) > 0;
       return json({ tg: await has('tg_accounts'), vk: await has('vk_accounts'), max: await has('max_accounts') });
     }
+    if (body.action === 'max_start') {
+      if (!maxToken()) return json({ error: 'not_configured' }, 503);
+      const nonce = newNonce();
+      const { error } = await db.from('nf_max_auth').insert({ nonce });
+      return error ? json({ error: 'start_failed' }, 500) : json({ nonce, url: `https://max.ru/${MAX_BOT}?start=${nonce}`, expires_in: 600 });
+    }
 
     const code = typeof body.code === 'string' ? body.code.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
     const widget = body.tg_widget && typeof body.tg_widget === 'object';
     const vkid = typeof body.vkid_token === 'string' && body.vkid_token;
-    const plat = typeof body.max_init === 'string' && body.max_init ? 'max' : body.vk_launch || vkid ? 'vk' : (typeof body.initData === 'string' && body.initData) || widget ? 'tg' : '';
+    const maxNonce = typeof body.max_nonce === 'string' && NONCE_RE.test(body.max_nonce) ? body.max_nonce : '';
+    const plat = (typeof body.max_init === 'string' && body.max_init) || maxNonce ? 'max' : body.vk_launch || vkid ? 'vk' : (typeof body.initData === 'string' && body.initData) || widget ? 'tg' : '';
     if (code && !plat) { const target = await useCode(db, code); return target ? await sessionFor(db, target, '') : json({ error: 'bad_code' }, 403); }
     if (!plat) return json({ error: 'no_proof' }, 400);
 
@@ -145,7 +211,11 @@ Deno.serve(async (req) => {
       const t = (Deno.env.get('TELEGRAM_BOT_TOKEN') || '').trim(); if (!t) return json({ error: 'not_configured' }, 503);
       u = widget ? await widgetUser(t, body.tg_widget) : await initDataUser(t, body.initData);
     }
-    else if (plat === 'max') { const t = (Deno.env.get('MAX_BOT_TOKEN') || '').trim(); if (!t) return json({ error: 'not_configured' }, 503); u = await initDataUser(t, body.max_init); }
+    else if (plat === 'max') {
+      const t = maxToken(); if (!t) return json({ error: 'not_configured' }, 503);
+      if (maxNonce) { const r: any = await maxNonceUser(db, maxNonce); if (r.pending) return json({ pending: true }); if (r.gone) return json({ error: 'expired' }, 410); u = r.user; }
+      else u = await initDataUser(t, body.max_init);
+    }
     else if (vkid) u = await vkIdUser(body.vkid_token);
     else { if (!(Deno.env.get('VK_APP_SECRET') || '').trim()) return json({ error: 'not_configured' }, 503); u = await vkLaunchUser(body.vk_launch); }
     if (!u?.id) return json({ error: 'bad_signature' }, 403);
