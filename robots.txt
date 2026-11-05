@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /supabase/
+Disallow: /docs/
+
+Sitemap: https://nightfaregame.com/sitemap.xml
