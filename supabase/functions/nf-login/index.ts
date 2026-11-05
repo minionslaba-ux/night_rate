@@ -105,14 +105,15 @@ async function maxHook(db: any, up: any) {
   const user = ty === 'bot_started' ? up.user : ty === 'message_created' ? up.message?.sender : null;
   const uid = Number(user?.user_id); if (!(uid > 0) || user?.is_bot) return;
   const raw = String(ty === 'bot_started' ? up.payload || '' : up.message?.body?.text || '').trim().replace(/^\/start\s+/, '');
-  if (NONCE_RE.test(raw)) {
+  const short = raw.replace(/[\s-]/g, '');
+  if (NONCE_RE.test(raw) || /^\d{6}$/.test(short)) {   // метка из ссылки или 6 цифр с экрана сайта
     const name = [user.first_name, user.last_name].filter(Boolean).join(' ').slice(0, 24) || user.username || 'MAX';
     const { data } = await db.from('nf_max_auth').update({ max_id: uid, name, done_at: new Date().toISOString() })
-      .eq('nonce', raw).is('max_id', null).gt('created_at', new Date(Date.now() - 600e3).toISOString()).select('nonce');
+      .eq(NONCE_RE.test(raw) ? 'nonce' : 'code', NONCE_RE.test(raw) ? raw : short).is('max_id', null).gt('created_at', new Date(Date.now() - 600e3).toISOString()).select('nonce');
     await maxSay(uid, data?.length ? '✅ Вход в «Ночной тариф» подтверждён. Вернитесь на сайт — игра продолжится сама.' : 'Ссылка для входа устарела. Нажмите «Войти через MAX» на сайте ещё раз.');
     return;
   }
-  if (ty === 'bot_started') await maxSay(uid, '🚕 «Ночной тариф» — ночной город, такси, погони и перестрелки. Откройте игру кнопкой мини-приложения этого бота.');
+  if (ty === 'bot_started' || ty === 'message_created') await maxSay(uid, '🚕 «Ночной тариф» — ночной город, такси, погони и перестрелки. Играть — кнопкой мини-приложения этого бота.\n\nВходите на сайте? Отправьте сюда 6 цифр с экрана входа.');
 }
 // сайт: метка подтверждена в MAX → пользователь MAX (один раз)
 async function maxNonceUser(db: any, nonce: string) {
@@ -150,7 +151,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
     if (req.method === 'GET') {
-      if (new URL(req.url).searchParams.get('max_setup') !== '1') return json({ ok: true });
+      const qs = new URL(req.url).searchParams;
+      if (qs.get('max_check') === '1') {   // диагностика без секретов: какие подписки видит MAX и есть ли метки входа
+        if (!maxToken()) return json({ error: 'not_configured' }, 503);
+        const subs = await maxApi('/subscriptions');
+        return json({ subscriptions: (subs?.subscriptions || []).map((x: any) => ({ url: x.url, time: x.time, update_types: x.update_types, version: x.version })), raw_error: subs?.subscriptions ? null : subs });
+      }
+      if (qs.get('max_setup') !== '1') return json({ ok: true });
       if (!maxToken()) return json({ error: 'not_configured' }, 503);
       const me = await maxApi('/me');
       const sub = await maxApi('/subscriptions', { method: 'POST', body: JSON.stringify({ url: `${URL0}/functions/v1/nf-login`, secret: await maxSecret(), update_types: ['bot_started', 'message_created'] }) });
@@ -193,9 +200,15 @@ Deno.serve(async (req) => {
     }
     if (body.action === 'max_start') {
       if (!maxToken()) return json({ error: 'not_configured' }, 503);
-      const nonce = newNonce();
-      const { error } = await db.from('nf_max_auth').insert({ nonce });
-      return error ? json({ error: 'start_failed' }, 500) : json({ nonce, url: `https://max.ru/${MAX_BOT}?start=${nonce}`, expires_in: 600 });
+      const nonce = newNonce(), since = new Date(Date.now() - 600e3).toISOString();
+      let short = '';
+      for (let i = 0; i < 6 && !short; i++) {   // 6 цифр, не совпадающие с другими действующими
+        const c = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+        const { count } = await db.from('nf_max_auth').select('nonce', { count: 'exact', head: true }).eq('code', c).gt('created_at', since);
+        if (!count) short = c;
+      }
+      const { error } = await db.from('nf_max_auth').insert({ nonce, code: short || null });
+      return error ? json({ error: 'start_failed' }, 500) : json({ nonce, code: short, url: `https://max.ru/${MAX_BOT}?start=${nonce}`, expires_in: 600 });
     }
 
     const code = typeof body.code === 'string' ? body.code.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';

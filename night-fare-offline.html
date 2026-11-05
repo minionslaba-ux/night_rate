@@ -439,7 +439,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v45'; window.__errs = [];
+window.APP_VER = 'v46'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6265,13 +6265,15 @@ function maxPrefetch(done) {
   if (!cloudInit()) { maxPre = { err: noServer(), t: Date.now() }; return; }
   maxPre = { busy: true };
   nfPublic({ action: 'max_start' }).then((j) => {
-    maxPre = j.url ? { nonce: j.nonce, url: j.url, t: Date.now() } : { err: j.error === 'not_configured' ? 'Вход через MAX ещё не настроен.' : j.error === 'network' ? NO_SERVER : 'Не удалось подготовить вход через MAX.', t: Date.now() };
+    maxPre = j.url ? { nonce: j.nonce, code: j.code || '', url: j.url, t: Date.now() } : { err: j.error === 'not_configured' ? 'Вход через MAX ещё не настроен.' : j.error === 'network' ? NO_SERVER : 'Не удалось подготовить вход через MAX.', t: Date.now() };
     if (done) done();
   });
 }
 const maxReady = () => !!(maxPre && maxPre.url && Date.now() - maxPre.t < 9 * 60e3);
 // the tap on the MAX link: remember the mark (the page may be reloaded while the player is in MAX) and use it once
-function maxGo(link) { if (!maxReady()) return false; store.set('nf-max', { nonce: maxPre.nonce, link: !!link, t: maxPre.t }); maxPre = null; return true; }
+function maxGo(link) { if (!maxReady()) return false; store.set('nf-max', { nonce: maxPre.nonce, code: maxPre.code, link: !!link, t: maxPre.t }); maxPre = null; return true; }
+// what to do in MAX: tap «Начать»; if the bot stays silent (the chat was opened before), send it the 6 digits
+function maxHint() { const S = store.get('nf-max') || {}, c = S.code ? S.code.slice(0, 3) + ' ' + S.code.slice(3) : ''; return 'Нажми «Начать» в боте игры в MAX и вернись сюда — вход подтвердится сам.' + (c ? ` Если бот не ответил, отправь ему код ${c}.` : ''); }
 const maxRedraw = () => { if (!$('prof').hidden) renderProfile(); else if (!$('gate').hidden && !gateMaxUrl) renderGate(); };
 const maxLinkHtml = (cls, label, attrs) => (maxReady() || maxPrefetch(maxRedraw), maxReady()) ? `<a class="${cls}" href="${esc(maxPre.url)}" target="_blank" rel="noopener" ${attrs}>${label}</a>` : `<button class="${cls}" type="button" disabled>${maxPre && maxPre.err ? 'MAX недоступен' : 'Готовлю вход через MAX…'}</button>`;
 // returns '' when signed in, a message otherwise, or null if a newer attempt took over
@@ -6377,7 +6379,7 @@ let gateStep = 'install', gateMode = 'register', gateMsg = '', gateForm = false,
 function startGate() {
   if (VK_AUTH) { finishGate(); toast('Вход через ВКонтакте…', 2); vkidFinish(VK_AUTH).then((err) => { toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return; }
   if (!inMiniApp && store.get('nf-max') && Date.now() - store.get('nf-max').t < 10 * 60e3) {   // the page reloaded while waiting for MAX
-    finishGate(); toast('Жду подтверждения в MAX…', 3); maxSiteWait().then((err) => { if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return;
+    finishGate(); toast(maxHint(), 6); maxSiteWait().then((err) => { if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return;
   }
   if (TG_AUTH) { finishGate(); toast('Вход через Telegram…', 2); tgWidgetLogin(TG_AUTH).then((err) => { toast(err || `Привет, ${PROF.name}!`, 3); updateProfChip(); }); return; }
   if (inMiniApp) { platformLogin().then((err) => { if (!err) toast(PROF.god ? 'Тестовый профиль' : `Привет, ${PROF.name}!`, 2); updateProfChip(); }); return; }
@@ -6432,7 +6434,7 @@ function renderGate() {
       const url = $('gMax').href;
       if (!maxGo(false)) { e.preventDefault(); return; }
       setTimeout(() => {   // after the link has opened MAX
-        gateMaxUrl = url; gateMsg = 'Нажми «Начать» в боте игры в MAX и вернись сюда — вход подтвердится сам.'; renderGate();
+        gateMaxUrl = url; gateMsg = maxHint(); renderGate();
         maxSiteWait().then((err) => {
           if (err === null) return; gateMaxUrl = '';
           if (err) { gateMsg = err; renderGate(); return; }
@@ -7864,7 +7866,7 @@ $('profBody').addEventListener('click', (e) => {
   const mg = e.target.closest('[data-maxgo]');
   if (mg) {   // let the link open MAX; redraw only after the tap is handled
     if (!maxGo(mg.dataset.maxgo === 'link')) { e.preventDefault(); return; }
-    setTimeout(() => { profMsg = 'Нажми «Начать» в боте игры в MAX и вернись сюда — вход подтвердится сам.'; renderProfile(); maxSiteWait().then((err) => { if (err === null) return; profMsg = err || 'Готово: профиль загружен.'; renderProfile(); updateProfChip(); }); }, 0);
+    setTimeout(() => { profMsg = maxHint(); renderProfile(); maxSiteWait().then((err) => { if (err === null) return; profMsg = err || 'Готово: профиль загружен.'; renderProfile(); updateProfChip(); }); }, 0);
     return;
   }
   const j = e.target.closest('[data-join]'); if (j) { joinCommunity(j.dataset.join); return; } const b = e.target.closest('[data-act]'); if (b && !b.disabled) profAction(b.dataset.act, b.dataset.id); });
