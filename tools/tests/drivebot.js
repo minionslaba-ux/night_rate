@@ -36,7 +36,7 @@ if (!process.env.NOPAGE) fs.writeFileSync(SP + '/test/' + PAGE, '<!doctype html>
     function drive(type) {
       const pc = g.pc, M = g.MIS, goal = S.ep === 1 ? g.GOAL : M.navGoal();
       const sp = Math.hypot(pc.vel.x, pc.vel.z), dG = Math.hypot(goal.x - pc.pos.x, goal.z - pc.pos.z);
-      const ram = /stop|train|plane|ep2c5/.test(type), tail = /tail|ep2c1/.test(type);
+      const ram = /stop|train|plane|ep2c5/.test(type), tail = /tail|ep2c1|escort/.test(type);
       let tgt = g.NAV.target || goal;
       if (dG < (ram ? 70 : 35) || !g.NAV.target) tgt = goal;
       // a moving scripted car: drive along its trail (breadcrumbs), not across blocks
@@ -55,6 +55,16 @@ if (!process.env.NOPAGE) fs.writeFileSync(SP + '/test/' + PAGE, '<!doctype html>
           if (B.rp === undefined || B.rp === null) B.rp = bi;
           if (Math.hypot(Pp[B.rp].x - pc.pos.x, Pp[B.rp].z - pc.pos.z) < 9) B.rp = (B.rp + 1) % n;
           tgt = Pp[B.rp];
+        }
+      }
+      // on the race track: steer round a slower car right ahead instead of ramming it
+      if (g.TRK.on && /circuit|overtake/.test(type)) {
+        const T = g.TRK, i0 = g.TR.me.idx, nr = T.nrm[i0], fx = Math.sin(pc.h), fz = Math.cos(pc.h);
+        const mySide = (pc.pos.x - T.pts[i0].x) * nr.x + (pc.pos.z - T.pts[i0].z) * nr.z;
+        for (const e of g.enemyCars) {
+          if (!e.racer || e.dead) continue;
+          const dx = e.pos.x - pc.pos.x, dz = e.pos.z - pc.pos.z, f = dx * fx + dz * fz, lat = dx * nr.x + dz * nr.z;
+          if (f > 0 && f < 22 && Math.abs(lat) < 3.6) { const side = Math.abs(mySide + lat) > 5 ? -Math.sign(mySide + lat) : (lat > 0 ? -1 : 1); tgt = new g.GOAL.constructor(tgt.x + nr.x * side * 5, 0, tgt.z + nr.z * side * 5); break; }
         }
       }
       // a fight: patrol the blocks in the centre and let the autoaim shoot the pursuers
@@ -89,6 +99,11 @@ if (!process.env.NOPAGE) fs.writeFileSync(SP + '/test/' + PAGE, '<!doctype html>
         if (d < 22) vWant = 0; else if (d < 35) vWant = Math.min(vWant, tv); else if (d < 55) vWant = Math.min(vWant, tv + 6);
       }
       if (/deliver|escape|ep2c3/.test(type) && dG < 30) vWant = Math.min(vWant, 14);
+      if (type === 'pacecar') vWant = clamp(vWant, 19, 25);
+      if (type === 'photo' && dG < 11) vWant = 0;
+      if (type === 'fuel') { const P0b = g.NAV.pts[1]; vWant = Math.min(vWant, 33); }
+      if (type === 'slalom') vWant = Math.min(vWant, 15);
+      if (type === 'push' && pc.pos.distanceTo(goal) < 12) vWant = Math.min(vWant, 9);
       // stuck → back up with the wheel turned the other way
       if (B.rev > 0) { B.rev -= 1 / 30; g.keys.KeyS = false; g.joy.x = -B.revS * 0.75; g.joy.y = 0.75; return; }
       if (vWant > 3 && sp < 1.8) B.stuck += 1 / 30; else B.stuck = Math.max(0, B.stuck - 2 / 30);
@@ -138,8 +153,9 @@ if (!process.env.NOPAGE) fs.writeFileSync(SP + '/test/' + PAGE, '<!doctype html>
         if (g.DIFF.last && g.DIFF.last.result === 'win') { end = 'win'; break; }
       }
       g.keys.Space = false; g.keys.KeyS = false; g.joy.x = 0; g.joy.y = 0;
+      let hudT = ''; try { hudT = (g.MIS && g.MIS.hud && g.MIS.hud().timer) || ''; } catch (e) {}
       let goalD = null; try { const q = S.ep === 1 ? g.GOAL : g.MIS.navGoal(); goalD = Math.round(Math.hypot(q.x - g.pc.pos.x, q.z - g.pc.pos.z)); } catch (e) {}
-      const r = { tries, m0, end, why: end === 'fail' ? g.DIFF.last.reason : '', sec: Math.round(t / 30), hp: Math.round(g.pc.hp), minHp: Math.round(minHp), goalD, kills: S.carKills, tr };
+      const r = { tries, m0, end, why: end === 'fail' ? g.DIFF.last.reason : '', sec: Math.round(t / 30), hp: Math.round(g.pc.hp), minHp: Math.round(minHp), goalD, kills: S.carKills, tr, hudT };
       document.getElementById('modal').hidden = true; S.mode = 'preview';
       return r;
     }
@@ -159,6 +175,6 @@ if (!process.env.NOPAGE) fs.writeFileSync(SP + '/test/' + PAGE, '<!doctype html>
     return out;
   }, [A, Bn, TRIES, LIMIT, ONLY, SEED]);
   fs.writeFileSync(SP + '/drive-' + (process.env.TAG || A) + '.json', JSON.stringify(res, null, 1));
-  for (const r of res) console.log(r.err ? `${r.k} ERR ${r.err}` : `${r.k.padEnd(6)} ${r.type.padEnd(9)} ${String(r.title).slice(0, 20).padEnd(20)} ` + r.rs.map((x) => `x${x.m0}:${x.end}${x.why ? '(' + x.why + ')' : ''} ${x.sec}s hp${x.minHp} d${x.goalD}`).join(' | '));
+  for (const r of res) console.log(r.err ? `${r.k} ERR ${r.err}` : `${r.k.padEnd(6)} ${r.type.padEnd(9)} ${String(r.title).slice(0, 20).padEnd(20)} ` + r.rs.map((x) => `x${x.m0}:${x.end}${x.why ? '(' + x.why + ')' : ''} ${x.sec}s hp${x.minHp} d${x.goalD}${process.env.HUD ? ' [' + x.hudT + ']' : ''}`).join(' | '));
   console.log('errors', errs.slice(0, 5)); await b.close();
 })().catch((e) => { console.log('FAIL', e.message); process.exit(1); });
