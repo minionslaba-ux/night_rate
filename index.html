@@ -429,7 +429,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v35'; window.__errs = [];
+window.APP_VER = 'v36'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -2869,6 +2869,24 @@ const HUMANS = new Set();
 const HUMAN_S = 0.54;
 const gunMat = new THREE.MeshStandardMaterial({ color: 0x1d1f24, metalness: 0.7, roughness: 0.35 });
 const gunGeoA = new THREE.BoxGeometry(0.16, 0.22, 0.62), gunGeoB = new THREE.BoxGeometry(0.14, 0.34, 0.16);
+// softer people: the low-poly characters get smoothed normals (no hard facets), a little more detail on the hands,
+// and dark clothes are lifted a touch so trousers do not vanish against the night street
+const SMOOTHED = new WeakSet();
+function smoothNormals(geo) {
+  if (SMOOTHED.has(geo)) return; SMOOTHED.add(geo);
+  const pos = geo.attributes.position, nor = geo.attributes.normal; if (!pos || !nor) return;
+  const key = (i) => `${Math.round(pos.getX(i) * 1e4)},${Math.round(pos.getY(i) * 1e4)},${Math.round(pos.getZ(i) * 1e4)}`;
+  const sum = new Map();
+  for (let i = 0; i < pos.count; i++) { const k = key(i); let s = sum.get(k); if (!s) { s = [0, 0, 0]; sum.set(k, s); } s[0] += nor.getX(i); s[1] += nor.getY(i); s[2] += nor.getZ(i); }
+  for (let i = 0; i < pos.count; i++) {
+    const s = sum.get(key(i)), l = Math.hypot(s[0], s[1], s[2]) || 1;
+    // keep a little of the original facet so edges stay readable
+    const nx = s[0] / l * 0.8 + nor.getX(i) * 0.2, ny = s[1] / l * 0.8 + nor.getY(i) * 0.2, nz = s[2] / l * 0.8 + nor.getZ(i) * 0.2, m = Math.hypot(nx, ny, nz) || 1;
+    nor.setXYZ(i, nx / m, ny / m, nz / m);
+  }
+  nor.needsUpdate = true;
+}
+function liftDark(c) { const hsl = {}; c.getHSL(hsl); if (hsl.l < 0.06) c.setHSL(hsl.h, Math.max(hsl.s, 0.15), 0.06 + hsl.l * 0.3); return c; }
 function makeHuman(look, scale) {
   const src = ASSETS.chars[look.model] || ASSETS.chars.kira;
   const model = THREE.SkeletonUtils.clone(src.scene);
@@ -2880,6 +2898,8 @@ function makeHuman(look, scale) {
     if (n === 'Skin') o.material.color.set(look.skin || '#e0b89a');
     else if (n === 'Face') { o.material.color.set('#1c1a22'); if (look.face) o.visible = false; }
     else if (look.colors && look.colors[n]) o.material.color.set(look.colors[n]);
+    if (n !== 'Skin' && n !== 'Face') liftDark(o.material.color);
+    smoothNormals(o.geometry);
   });
   const headB = model.getObjectByName('Head');
   if (headB && look.face) {
