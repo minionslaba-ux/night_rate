@@ -55,7 +55,15 @@ body { -webkit-user-select: none; user-select: none; touch-action: none; }
 html.fs-scroll, html.fs-scroll body { overflow: auto; height: auto; touch-action: pan-y; } html.fs-scroll body { min-height: calc(100vh + 240px); }
 
 /* HUD */
-.hud { position: fixed; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; }
+.hud { position: fixed; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; transition: opacity .45s ease; }
+/* cinema: letterbox bars, the HUD steps aside, a title card for every chapter */
+.lb { position: fixed; left: 0; right: 0; height: 0; background: #000; pointer-events: none; z-index: 40; transition: height .7s cubic-bezier(.2,.8,.2,1); }
+#lbT { top: 0; } #lbB { bottom: 0; }
+body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
+.cine-title { position: fixed; left: 0; right: 0; bottom: 17vh; text-align: center; pointer-events: none; opacity: 0; z-index: 41; color: #f4efe6; text-shadow: 0 2px 24px rgba(0,0,0,.8); }
+.cine-title small { display: block; font: 600 clamp(11px, 1.6vw, 14px) var(--font-body); letter-spacing: .38em; text-transform: uppercase; color: var(--taxi); margin-bottom: 8px; }
+.cine-title b { display: block; font: 400 clamp(26px, 5.2vw, 54px) var(--font-display); letter-spacing: .04em; }
+.cine-title.show { animation: cineT 3.4s ease forwards; } @keyframes cineT { 0% { opacity: 0; transform: translateY(14px); letter-spacing: .02em; } 18%, 72% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-6px); } }
 .hud-tl { position: absolute; top: calc(12px + var(--sat)); left: calc(12px + var(--sal)); display: grid; gap: 8px; max-width: min(46vw, 360px); }
 .obj { background: var(--panel); border-left: 3px solid var(--go); padding: 8px 12px; font-size: 14px; line-height: 1.35; border-radius: 0 6px 6px 0; }
 .obj b { font-family: var(--font-display); font-weight: 400; letter-spacing: .04em; color: var(--go); display: block; font-size: 11px; text-transform: uppercase; }
@@ -249,7 +257,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 .car-card.owned { border-color: var(--taxi); }
 
 /* Dialog */
-.dialog { position: fixed; left: 50%; bottom: calc(18px + var(--sab)); transform: translateX(-50%); box-sizing: border-box; margin-left: calc((var(--sal) - var(--sar)) / 2); width: min(720px, calc(100% - 24px - var(--sal) - var(--sar))); max-height: calc(100% - 36px - var(--sat) - var(--sab)); overflow-y: auto; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; cursor: pointer; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.dialog { z-index: 42; position: fixed; left: 50%; bottom: calc(18px + var(--sab)); transform: translateX(-50%); box-sizing: border-box; margin-left: calc((var(--sal) - var(--sar)) / 2); width: min(720px, calc(100% - 24px - var(--sal) - var(--sar))); max-height: calc(100% - 36px - var(--sat) - var(--sab)); overflow-y: auto; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; cursor: pointer; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
 .portrait { width: 58px; height: 58px; border-radius: 8px; display: grid; place-items: center; font-family: var(--font-display); font-size: 28px; color: #0b0d1f; }
 .dlg-name { font-family: var(--font-display); font-size: 14px; letter-spacing: .04em; margin-bottom: 4px; }
 .dlg-text { font-size: 16px; line-height: 1.5; min-height: 3em; }
@@ -432,6 +440,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 <div id="svc" class="chat party svc" hidden><div class="ptitle"><b id="svcTitle"></b><button id="svcClose" class="btn sm" type="button">✕</button></div><div id="svcBody" class="pbody"></div></div>
 <div id="tasks" class="chat party" hidden><div class="ptitle"><b>Задания</b><button id="tasksClose" class="btn sm" type="button">✕</button></div><div id="tasksBody" class="pbody"></div></div>
 <div id="party" class="chat party" hidden><div class="ptitle"><b>Группа и голос</b><button id="partyClose" class="btn sm" type="button">✕</button></div><div id="partyBody" class="pbody"></div></div>
+<div id="lbT" class="lb"></div><div id="lbB" class="lb"></div><div id="cineTitle" class="cine-title"><small></small><b></b></div>
 <div id="dialog" class="dialog" hidden>
   <div id="dlgPortrait" class="portrait">К</div>
   <div>
@@ -469,6 +478,7 @@ window.APP_VER = 'v55'; window.__errs = [];
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/FXAAShader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/SkeletonUtils.js"></script>
 <script>
@@ -508,12 +518,12 @@ const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 1200);
 camera.position.set(0, 80, 140);
 
 // post-processing: HDR scene -> bloom -> ACES tone map + sRGB + vignette
-let composer = null, bloomPass = null, finalPass = null;
+let composer = null, bloomPass = null, finalPass = null, fxaaPass = null;
 const FinalShader = {
-  uniforms: { tDiffuse: { value: null }, exposure: { value: 1.05 }, time: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, exposure: { value: 1.05 }, time: { value: 0 }, speed: { value: 0 }, dof: { value: 0 }, vig: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: [
-    'uniform sampler2D tDiffuse; uniform float exposure; uniform float time; varying vec2 vUv;',
+    'uniform sampler2D tDiffuse; uniform float exposure; uniform float time; uniform float speed; uniform float dof; uniform float vig; varying vec2 vUv;',
     'float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
     'vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }',
     'vec3 toSRGB(vec3 c){ return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4))-0.055, step(vec3(0.0031308), c)); }',
@@ -521,13 +531,17 @@ const FinalShader = {
     '  vec2 q = vUv - 0.5; float r2 = dot(q, q);',
     '  vec2 off = q * r2 * 0.012;',  // slight chromatic fringe towards the corners
     '  vec3 c = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);',
+    // speed: a radial blur that grows towards the edges of the frame (the centre — the car — stays sharp)
+    '  if (speed > 0.01) { float k = speed * 0.075 * smoothstep(0.02, 0.3, r2); vec3 a = c; for (int i = 1; i <= 5; i++) a += texture2D(tDiffuse, vUv - q * k * float(i) / 5.0).rgb; c = a / 6.0; }',
+    // dialogs: a soft lens blur around the edges, like a shallow depth of field with the speaker in the middle
+    '  if (dof > 0.01) { float rr = dof * 0.0075 * smoothstep(0.015, 0.2, r2); vec3 a = c; for (int i = 0; i < 6; i++) { float an = float(i) * 1.0472; a += texture2D(tDiffuse, vUv + vec2(cos(an), sin(an) * 1.7) * rr).rgb; } c = a / 7.0; }',
     '  c = aces(c * exposure);',
     '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
     '  c = mix(c, c * vec3(0.86, 0.98, 1.14), (1.0 - smoothstep(0.0, 0.45, l)) * 0.35);',  // cool, teal-blue shadows
     '  c = mix(c, c * vec3(1.08, 1.0, 0.88), smoothstep(0.45, 1.0, l) * 0.3);',          // warm highlights
     '  c = mix(vec3(l), c, 0.92);',                                                       // slightly muted colours: less cartoon
     '  c = mix(c, c * c * (3.0 - 2.0 * c), 0.22);',                                       // a gentle S-curve for contrast
-    '  c *= 1.0 - r2 * 0.65;',
+    '  c *= 1.0 - r2 * (0.65 + vig);',
     '  vec3 o = toSRGB(c) + (hash(vUv * 900.0 + fract(time * 7.0)) - 0.5) * 0.028;',     // fine film grain
     '  gl_FragColor = vec4(o, 1.0);',
     '}',
@@ -543,6 +557,8 @@ function setupPost() {
     bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.55, 0.95);
     composer.addPass(bloomPass);
     finalPass = new THREE.ShaderPass(FinalShader); composer.addPass(finalPass);
+    // smooth edges: phones render without MSAA, so FXAA runs last on the graded image
+    if (THREE.FXAAShader && !(gl2 && !isTouch)) { fxaaPass = new THREE.ShaderPass(THREE.FXAAShader); composer.addPass(fxaaPass); }
   } catch (e) { composer = null; }
 }
 setupPost();
@@ -553,6 +569,7 @@ function resize() {
   const w = Math.max(1, Math.round((r && r.width) || window.innerWidth)), h = Math.max(1, Math.round((r && r.height) || window.innerHeight));
   renderer.setSize(w, h, false);
   if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); }
+  if (fxaaPass) { const pr = renderer.getPixelRatio(); fxaaPass.material.uniforms.resolution.value.set(1 / (w * pr), 1 / (h * pr)); }
   camera.aspect = w / h;
   camera.fov = w < h ? 72 : 60;
   camera.updateProjectionMatrix();
@@ -561,18 +578,18 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => { resize(); setTimeout(resize, 250); setTimeout(resize, 700); });
 if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 resize();
-// adaptive quality: drop bloom, then resolution, if the device struggles
-const perf = { t: 0, frames: 0, level: 0 };
+// adaptive quality: first the bloom, then the resolution; the colour grade and the anti-aliasing stay unless the device really cannot cope
+const perf = { t: 0, frames: 0, level: 0, done: false };
 function checkPerf(dt) {
-  if (perf.level >= 2) return;
+  if (perf.done) return;
   perf.t += dt; perf.frames++;
   if (perf.t < 2.5) return;
   const fps = perf.frames / perf.t; perf.t = 0; perf.frames = 0;
-  if (fps < 32) {
-    perf.level++;
-    if (perf.level === 1) { composer = null; moon.shadow.mapSize.set(1024, 1024); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } }
-    if (perf.level === 2) { renderer.setPixelRatio(1); resize(); }
-  } else perf.level = 2;
+  if (fps >= 32) { perf.done = true; return; }
+  perf.level++;
+  if (perf.level === 1) { if (bloomPass) bloomPass.enabled = false; moon.shadow.mapSize.set(1024, 1024); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } }
+  if (perf.level === 2) { renderer.setPixelRatio(1); resize(); }
+  if (perf.level === 3) { if (fps < 24) composer = null; perf.done = true; }
 }
 
 // sky dome with stars and moon
@@ -2432,6 +2449,8 @@ function buildAtmosphere() {
   const coneTex = canvasTex(4, 128, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0.0)'); gr.addColorStop(0.06, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
   const geo = new THREE.CylinderGeometry(0.35, 3.4, 7.0, 20, 1, true); geo.translate(0, -3.5, 0);
   const mat = new THREE.MeshBasicMaterial({ map: coneTex, color: new THREE.Color(0.26, 0.19, 0.11), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true });
+  // a cone fades out when the camera is inside or right next to it, instead of washing the whole frame white
+  nearFade(mat, 3, 12);
   ATMO.coneMat = mat;
   const cones = new THREE.InstancedMesh(geo, mat, LAMP_HEADS.length);
   const m4 = new THREE.Matrix4();
@@ -2934,6 +2953,14 @@ function makeEnvironment() {
 // ---------------- models ----------------
 const CAR_S = 4.7;
 const HEADBEAM = {};
+// additive light shapes (headlight beams, lamp cones) fade out right in front of the camera instead of washing the frame white
+function nearFade(mat, a, b) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = 'varying float vCamD;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vCamD = -mvPosition.z;');
+    sh.fragmentShader = 'varying float vCamD;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.rgb *= smoothstep(' + a.toFixed(1) + ', ' + b.toFixed(1) + ', vCamD);');
+  };
+  mat.customProgramCacheKey = () => 'nearFade' + a + '_' + b;
+}
 // «Девятка»: a procedural low-poly 5-door wedge hatchback (built from the owner's photos; no badges or brand marks).
 // Built in world units at the kit car's size (length ~4.45, lights at z ±2.23), then wrapped so makeCar's CAR_S scale cancels out.
 const NINE = { geo: null, mats: new Map() };
@@ -3037,9 +3064,11 @@ function makeCar(color, kind, forceModel) {
       HEADBEAM.mat = new THREE.MeshBasicMaterial({ map: t, color: new THREE.Color(0.38, 0.36, 0.3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
       HEADBEAM.pool = new THREE.PlaneGeometry(5, 9); HEADBEAM.pool.rotateX(-PI / 2);
       HEADBEAM.poolMat = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(0.9, 0.8, 0.6), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+      nearFade(HEADBEAM.mat, 1.5, 8); nearFade(HEADBEAM.poolMat, 1.5, 6);
     }
-    for (const sx of [-0.6, 0.6]) { const b = new THREE.Mesh(HEADBEAM.geo, HEADBEAM.mat); b.position.set(sx, 0.62, 2.25); b.rotation.x = 0.06; g.add(b); }
-    const hp = new THREE.Mesh(HEADBEAM.pool, HEADBEAM.poolMat); hp.position.set(0, 0.05, 7.5); g.add(hp);
+    g.userData.beams = [];
+    for (const sx of [-0.6, 0.6]) { const b = new THREE.Mesh(HEADBEAM.geo, HEADBEAM.mat); b.position.set(sx, 0.62, 2.25); b.rotation.x = 0.06; g.add(b); g.userData.beams.push(b); }
+    const hp = new THREE.Mesh(HEADBEAM.pool, HEADBEAM.poolMat); hp.position.set(0, 0.05, 7.5); g.add(hp); g.userData.beams.push(hp);
   }
   if (player) {
     if (PLAYER_CAR.model === 'car_taxi') box(basic(new THREE.Color(3, 2.4, 0.7)), 0, 1.98, -0.15, 0.5, 0.12, 0.3);
@@ -3735,7 +3764,7 @@ function damageEnemyCar(e, d) {
   if (e.invuln || e.disabled) return;
   e.hp -= d;
   if (e.noExplode) { if (e.hp <= 0) { e.hp = 0; e.disabled = true; e.noTarget = true; toast(e.kind === 'van' ? 'Фургон заглох!' : e.kind === 'plane' ? 'Самолёт обездвижен!' : e.kind === 'train' ? 'Локомотив встал!' : 'Машина встала', 2); sfx.crash(12); shake = Math.min(1.2, shake + 0.4); } return; }
-  if (e.hp <= 0 && !e.dead) { e.dead = true; explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); if (TASK.cur && TASK.cur.group && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'kill', payload: { id: TASK.cur.id } }); }
+  if (e.hp <= 0 && !e.dead) { e.dead = true; cineSlow(e.pos); explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); if (TASK.cur && TASK.cur.group && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'kill', payload: { id: TASK.cur.id } }); }
 }
 function damageEnemy(e, d) {
   e.hp -= d; e.hitT = 0.12; if (e.hp > 0) hitHuman(e);
@@ -3804,6 +3833,7 @@ const WHO = {
 const dlg = { lines: [], i: 0, shown: 0, done: null, prev: null };
 function playDialog(lines, done) {
   dlg.lines = lines; dlg.i = 0; dlg.done = done; dlg.prev = state.mode; state.mode = 'dialog';
+  CINE.dlg = (dlg.prev === 'drive' || dlg.prev === 'foot') && !(MIS && MIS.online) && !ONL.on; CINE.who = null; CINE.shot = -1;
   $('dialog').hidden = false; showLine();
 }
 function showLine() {
@@ -3811,13 +3841,14 @@ function showLine() {
   $('dlgName').textContent = w.name; $('dlgName').style.color = w.color;
   $('dlgPortrait').textContent = w.init; $('dlgPortrait').style.background = w.color;
   dlg.shown = 0; $('dlgText').textContent = '';
+  if (CINE.dlg && who !== CINE.who) { CINE.who = who; CINE.cut = true; }
 }
 function advanceDialog() {
   if (state.mode !== 'dialog') return;
   const text = dlg.lines[dlg.i][1];
   if (dlg.shown < text.length) { dlg.shown = text.length; $('dlgText').textContent = text; return; }
   dlg.i++;
-  if (dlg.i >= dlg.lines.length) { $('dialog').hidden = true; state.fireLock = true; const d = dlg.done; dlg.done = null; d && d(); }
+  if (dlg.i >= dlg.lines.length) { $('dialog').hidden = true; state.fireLock = true; if (CINE.dlg) { CINE.dlg = false; snapCam = true; } const d = dlg.done; dlg.done = null; d && d(); }
   else showLine();
 }
 function updateDialog(dt) {
@@ -5839,7 +5870,73 @@ function cockpitFor(car) {
   COCKPIT.wheel.rotation.z = (car.steerIn || 0) * -1.4;
 }
 const camPos = new V3(), camLook = new V3(), focus = new V3();
+// ---------------- cinema: shots for dialogues, chapter title cards, slow motion on big hits ----------------
+const CINE = { dlg: false, who: null, shot: -1, cut: false, t: 0, fov: 40, p: new V3(), l: new V3(), drift: new V3(), slow: 0, slowCd: 0, bloom: 0, key: '', titleT: 0, speed: 0, dof: 0, vig: 0 };
+// shots around the speaker's car or the hero: [right, up, forward] for the camera, [right, up, forward] for the look point, field of view
+const SHOTS_CAR = [[[3.8, 1.25, 6.4], [0, 1.0, 0], 40], [[-6.6, 2.0, 1.2], [0, 1.0, 0.6], 36], [[-2.8, 1.0, -6.2], [0, 1.1, 1.6], 44], [[5.2, 7.5, -9.5], [0, 0.6, 6], 50]];
+const SHOTS_FOOT = [[[0.9, 1.6, 2.7], [0, 1.45, 0], 36], [[-1.9, 1.35, 3.1], [0, 1.35, 0], 40], [[1.9, 1.9, -3.0], [-1.0, 1.3, 6.0], 48], [[2.4, 0.55, 2.7], [0, 1.5, 0], 42]];
+function cineFrame(S, h, o) { const f = new V3(Math.sin(h), 0, Math.cos(h)), r = new V3(Math.cos(h), 0, -Math.sin(h)); return S.clone().addScaledVector(r, o[0]).add(new V3(0, o[1], 0)).addScaledVector(f, o[2]); }
+function cineClear(a, b) {
+  const n = Math.ceil(a.distanceTo(b) / 1.2), p = new V3();
+  for (let i = 1; i < n; i++) { p.lerpVectors(a, b, i / n); if (inColliders(p, p.y)) return false; }
+  return !inColliders(a, a.y + 0.3);
+}
+function cineCam(dt) {
+  const car = state.act === 1 || !hero, S = car ? (pc && pc.pos) : hero.pos; if (!S) return false;
+  const h = car ? pc.h : hero.face, list = car ? SHOTS_CAR : SHOTS_FOOT;
+  if (CINE.cut || CINE.shot < 0) {
+    // the main character gets the close shots, everybody else the wider ones; a blocked shot is skipped
+    const pref = CINE.who === 'hero' ? [0, 1, 3, 2] : car ? [2, 3, 1, 0] : [1, 2, 3, 0], start = CINE.shot < 0 ? 0 : (pref.indexOf(CINE.shot) + 1) % 4;
+    let ok = -1;
+    for (let k = 0; k < 4 && ok < 0; k++) { const i = pref[(start + k) % 4], cp = cineFrame(S, h, list[i][0]), lp = cineFrame(S, h, list[i][1]); if (cineClear(cp, lp)) ok = i; }
+    CINE.cut = false; if (ok < 0) return false;
+    CINE.shot = ok; CINE.t = 0; CINE.fov = list[ok][2];
+    CINE.drift.set(Math.cos(h), 0.06, -Math.sin(h)).multiplyScalar(ok % 2 ? -0.22 : 0.22);
+  }
+  if (CINE.shot < 0) return false;
+  CINE.t += dt;
+  const sh = list[CINE.shot], cp = cineFrame(S, h, sh[0]).addScaledVector(CINE.drift, Math.min(CINE.t, 9)), lp = cineFrame(S, h, sh[1]);
+  camPos.copy(cp); camLook.copy(lp); camera.position.copy(cp); camera.lookAt(lp);
+  if (Math.abs(camera.fov - CINE.fov) > 0.05) { camera.fov = CINE.fov; camera.updateProjectionMatrix(); }
+  if (COCKPIT.g) COCKPIT.g.visible = false; if (viewGun) viewGun.visible = false; if (hero && !car) hero.g.visible = !hero.dead;
+  focus.copy(S); sky.position.copy(camera.position);
+  moon.position.set(focus.x + 40, 85, focus.z + 30); moon.target.position.copy(focus);
+  return true;
+}
+// a beat of slow motion and a flash of bloom when an enemy car explodes nearby (not in the shared online city)
+function cineSlow(at) {
+  if (ONL.on || CINE.slowCd > 0 || !pc || (at && at.distanceTo(pc.pos) > 45)) return;
+  CINE.slow = 0.55; CINE.slowCd = 6; CINE.bloom = 0.9;
+}
+function cineTime(dt) {
+  CINE.slowCd = Math.max(0, CINE.slowCd - dt);
+  if (CINE.slow > 0 && (state.mode === 'drive' || state.mode === 'foot')) { CINE.slow -= dt; return dt * (0.3 + 0.7 * clamp(1 - CINE.slow / 0.55, 0, 1) ** 3); }
+  CINE.slow = 0; return dt;
+}
+function cineTitle(kicker, title) {
+  const el = $('cineTitle'); el.querySelector('small').textContent = kicker; el.querySelector('b').textContent = title;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); CINE.titleT = 3.4;
+}
+function cineUpdate(dt) {
+  if (pc && pc.g.userData.beams) { const on = state.act === 1 || state.mode === 'preview' || state.mode === 'select'; if (pc.g.userData.beams[0].visible !== on) pc.g.userData.beams.forEach((b) => { b.visible = on; }); }
+  // a title card the first time a chapter goes live
+  const live = (state.mode === 'drive' || state.mode === 'foot') && state.ep >= 2 && MIS && MIS.title && !MIS.online && !ONL.on;
+  const key = live ? state.ep + ':' + state.ch : CINE.key;
+  if (live && key !== CINE.key) { CINE.key = key; cineTitle(`Эпизод ${state.ep} · ${EP_NAMES[state.ep] || ''}`, MIS.title); }
+  if (state.mode === 'preview' || state.mode === 'select') CINE.key = '';
+  CINE.titleT = Math.max(0, CINE.titleT - dt);
+  const bars = (state.mode === 'dialog' && CINE.dlg) || CINE.titleT > 0.5;
+  document.body.classList.toggle('cine', bars);
+  // the lens: speed blur when driving fast, soft edges and a deeper vignette in dialogues
+  const sp = state.mode === 'drive' && state.act === 1 && pc && carView !== 'cab' ? clamp((Math.abs(pc.vf || 0) - 20) / 18, 0, 1) + (state.nitroT > 0 ? 0.35 : 0) : 0;
+  const k = Math.min(1, dt * 4);
+  CINE.speed += (Math.min(1, sp) - CINE.speed) * k; CINE.dof += ((state.mode === 'dialog' && CINE.dlg ? 1 : 0) - CINE.dof) * k; CINE.vig += ((bars ? 0.35 : 0) + (CINE.slow > 0 ? 0.3 : 0) - CINE.vig) * k;
+  CINE.bloom = Math.max(0, CINE.bloom - dt * 1.6);
+  if (finalPass) { finalPass.uniforms.speed.value = CINE.speed; finalPass.uniforms.dof.value = CINE.dof; finalPass.uniforms.vig.value = CINE.vig; }
+  if (bloomPass) bloomPass.strength = 0.8 + CINE.bloom;
+}
 function updateCamera(dt) {
+  if (state.mode === 'dialog' && CINE.dlg && cineCam(dt)) return;
   let desired, look;
   if (state.mode === 'preview') {
     const A = pc.pos, E = pvEnemy.pos, s = pv.shotT;
@@ -8606,7 +8703,7 @@ window.addEventListener('keydown', (e) => {
 let last = performance.now();
 function loop(now) {
   requestAnimationFrame(loop);
-  const dt = Math.min(0.05, (now - last) / 1000); last = now; state.t += dt;
+  let dt = Math.min(0.05, (now - last) / 1000); last = now; dt = cineTime(dt); state.t += dt;
   if (state.invuln > 0) state.invuln -= dt;
   if (state.mode === 'preview' || state.mode === 'drive') checkPerf(dt);
   if (state.mode === 'preview') updatePreview(dt);
@@ -8620,7 +8717,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; cineUpdate(dt); if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateWeather(dt, focus); updateRain(dt, focus);
