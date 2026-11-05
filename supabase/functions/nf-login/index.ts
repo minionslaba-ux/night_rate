@@ -63,8 +63,15 @@ async function vkLaunchUser(v: any) {
 const VKID_APP = '54878563';
 async function vkIdUser(token: unknown) {
   if (typeof token !== 'string' || token.length < 10 || token.length > 4096) return null;
-  const r = await fetch('https://id.vk.com/oauth2/user_info', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: VKID_APP, access_token: token }) });
-  const j = await r.json().catch(() => null);
+  // VK ID moved to vk.ru; the old .com address stays as a fallback
+  let j: any = null;
+  for (const host of ['id.vk.ru', 'id.vk.com']) {
+    try {
+      const r = await fetch(`https://${host}/oauth2/user_info`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: VKID_APP, access_token: token }) });
+      j = await r.json().catch(() => null);
+      if (j && (j.user || j.error)) break;
+    } catch (_) { /* try the next address */ }
+  }
   const u = j && j.user, id = Number(u && u.user_id);
   return id > 0 ? { id, first_name: String(u.first_name || '').slice(0, 24), last_name: String(u.last_name || '').slice(0, 24) } : null;
 }
