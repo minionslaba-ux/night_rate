@@ -447,7 +447,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v51'; window.__errs = [];
+window.APP_VER = 'v53'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5881,7 +5881,7 @@ let achBusy = false;
 function walletAdd(n) { if (!n) return; PROF.coins += n; PROF.st.earned += Math.max(0, n); saveProfile(); checkAch(); }
 function canPay(price) { return PROF.god || PROF.coins >= price; }
 function pay(price) { if (!canPay(price)) return false; if (!PROF.god) PROF.coins -= price; saveProfile(); return true; }
-function profStat(k, n) { PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); }
+function profStat(k, n) { PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
 const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: 'https://t.me/nightfaregame', maxUrl: '' };
@@ -5903,6 +5903,93 @@ function joinNudge() {
   bar.innerHTML = `<span>Понравилось? Подписывайся — новости и новые главы первыми.</span>${joinButtons('data-join')}<button class="btn sm" data-x type="button" aria-label="Закрыть">✕</button>`;
   bar.querySelectorAll('[data-join]').forEach((b) => { b.onclick = () => { joinCommunity(b.dataset.join); bar.remove(); }; }); bar.querySelector('[data-x]').onclick = () => bar.remove();
   document.body.appendChild(bar); setTimeout(() => bar.remove(), 15000);
+}
+// ---------- пуш-напоминания (как в «Выжить до пятницы»): 1–3 в день, утро / день / вечер, рассылает сервер nf-push ----------
+// Включает сам игрок кнопкой (браузер спросит разрешение). Только на сайте: в мини-приложениях Telegram, ВК и MAX — их собственные уведомления.
+// iPhone (iOS 16.4+) — только когда игра добавлена на экран «Домой».
+const PUSH_PUB = 'BACwoz3SAW_yj25SRwX3TxERHCfLzihkudxI4sc_RqHjd_6DwyqadR3shApfBGf1c9tuaNOc6lyXNCqM2cnAo68';
+const pushIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// 'ok' — можно включить; 'ios' — iPhone в обычной вкладке Safari; '' — недоступно
+function pushCan() {
+  if (inMiniApp || !/^https:$/.test(location.protocol)) return '';
+  if (pushIOS && !isStandalone()) return 'ios';
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window ? 'ok' : '';
+}
+const pushOn = () => pushCan() === 'ok' && Notification.permission === 'granted' && !!store.get('nf-push');
+const pushKey = (k) => { const pad = '='.repeat((4 - k.length % 4) % 4), raw = atob((k + pad).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
+async function pushPost(body) {
+  try { await fetch(SB_URL + '/functions/v1/nf-push', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(body) }); } catch (e) { /* offline */ }
+}
+async function pushSave(sub) {
+  let tok = null; try { if (CLOUD.sb) { const { data } = await CLOUD.sb.auth.getSession(); tok = data && data.session && data.session.access_token; } } catch (e) { /* no session */ }
+  await pushPost({ action: 'on', sub: sub.toJSON(), access_token: tok });
+}
+async function pushEnable() {
+  if (pushCan() === 'ios') return pushIosHelp();
+  if (pushCan() !== 'ok') return;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { store.set('nf-push-never', true); if (!$('prof').hidden) renderProfile(); return toast('Напоминания выключены. Включить можно в настройках браузера.', 3); }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(PUSH_PUB) }));
+    await pushSave(sub); store.set('nf-push', true); pushStateLast = ''; setTimeout(pushStateSend, 500);
+    toast('🔔 Готово! Будем напоминать 1–3 раза в день', 3);
+  } catch (e) { toast('Не получилось включить напоминания — попробуй ещё раз', 3); }
+  if (!$('prof').hidden) renderProfile();
+}
+async function pushDisable() {
+  try { const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); if (sub) { await pushPost({ action: 'off', endpoint: sub.endpoint }); await sub.unsubscribe(); } } catch (e) { /* nothing to remove */ }
+  try { localStorage.removeItem('nf-push'); } catch (e) { /* storage unavailable */ }
+  toast('🔕 Напоминания выключены', 2); if (!$('prof').hidden) renderProfile();
+}
+function pushIosHelp() {
+  showModal(`<h2 class="h2">🔔 Напоминания на iPhone</h2><p class="lead">На iPhone уведомления работают, когда игра установлена на экран «Домой»:</p>
+    <ol class="lead"><li>Нажми «Поделиться» внизу Safari</li><li>Выбери «На экран „Домой“»</li><li>Открой игру со значка и нажми «🔔 Напоминать мне играть»</li></ol>
+    <div class="btns"><button id="piOk" class="btn primary" type="button">Понятно</button></div>`, { piOk: hideModal });
+}
+// строка в профиле
+function pushRowHtml() {
+  const c = pushCan(); if (!c || (c === 'ok' && Notification.permission === 'denied')) return '';
+  return `<div class="plabel">Напоминания</div><div class="prow"><span>${pushOn() ? '🔔 Включены: 1–3 раза в день' : 'Утром, днём или вечером — 1–3 раза в день, не чаще'}</span>${pushOn() ? '<button class="btn sm" data-act="pushoff" type="button">Выключить</button>' : '<button class="btn sm primary" data-act="pushon" type="button">🔔 Напоминать мне играть</button>'}</div>`;
+}
+// что сейчас у игрока — для личных напоминаний («Бензин на нуле», «{hero} ждёт тебя»…); только если напоминания включены
+let pushStateLast = '';
+async function pushStateSend() {
+  if (!pushOn()) return;
+  const cs = (PROF.cs && PROF.cs[PROF.car]) || {}, car = CARS[PROF.car] || CARS.taxi;
+  const st = { hero: CH ? CH.name : '', nick: CH ? CH.nick : '', g: CH && CH.sex === 'f' ? 'f' : 'm', car: car.name.replace(/«|»/g, ''), fuel: typeof cs.f === 'number' ? Math.round(cs.f) : 100, dirt: typeof cs.d === 'number' ? cs.d : 0, cond: typeof cs.c === 'number' ? Math.round(cs.c) : 100, ch: PROF.st.chapters || 0, lastPlay: new Date().toISOString() };
+  const k = JSON.stringify(Object.assign({}, st, { lastPlay: st.lastPlay.slice(0, 13) })); if (k === pushStateLast) return; pushStateLast = k;
+  try { const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); if (sub) await pushPost({ action: 'state', endpoint: sub.endpoint, state: st }); } catch (e) { /* offline */ }
+}
+// предложение: после первой пройденной главы, «Позже» — снова не раньше чем через 3 дня, «Не спрашивать» — никогда
+function pushAsk() {
+  if (pushOn() || store.get('nf-push-never') || pushCan() !== 'ok' || Notification.permission !== 'default') return;
+  if (Date.now() - (store.get('nf-push-ask') || 0) < 3 * 864e5 || !$('modal').hidden) return;
+  store.set('nf-push-ask', Date.now());
+  showModal(`<h2 class="h2">🔔 Включить напоминания?</h2><p class="lead">Подскажем, когда ${CH ? esc(CH.name) + ' ждёт на смене' : 'город ждёт водителя'}, кончается бензин или машину пора помыть, — 1–3 раза в день, не чаще.</p>
+    <div class="btns"><button id="paYes" class="btn primary" type="button">🔔 Включить</button><button id="paLater" class="btn" type="button">Позже</button><button id="paNever" class="btn linkish" type="button">Не спрашивать</button></div>`,
+    { paYes: () => { hideModal(); pushEnable(); }, paLater: hideModal, paNever: () => { hideModal(); store.set('nf-push-never', true); } });
+}
+// при запуске: включённую подписку обновляем на сервере (браузер мог её сменить; привязка к профилю)
+setTimeout(async () => {
+  if (!pushOn()) return;
+  try { const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); if (sub) { await pushSave(sub); pushStateSend(); } else localStorage.removeItem('nf-push'); } catch (e) { /* no service worker */ }
+}, 5000);
+// ---------- реклама Рекламной сети Яндекса: полноэкранный блок для телефона ----------
+// Только на сайте и на телефоне, только между главами (со второй пройденной главы), не чаще раза в 5 минут.
+// В мини-приложениях Telegram, ВКонтакте и MAX не показывается (в ВК по правилам — только реклама ВК), тестовому профилю — тоже.
+// Пока сайт не прошёл модерацию РСЯ, Яндекс просто ничего не покажет.
+const AD_BLOCK = 'R-A-20345213-1', AD_GAP = 5 * 60e3;
+let adLoaded = false;
+const adCan = () => PLATFORM === 'web' && !PROF.god && (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window);
+function adLoad() {
+  if (adLoaded) return; adLoaded = true; window.yaContextCb = window.yaContextCb || [];
+  const sc = document.createElement('script'); sc.src = 'https://yandex.ru/ads/system/context.js'; sc.async = true; document.head.appendChild(sc);
+}
+function adBetween() {
+  if (!adCan() || Date.now() - (store.get('nf-ad-at') || 0) < AD_GAP) return;
+  store.set('nf-ad-at', Date.now()); adLoad();
+  window.yaContextCb.push(() => { try { window.Ya.Context.AdvManager.render({ blockId: AD_BLOCK, type: 'fullscreen', platform: 'touch' }); } catch (e) { /* no ad */ } });
 }
 function profMax(k, v) { if (v > (PROF.st[k] || 0)) { PROF.st[k] = v; saveProfile(); checkAch(); } }
 function profEp(ep) { if (!PROF.st.eps.includes(ep)) { PROF.st.eps.push(ep); saveProfile(); } checkAch(); }
@@ -6032,6 +6119,7 @@ function renderProfile() {
     <div class="prow">${PROF.cloud ? `<button class="btn sm" data-act="getcode" type="button">Получить код для другого устройства</button>${CLOUD.code ? `<b class="pcode">${CLOUD.code}</b><small>действует 10 минут</small>` : ''}` : '<span>Войди в профиль, чтобы получить код.</span>'}</div>
     <div class="plogin"><input id="pCode" type="text" placeholder="Код с другого устройства" maxlength="9" autocapitalize="characters"><button class="btn sm" data-act="usecode" type="button">${inMiniApp ? 'Привязать по коду' : 'Войти по коду'}</button></div>${inMiniApp ? `<div class="prow"><small>Уже играешь на сайте или в другом приложении? Возьми там код («Получить код для другого устройства») и введи здесь — ${PLATFORM === 'max' ? 'MAX' : PLATFORM === 'vk' ? 'ВКонтакте' : 'Telegram'} привяжется к тому же профилю.</small></div>` : ''}
     ${PROF.cloud ? '<div class="prow"><button class="btn sm danger" data-act="delete" type="button">Удалить аккаунт</button></div>' : ''}
+    ${pushRowHtml()}
     <div class="plabel">Документы</div><div class="prow plegal"><a href="tseny.html" target="_blank" rel="noopener">Цены</a> · <a href="oferta.html" target="_blank" rel="noopener">Оферта</a> · <a href="politika.html" target="_blank" rel="noopener">Персональные данные</a> · <a href="pravila.html" target="_blank" rel="noopener">Правила</a> · <a href="kontakty.html" target="_blank" rel="noopener">Контакты</a></div>
     <div class="pmsg">${esc(profMsg)}</div>
     <div class="note">${PROF.cloud ? 'Профиль хранится на сервере и доступен на любом устройстве.' : 'Гость: прогресс хранится только в этом браузере. Войди или создай профиль, чтобы сохранить его на сервере.'}</div>`;
@@ -6062,6 +6150,8 @@ function profAction(act, id) {
   else if (act === 'pflogin') { platformLogin().then((err) => { profMsg = err || 'Готово: профиль загружен.'; renderProfile(); }); return; }
   else if (act === 'getcode') { getLinkCode().then((j) => { if (j.code) CLOUD.code = j.code.slice(0, 4) + '-' + j.code.slice(4); profMsg = j.error || 'Введи этот код на другом устройстве или в другой площадке в течение 10 минут.'; renderProfile(); }); return; }
   else if (act === 'linkvk' || act === 'linktg') { profMsg = act === 'linkvk' ? 'Открываю ВКонтакте…' : 'Открываю Telegram…'; renderProfile(); linkStart(act === 'linkvk' ? 'vk' : 'tg').then((err) => { if (err) { try { localStorage.removeItem('nf-link'); } catch (e) { /* storage unavailable */ } profMsg = err; renderProfile(); } }); return; }
+  else if (act === 'pushon') { pushEnable(); return; }
+  else if (act === 'pushoff') { pushDisable(); return; }
   else if (act === 'vklogin') { profMsg = 'Открываю ВКонтакте…'; renderProfile(); vkSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
   else if (act === 'tglogin') { profMsg = 'Открываю Telegram…'; renderProfile(); tgSiteLogin().then((err) => { if (err) { profMsg = err; renderProfile(); } }); return; }
   else if (act === 'usecode') { const v = $('pCode').value; profMsg = 'Связываюсь с сервером…'; renderProfile(); loginWithCode(v).then((err) => { profMsg = err || 'Готово: вошли в аккаунт по коду.'; renderProfile(); }); return; }
@@ -7937,7 +8027,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
