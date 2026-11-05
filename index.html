@@ -115,9 +115,10 @@ body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, bo
 .cmsg b { color: var(--taxi); } .cmsg.pending { opacity: .6; } .cmsg.failed { color: #ff8a8a; }
 .chat input, .chat-row input, .plogin input, .gate-form input { -webkit-user-select: text; user-select: text; touch-action: manipulation; } .clink { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 3px; }
 .chat-row { display: flex; gap: 6px; } .chat-form { display: flex; flex: 1; gap: 6px; min-width: 0; margin: 0; } .chat-row input { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 8px 10px; font: 16px var(--font-body); }
-#btnChat.new { background: var(--taxi); color: #1a1405; }
+#btnChat.new, #btnTask.new { background: var(--taxi); color: #1a1405; } #btnTask.new { animation: tpulse 1.2s ease-in-out infinite; } @keyframes tpulse { 50% { transform: scale(1.08); } }
 .cab-arrow { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(26vw, 150px); pointer-events: none; filter: drop-shadow(0 0 10px rgba(77,255,166,.55)); } .cab-arrow svg { width: 100%; height: auto; display: block; transition: transform .12s linear; }
-.chat.party { grid-template-rows: auto 1fr; } .chat.svc { min-height: 0; } .svc .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat.party { grid-template-rows: auto 1fr; } .tcard { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); } .tcard p { margin: 0; }
+.cam-flash { position: fixed; inset: 0; background: #fff; opacity: .85; pointer-events: none; z-index: 60; animation: camflash .38s ease-out forwards; } @keyframes camflash { to { opacity: 0; } } .chat.svc { min-height: 0; } .svc .btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .care { display: grid; gap: 4px; } .care .bar { grid-template-columns: auto 1fr auto; } .bar-fill.fuel { background: #ff9a3d; } .bar-fill.fuel.low { background: var(--neon); } .fuel-n { font-size: 11px; min-width: 32px; text-align: right; }
 .care-txt { font-size: 11px; color: var(--muted); background: var(--panel); padding: 4px 10px; border-radius: 6px; } .care-txt.bad { color: #ffb08a; } .hud-chip.tow { color: #ffb08a; border-color: rgba(255,154,61,.6); } .ptitle { display: flex; justify-content: space-between; align-items: center; } .pbody { overflow-y: auto; display: grid; gap: 8px; align-content: start; font-size: 14px; }
 .prow2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; } .plist { display: grid; gap: 6px; }
@@ -428,7 +429,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
 </div>
 
 <script>
-window.APP_VER = 'v34'; window.__errs = [];
+window.APP_VER = 'v35'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -3437,7 +3438,7 @@ function clearBullets() { for (const b of bullets) scene.remove(b.m); bullets.le
 // ---------------- damage ----------------
 let hurt = 0;
 function damagePlayer(d) {
-  if (state.act === 1 && typeof ONL !== 'undefined' && ONL.on) careWear(d);
+  if (state.act === 1 && typeof ONL !== 'undefined' && ONL.on) { careWear(d); if (d >= 1.5) HITS.n++; }
   if (state.invuln > 0 || PROF.god) return;
   if (state.act === 1) { pc.hp -= d * P.carArmor; } else { hero.hp -= d * P.footArmor; }
   hurt = Math.min(1, hurt + d / 20); shake = Math.min(1.2, shake + 0.15);
@@ -6458,7 +6459,7 @@ function leaveRoom(keep) {
   if (ONL.ch) { try { CLOUD.sb.removeChannel(ONL.ch); } catch (e) { /* gone */ } ONL.ch = null; }
   if (ONL.chat) { try { CLOUD.sb.removeChannel(ONL.chat); } catch (e) { /* gone */ } ONL.chat = null; }
   for (const id of [...ONL.others.keys()]) dropOther(id);
-  if (!keep) { careClose(); careDirtLook(0); if (CARE.saveT) careSave(true); $('careBox').hidden = true; $('btnTow').hidden = true; ONL.on = false; document.body.classList.remove('online'); partyLeave(true); botsClear(); JOBS.cur = null; if (TASK.cur) { TASK.cur = null; document.body.classList.remove('task'); } if ($('btnTask')) { $('btnTask').hidden = true; $('tasks').hidden = true; TASK.open = false; } document.body.classList.remove('job'); if ($('btnJob')) $('btnJob').hidden = true; if ($('btnChat')) { $('btnChat').hidden = true; $('chat').hidden = true; ONL.chatOpen = false; $('btnParty').hidden = true; $('party').hidden = true; PARTY.open = false; } }
+  if (!keep) { tMarksClear(); careClose(); careDirtLook(0); if (CARE.saveT) careSave(true); $('careBox').hidden = true; $('btnTow').hidden = true; ONL.on = false; document.body.classList.remove('online'); partyLeave(true); botsClear(); JOBS.cur = null; if (TASK.cur) { TASK.cur = null; document.body.classList.remove('task'); } if ($('btnTask')) { $('btnTask').hidden = true; $('tasks').hidden = true; TASK.open = false; } document.body.classList.remove('job'); if ($('btnJob')) $('btnJob').hidden = true; if ($('btnChat')) { $('btnChat').hidden = true; $('chat').hidden = true; ONL.chatOpen = false; $('btnParty').hidden = true; $('party').hidden = true; PARTY.open = false; } }
 }
 function onlinePos(q) {
   if (!q || !q.i || q.i === ONL.id || typeof q.x !== 'number') return;
@@ -6486,6 +6487,7 @@ function chatBubble(o, text) {
 function updateOnline(dt) {
   if (!ONL.on || !pc) return;
   arrow.visible = !!JOBS.cur; botsUpdate(dt); careUpdate(dt);
+  if (!TASK.cur && !(JOBS.cur && JOBS.cur.ph === 'ride') && state.mode === 'drive') { TASK.nudgeT = (TASK.nudgeT === undefined ? 40 : TASK.nudgeT) - dt; if (TASK.nudgeT <= 0) { TASK.nudgeT = 90; const t = genTask(task2OfferId(), { x: pc.pos.x, z: pc.pos.z, h: pc.h }); $('btnTask').classList.add('new'); toast(`Новое задание: «${t.title}» · +${t.reward} — кнопка «Задания»`, 3.2); } }
   // send my car a few times a second (less when standing still): realtime messages are counted by the server
   ONL.sendT -= dt; const moving = Math.hypot(pc.vel.x, pc.vel.z) > 0.5;
   if (ONL.ch && ONL.sendT <= 0) {
@@ -7069,6 +7071,7 @@ function taskWalk(r, from, n) {
   return path;
 }
 function genTask(id, near) {
+  if (id > T2_FROM) return genTask2(id, near);
   const r = taskRng(id), pk = (a) => a[Math.floor(r() * a.length)], group = id > T_SOLO;
   const n = group ? id - T_SOLO : id, tier = Math.min(5, 1 + Math.floor((n - 1) / (group ? 2000 : 4000)));
   const type = pk(group ? ['hunt', 'stop', 'escape', 'deliver', 'hunt', 'stop', 'escape'] : ['deliver', 'hunt', 'stop', 'escape', 'tail', 'deliver', 'stop']);
@@ -7100,6 +7103,193 @@ function genTask(id, near) {
   }
   return { id, group, tier, type, c, title, brief, reward: Math.round(base * mult) };
 }
+// ---------------- «Городские» tasks: numbers 30 001–60 000 (30 001–50 000 solo, 50 001–60 000 group) ----------------
+// Eight more kinds on top of the first series: a checkpoint race, collecting around the district, ramming barricades,
+// a photo hunt, a drift show, an escort, a fragile load and a courier run. One number always builds the same task.
+const T2_FROM = 30000, T2_SOLO = 50000, T2_ALL = 60000;
+const TMARKS = [];
+const HITS = { n: 0 };
+const T2_KINDS = ['race', 'collect', 'smash', 'photo', 'drift', 'escort', 'fragile', 'rush'];
+const T2_CLIENTS = ['клуб стритрейсеров', 'редакция «Ночного вестника»', 'служба доставки «Сова»', 'кинокомпания', 'мэрия', 'автошкола «Руль»', 'хозяйка цветочного салона', 'музей города', 'пекарня «Утро»', 'страховая «Щит»', 'дорожная служба', 'волонтёры', 'фотограф Влад', 'стритрейсер Неон', 'курьерская «Молния»', 'кафе «Фонарь»'];
+const T2_STUFF = { collect: ['потерянные посылки', 'листовки с концерта', 'запчасти, упавшие с грузовика', 'кошельки из угнанной сумки', 'флешки с уликами', 'подарки для детского дома', 'пропавшие ключи', 'улетевшие воздушные шары'],
+  smash: ['баррикады «Шакалов»', 'незаконные шлагбаумы', 'ящики с контрабандой', 'бутафорские стены для съёмки', 'пустые бочки на трассе', 'заграждения банды'],
+  photo: ['ночные фасады', 'неоновые вывески', 'места для фильма', 'город для календаря', 'следы банды', 'новые дорожные знаки'],
+  escort: ['инкассаторская машина', 'свадебный кортеж', 'автобус с хором', 'фургон с картинами', 'машина свидетеля', 'катафалк без пассажира', 'грузовик с цветами'],
+  fragile: ['свадебный торт', 'аквариум с рыбками', 'хрустальную люстру', 'старинную вазу', 'ящик шампанского', 'стеклянную витрину', 'ноутбук с отчётом'],
+  rush: ['пиццу', 'лекарства', 'ключи от квартиры', 'забытый паспорт', 'билеты на поезд', 'горячий кофе', 'документы в суд'] };
+const T2_TITLES = {
+  race: ['Ночная гонка: {n} точек', 'Заезд на время', 'Кубок проспекта', 'Гонка — {c}', 'Пробный заезд'],
+  collect: ['Собери: {s}', 'Охота за мелочью', 'Сбор по району', 'Всё до последнего'],
+  smash: ['Снеси: {s}', 'Таран-рейд', 'Расчистка улиц', 'Через преграды'],
+  photo: ['Фотоохота: {s}', 'Снимки — {c}', 'Объектив ночи'],
+  drift: ['Дрифт-шоу', 'Боком по городу', 'Шоу — {c}', 'Резина и дым'],
+  escort: ['Сопровождение: {s}', 'Под охраной: {s}', 'Тихий конвой'],
+  fragile: ['Хрупкий груз', 'Без единой царапины', 'Осторожная доставка'],
+  rush: ['Срочно: {s}', 'Курьер на скорость', 'Успеть до закрытия'] };
+function roadPt(r, near, rad) {
+  for (let k = 0; k < 30; k++) {
+    const onX = r() < 0.5, road = ROADS[Math.floor(r() * 5)], t = -150 + r() * 300;
+    if (ROADS.some((q) => Math.abs(t - q) < 14)) continue;
+    const x = onX ? road : t, z = onX ? t : road;
+    if (near && Math.hypot(x - near.x, z - near.z) > rad) continue;
+    if (inTunnel(x, z, 2) || nearCare(x, z, 8)) continue;
+    return [Math.round(x), Math.round(z)];
+  }
+  return [0, 40];
+}
+function genTask2(id, near) {
+  const r = taskRng(id * 7 + 13), pk = (a) => a[Math.floor(r() * a.length)], group = id > T2_SOLO;
+  const n = group ? id - T2_SOLO : id - T2_FROM, tier = Math.min(5, 1 + Math.floor((n - 1) / (group ? 2000 : 4000)));
+  const type = T2_KINDS[(Math.floor(r() * 997) + id) % T2_KINDS.length];
+  const start = near ? [near.x, near.z, near.h] : [0, 0, 0], np = { x: start[0], z: start[1] };
+  const client = pk(T2_CLIENTS), stuff = T2_STUFF[type] ? pk(T2_STUFF[type]) : '', mult = (1 + tier * 0.3) * (group ? 1.6 : 1);
+  const C = client[0].toUpperCase() + client.slice(1);
+  let c, brief, base, cnt = 0;
+  if (type === 'race') {
+    const startNode = [ROADS.reduce((p, q) => (Math.abs(q - np.x) < Math.abs(p - np.x) ? q : p)), ROADS.reduce((p, q) => (Math.abs(q - np.z) < Math.abs(p - np.z) ? q : p))];
+    cnt = 5 + tier + (group ? 2 : 0); const pts = taskWalk(r, startNode, cnt);
+    let dist = Math.hypot(pts[0][0] - np.x, pts[0][1] - np.z); for (let i = 1; i < pts.length; i++) dist += 80;
+    c = { start, pts, secs: Math.round(dist / (13 + tier * 1.2) + 12) };
+    brief = `${C} устраивает заезд: проедь ${cnt} контрольных точек по порядку за ${fmt(c.secs)}.`; base = 70 + cnt * 14;
+  } else if (type === 'collect' || type === 'smash') {
+    cnt = (type === 'collect' ? 4 : 3) + tier + (group ? 2 : 0); const pts = []; for (let i = 0; i < cnt; i++) pts.push(roadPt(r, np, 150));
+    c = { start, pts, secs: Math.round(70 + cnt * 20 - tier * 4), minKmh: type === 'smash' ? 40 + tier * 8 : 0, chase: type === 'smash' && tier >= 3 ? Math.min(3, tier - 2) : 0 };
+    brief = type === 'collect' ? `${C}: по району разбросаны ${stuff}. Собери все ${cnt} за ${fmt(c.secs)} — просто проезжай через светящиеся метки.` : `${C} просит: ${stuff} — ${cnt} штук. Тарань их на скорости больше ${c.minKmh} км/ч, успей за ${fmt(c.secs)}.${c.chase ? ' Банда будет мешать.' : ''}`;
+    base = 60 + cnt * (type === 'smash' ? 22 : 15);
+  } else if (type === 'photo') {
+    cnt = 3 + Math.floor(tier / 2) + (group ? 1 : 0); const pl = JOB_PLACES.slice().sort(() => r() - 0.5).slice(0, cnt);
+    c = { start, pts: pl.map((q) => q[1]), names: pl.map((q) => q[0]), secs: Math.round(cnt * 55 + 40 - tier * 5) };
+    brief = `${C}: нужны снимки — ${stuff}. Подъедь к каждому месту (${pl.map((q) => q[0]).join(', ')}) и остановись на пару секунд.`; base = 60 + cnt * 24;
+  } else if (type === 'drift') {
+    c = { start, score: 400 + tier * 300 + (group ? 400 : 0), secs: 90 + tier * 10 };
+    brief = `${C} снимает дрифт-шоу. Набери ${c.score} очков заноса за ${fmt(c.secs)}: держи «Занос» (Shift) на скорости и в поворотах.`; base = 80 + tier * 30;
+  } else if (type === 'escort') {
+    const startNode = [ROADS[Math.floor(r() * 5)], ROADS[Math.floor(r() * 5)]], route = taskWalk(r, startNode, 4 + Math.min(4, tier));
+    c = { start, car: [startNode[0], startNode[1], Math.atan2(route[0][0] - startNode[0], route[0][1] - startNode[1])], route, speed: 13 + tier, name: stuff[0].toUpperCase() + stuff.slice(1), far: 45 - tier * 2, chase: tier >= 2 ? Math.min(3, tier - 1) : 0 };
+    brief = `${C}: ${stuff} едет через город. Держись рядом — не дальше ${c.far} м — до самого места назначения.${c.chase ? ' Банда попробует отвлечь — не отвлекайся.' : ''}`; base = 70 + tier * 28;
+  } else if (type === 'fragile') {
+    const to = pk(JOB_PLACES), d = Math.hypot(to[1][0] - np.x, to[1][1] - np.z);
+    c = { start, pts: [{ p: to[1], name: to[0], t: Math.round(d / 7 + 45) }], hits: Math.max(1, 5 - tier), chase: 0 };
+    brief = `${C} просит отвезти ${stuff} — ${to[0]}. Не больше ${c.hits} ${c.hits === 1 ? 'удара' : 'ударов'} обо что-нибудь, иначе груз разобьётся.`; base = 60 + d * 0.25;
+  } else {
+    cnt = 2 + Math.min(3, Math.floor(tier / 2)) + (group ? 1 : 0); const pl = JOB_PLACES.slice().sort(() => r() - 0.5).slice(0, cnt);
+    let prev = np; const pts = pl.map((q) => { const d = Math.hypot(q[1][0] - prev.x, q[1][1] - prev.z); prev = { x: q[1][0], z: q[1][1] }; return { p: q[1], name: q[0], t: Math.round(d / (9 + tier) + 22) }; });
+    c = { start, pts, chase: tier >= 4 ? 1 : 0 };
+    brief = `${C}: ${stuff} по адресам — ${pl.map((q) => q[0]).join(' → ')}. На каждый адрес свой таймер.`; base = 50 + cnt * 30;
+  }
+  const title = pk(T2_TITLES[type]).replace('{n}', cnt).replace('{s}', stuff).replace('{c}', client);
+  return { id, group, tier, type: type === 'rush' ? 'deliver' : type === 'fragile' ? 'fragile' : type, kind: type, c, title, brief: brief + (group ? ' Засчитывается всей группе.' : ''), reward: Math.round(base * mult) };
+}
+// glowing markers for several targets at once
+function tMark(x, z, color, tall) {
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.2, 28), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -PI / 2; ring.position.y = 0.08; g.add(ring);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, tall || 14, 14, 1, true), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  col.position.y = (tall || 14) / 2; g.add(col);
+  scene.add(g); TMARKS.push(g); return g;
+}
+function tMarksClear() { for (const g of TMARKS) scene.remove(g); TMARKS.length = 0; }
+function tBarricade(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  const red = std(0xd83a2a), white = std(0xeeeeee);
+  for (let k = -2; k <= 2; k++) { const b = new THREE.Mesh(box1, k % 2 ? white : red); b.position.set(k * 0.9, 0.6, 0); b.scale.set(0.88, 1.0, 0.5); b.castShadow = true; g.add(b); }
+  scene.add(g); TMARKS.push(g); return g;
+}
+const kmh = () => Math.abs(pc.vf || 0) * 3.3;
+Object.assign(GEN, {
+  race(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.pts.map(([x, z]) => new V3(x, 0, z)); let i = 0, left = c.secs, mk = null;
+    const show = () => { if (mk) { scene.remove(mk); TMARKS.splice(TMARKS.indexOf(mk), 1); } mk = tMark(P_[i].x, P_[i].z, 0x4dffa6, 18); setBeam(P_[i]); setObjective(`Гонка: точка ${i + 1} из ${P_.length}.`); };
+    show();
+    return { title, chase: { max: 0 }, get navName() { return `Точка ${i + 1}/${P_.length}`; }, navGoal: () => P_[i],
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Не уложился', 'Время заезда вышло. Срезай повороты и держи газ.');
+        if (pc.pos.distanceTo(P_[i]) < 9) { i++; sfx.bell(); if (i >= P_.length) return done(); left += 2; toast(`Точка ${i}/${P_.length} · +2 с`, 0.9); show(); }
+      },
+      hud() { return { timer: `${fmt(left)} · точка ${i + 1}/${P_.length}`, bad: left < 10 }; } };
+  },
+  collect(c, title, done) { return GEN_many(c, title, done, false); },
+  smash(c, title, done) { return GEN_many(c, title, done, true); },
+  photo(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.pts.map(([x, z]) => new V3(x, 0, z)), got = P_.map(() => false), marks = P_.map((p) => tMark(p.x, p.z, 0x7ad6ff, 10));
+    let left = c.secs, hold = 0;
+    const nextI = () => { let b = -1, bd = 1e9; P_.forEach((p, k) => { if (!got[k]) { const d = p.distanceTo(pc.pos); if (d < bd) { bd = d; b = k; } } }); return b; };
+    setObjective(`Фотоохота: ${c.names.join(', ')}. Остановись у каждого места.`);
+    return { title, chase: { max: 0 }, get navName() { const k = nextI(); return k >= 0 ? c.names[k] : ''; }, navGoal: () => { const k = nextI(); return k >= 0 ? P_[k] : pc.pos; },
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Свет ушёл', 'Время вышло — фотограф уехал без снимков.');
+        const k = nextI(); if (k < 0) return; setBeam(P_[k]);
+        if (pc.pos.distanceTo(P_[k]) < 13 && kmh() < 8) { hold += dt; if (hold > 1.6) { hold = 0; got[k] = true; scene.remove(marks[k]); sfx.key(); camFlash(); toast(`Снимок: ${c.names[k]}`, 1.2); if (got.every(Boolean)) return done(); } }
+        else hold = 0;
+      },
+      hud() { return { timer: `${fmt(left)} · снимков ${got.filter(Boolean).length}/${P_.length}${hold > 0 ? ' · держи…' : ''}`, bad: left < 15 }; } };
+  },
+  drift(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    let left = c.secs, score = 0, combo = 0; setObjective(`Дрифт-шоу: набери ${c.score} очков заноса.`);
+    return { title, chase: { max: 0 }, navName: 'Дрифт', navGoal: () => pc.pos,
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Мало дыма', `Набрано ${Math.round(score)} из ${c.score}. Разгоняйся сильнее и держи занос дольше.`);
+        const side = Math.abs(pc.vr || 0), sp = Math.abs(pc.vf || 0);
+        if (side > 3 && sp > 8) { combo = Math.min(3, combo + dt * 0.4); score += side * sp * dt * 0.12 * (1 + combo); } else combo = Math.max(0, combo - dt);
+        if (score >= c.score) done();
+      },
+      hud() { return { bars: [{ label: `Очки заноса: ${Math.round(score)} / ${c.score}${combo > 0.5 ? ` · ×${(1 + combo).toFixed(1)}` : ''}`, frac: score / c.score, color: '#ff5ad1' }], timer: fmt(left), bad: left < 15 }; } };
+  },
+  escort(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const t = makeScripted('tail', c.route, c.car[0], c.car[1], hdg(c.car[2]), { speed: c.speed, stops: {} });
+    const mk = tMark(0, 0, 0x7aff9a, 8); let far = 0; const chase = { max: c.chase || 0 }; state.spawnT = 10;
+    setObjective(`Сопровождение: ${c.name}. Не отставай дальше ${c.far} м.`);
+    return { title, noFire: !c.chase, chase, navName: c.name, navGoal: () => t.pos,
+      update(dt) {
+        mk.position.set(t.pos.x, 0, t.pos.z); setBeam(t.pos);
+        const d = pc.pos.distanceTo(t.pos);
+        if (d > c.far) far += dt; else far = Math.max(0, far - dt * 2);
+        if (far > 8) return failChapter('Отстал', `Охраняемая машина осталась без прикрытия. Держись ближе ${c.far} м.`);
+        if (t.arrived && d < c.far + 10) done();
+      },
+      hud() { const d = pc.pos.distanceTo(t.pos); return { timer: far > 0.3 ? `Догоняй: ${Math.ceil(8 - far)}` : `До охраняемой машины ${Math.round(d)} м`, bad: far > 0.3 }; } };
+  },
+  fragile(c, title, done) {
+    const base = GEN.deliver(c, title, done), h0 = HITS.n, upd = base.update.bind(base), hud0 = base.hud.bind(base);
+    base.update = (dt) => { if (HITS.n - h0 > c.hits) return failChapter('Груз разбит', 'Слишком много ударов. Объезжай машины и не цепляй углы.'); upd(dt); };
+    base.hud = () => { const h = hud0(); h.bars = [{ label: `Удары: ${HITS.n - h0} из ${c.hits} допустимых`, frac: 1 - (HITS.n - h0) / (c.hits + 1), color: '#ffd23a' }]; return h; };
+    return base;
+  },
+});
+function GEN_many(c, title, done, smash) {
+  beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+  const P_ = c.pts.map(([x, z]) => new V3(x, 0, z)), got = P_.map(() => false);
+  const marks = P_.map((p) => (smash ? tBarricade(p.x, p.z) : tMark(p.x, p.z, 0xffd23a, 10)));
+  let left = c.secs, warnT = 0; const chase = { max: c.chase || 0 }; state.spawnT = 6;
+  const nextI = () => { let b = -1, bd = 1e9; P_.forEach((p, k) => { if (!got[k]) { const d = p.distanceTo(pc.pos); if (d < bd) { bd = d; b = k; } } }); return b; };
+  setObjective(smash ? `Снеси преграды: ${P_.length}. Скорость больше ${c.minKmh} км/ч.` : `Собери всё: ${P_.length} меток.`);
+  return { title, chase, get navName() { return smash ? 'Преграда' : 'Метка'; }, navGoal: () => { const k = nextI(); return k >= 0 ? P_[k] : pc.pos; },
+    update(dt) {
+      left -= dt; warnT -= dt; if (left <= 0) return failChapter('Не успел', `Время вышло: осталось ${got.filter((g) => !g).length}.`);
+      const k = nextI(); if (k < 0) return; setBeam(P_[k]);
+      if (pc.pos.distanceTo(P_[k]) < (smash ? 4.2 : 5)) {
+        if (smash && kmh() < c.minKmh) { if (warnT <= 0) { warnT = 1.2; toast(`Слабо! Нужно больше ${c.minKmh} км/ч`, 1.1); } return; }
+        got[k] = true; scene.remove(marks[k]);
+        if (smash) { sfx.crash(18); for (let q = 0; q < 14; q++) spawnP(P_[k].clone().add(new V3(rand(-2, 2), 1, rand(-1, 1))), { color: q % 2 ? 0xd83a2a : 0xeeeeee, size: 0.5, vel: new V3(rand(-6, 6), rand(4, 9), rand(-6, 6)), life: 1.2, opacity: 0.95 }); }
+        else sfx.bell();
+        if (got.every(Boolean)) return done();
+        toast(`${got.filter(Boolean).length}/${P_.length}`, 0.8);
+      }
+    },
+    hud() { return { timer: `${fmt(left)} · ${got.filter(Boolean).length}/${P_.length}`, bad: left < 15 }; } };
+}
+function camFlash() { const el = document.createElement('div'); el.className = 'cam-flash'; document.body.appendChild(el); setTimeout(() => el.remove(), 380); }
+// which series a number belongs to, and the next number of each series for this player
+const isT2 = (id) => id > T2_FROM;
+function task2NextSolo() { return T2_FROM + Math.min(T2_SOLO - T2_FROM, (PROF.task2N || 0) + 1); }
+function task2NextGroup() { return T2_SOLO + Math.min(T2_ALL - T2_SOLO, (PROF.gtask2N || 0) + 1); }
+function task2OfferId() { return PARTY.code && PARTY.members.size ? task2NextGroup() : task2NextSolo(); }
+
 function taskNextSolo() { return Math.min(T_SOLO, (PROF.taskN || 0) + 1); }
 function taskNextGroup() { return T_SOLO + Math.min(T_ALL - T_SOLO, (PROF.gtaskN || 0) + 1); }
 function taskOfferId() { return PARTY.code && PARTY.members.size ? taskNextGroup() : taskNextSolo(); }
@@ -7117,10 +7307,11 @@ function taskStart(id, fromGroup) {
 }
 function taskDone(ok, fromGroup) {
   const t = TASK.cur; if (!t) return;
-  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0; clearBullets();
+  for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0; clearBullets(); tMarksClear();
   if (ok) {
     addCoins(t.reward); profStat('tasks');
-    if (t.group) PROF.gtaskN = Math.max(PROF.gtaskN || 0, t.id - T_SOLO); else PROF.taskN = Math.max(PROF.taskN || 0, t.id);
+    if (isT2(t.id)) { if (t.group) PROF.gtask2N = Math.max(PROF.gtask2N || 0, t.id - T2_SOLO); else PROF.task2N = Math.max(PROF.task2N || 0, t.id - T2_FROM); }
+    else if (t.group) PROF.gtaskN = Math.max(PROF.gtaskN || 0, t.id - T_SOLO); else PROF.taskN = Math.max(PROF.taskN || 0, t.id);
     saveProfile(); toast(`Задание выполнено! +${t.reward}`, 2.6);
     if (t.group && !fromGroup && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'tdone', payload: { id: t.id } });
   }
@@ -7132,16 +7323,23 @@ function taskFail(title) { if (!TASK.cur) return; toast(`Задание пров
 // the panel with the next task
 function renderTasks() {
   const box = $('tasksBody'); if (!box) return;
+  $('btnTask').classList.remove('new');
   const inGroup = PARTY.code && PARTY.members.size, all = [...PARTY.members.keys(), ONL.id].sort(), lead = !inGroup || all[0] === ONL.id;
-  const id = taskOfferId(), t = genTask(id, pc ? { x: pc.pos.x, z: pc.pos.z, h: pc.h } : null);
-  const done = (PROF.taskN || 0) + (PROF.gtaskN || 0);
-  box.innerHTML = `<div class="kicker">${t.group ? 'Групповое' : 'Одиночное'} задание №${id.toLocaleString('ru-RU')} из 30 000 · сложность ${'★'.repeat(t.tier)}</div>
-    <b>${esc(t.title)}</b><p class="note">${esc(t.brief)}</p><div class="prow2"><span>Награда: <b>${t.reward}</b> монет${t.group ? ' каждому' : ''}</span><span>Выполнено: ${done}</span></div>
-    <div class="btns">${TASK.cur ? '<button class="btn sm" data-ta="quit" type="button">Бросить задание</button>' : lead ? `<button class="btn sm primary" data-ta="go" type="button">${inGroup ? 'Начать для группы' : 'Взять задание'}</button><button class="btn sm" data-ta="skip" type="button">Пропустить</button>` : '<span class="note">Задание выбирает тот, кто первым зашёл в группу.</span>'}</div>`;
+  const near = pc ? { x: pc.pos.x, z: pc.pos.z, h: pc.h } : null;
+  const done = (PROF.taskN || 0) + (PROF.gtaskN || 0) + (PROF.task2N || 0) + (PROF.gtask2N || 0);
+  // two series: the first 30 000 (deliveries, hunts, interceptions, escapes, tailing) and «Городские» 30 000 (races, collecting, ramming, photos, drift, escort, fragile loads, couriers)
+  const card = (id, series) => {
+    const t = genTask(id, near), from = series === 2 ? T2_FROM : 0;
+    return `<div class="tcard"><div class="kicker">${series === 2 ? 'Городские' : 'Основные'} · ${t.group ? 'групповое' : 'одиночное'} №${id.toLocaleString('ru-RU')} · ${'★'.repeat(t.tier)}</div>
+    <b>${esc(t.title)}</b><p class="note">${esc(t.brief)}</p><div class="prow2"><span>Награда: <b>${t.reward}</b> монет${t.group ? ' каждому' : ''}</span></div>
+    <div class="btns">${lead ? `<button class="btn sm primary" data-ta="go" data-id="${id}" type="button">${inGroup ? 'Начать для группы' : 'Взять'}</button><button class="btn sm" data-ta="skip" data-id="${id}" type="button">Пропустить</button>` : '<span class="note">Задание выбирает тот, кто первым зашёл в группу.</span>'}</div></div>`;
+  };
+  box.innerHTML = TASK.cur ? `<div class="kicker">Сейчас: задание №${TASK.cur.id.toLocaleString('ru-RU')}</div><b>${esc(TASK.cur.title)}</b><p class="note">${esc(TASK.cur.brief)}</p><div class="btns"><button class="btn sm" data-ta="quit" type="button">Бросить задание</button></div>`
+    : card(task2OfferId(), 2) + card(taskOfferId(), 1) + `<div class="note">Выполнено заданий: ${done} из 60 000. Заказы такси приходят сами, задания — здесь.</div>`;
   box.querySelectorAll('[data-ta]').forEach((b) => { b.onclick = () => {
-    const a = b.dataset.ta;
+    const a = b.dataset.ta, id = +b.dataset.id;
     if (a === 'go') taskStart(id); else if (a === 'quit') taskFail('брошено');
-    else if (a === 'skip') { if (t.group) PROF.gtaskN = (PROF.gtaskN || 0) + 1; else PROF.taskN = (PROF.taskN || 0) + 1; saveProfile(); renderTasks(); }
+    else if (a === 'skip') { const g = genTask(id, null).group; if (isT2(id)) { if (g) PROF.gtask2N = (PROF.gtask2N || 0) + 1; else PROF.task2N = (PROF.task2N || 0) + 1; } else if (g) PROF.gtaskN = (PROF.gtaskN || 0) + 1; else PROF.taskN = (PROF.taskN || 0) + 1; saveProfile(); renderTasks(); }
   }; });
 }
 function toggleTasks(v) { TASK.open = v === undefined ? !TASK.open : v; $('tasks').hidden = !TASK.open; if (TASK.open) { toggleChat(false); if (PARTY.open) toggleParty(false); renderTasks(); } }
@@ -7518,7 +7716,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, scene, WX, wxCyclePref, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { PLATFORM, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
