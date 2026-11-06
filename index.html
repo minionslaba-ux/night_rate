@@ -153,6 +153,8 @@ body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, bo
 body.online:not(.task) .hud-tl > .bar, body.online .care-txt:not(.bad), body.online .kills-w, body.online:not(.task) .wpn-stat { display: none; }
 body.online #objective { pointer-events: auto; cursor: pointer; } body.online .hud-tl { max-width: min(40vw, 320px); } .obj.min { padding-top: 7px; padding-bottom: 7px; } .obj.min > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; opacity: .85; }
 .onl-stat { color: #4dffa6; font-weight: 600; }
+.tbtn.flash { display: none; --c: #ffffff; right: calc(128px + var(--sar)); bottom: calc(196px + var(--sab)); width: 56px; height: 56px; } body.s3flash .tbtn.flash { display: grid; }
+.trunk { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; } .trunk-card { display: grid; gap: 6px; text-align: left; padding: 12px; border-radius: 8px; border: 1px solid var(--hair, rgba(255,255,255,.15)); background: linear-gradient(180deg, #1c1d26, #0f1016); color: var(--text, #eee); cursor: pointer; } .trunk-card.on { border-color: var(--taxi, #ffc43d); } .trunk-card img { width: 100%; height: 90px; object-fit: contain; } .trunk-card b { font: 800 16px/1.1 var(--font-display, sans-serif); text-transform: uppercase; } .trunk-card span { font-size: 13px; opacity: .85; } .trunk-card small { font-size: 11px; color: var(--taxi, #ffc43d); }
 .threats { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .threats i { position: absolute; left: 0; top: 0; will-change: transform; }
 .threats i.off { display: none; }
@@ -515,6 +517,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
   <div id="joy" class="joy"><div id="knob" class="knob"></div></div>
   <button id="btnFire" class="tbtn fire" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/><circle cx="12" cy="12" r="1.4"/></svg><span>Огонь</span><b class="cnt ammo" id="ammoN">0</b></button>
   <button id="btnProf" class="tbtn prof" type="button" aria-label="Профиль"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>Профиль</span></button>
+  <button id="btnFlash" class="tbtn flash" type="button" aria-label="Граната"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="6"/><path d="M12 8V4M9 4h6M16 10l3-3"/></svg><span>Граната</span><b class="cnt" id="flashN">0</b></button>
   <button id="btnDrift" class="tbtn drift" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c4 0 5-10 10-10h6"/><path d="m17 4 3 3-3 3"/><path d="M4 21h6"/></svg><span>Занос</span></button>
   <button id="btnMelee" class="tbtn melee" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v3M11 10V6a2 2 0 0 1 4 0v4M15 10V8a2 2 0 0 1 4 0v6a7 7 0 0 1-7 7h-1a6 6 0 0 1-6-6v-2a2 2 0 0 1 4 0"/></svg><span>Удар</span></button>
   <button id="btnAim" class="tbtn aim" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>Прицел</span></button>
@@ -1536,6 +1539,7 @@ const TRKX = { lights: [], lightMat: null, lightOn: null };
 // The main street (x = 0) runs south from the gate; five lanes cross it. Cottages stand on plots along the lanes;
 // the square with the shop and the club, the sawmill, the poultry yard, the lake with a pier and the security office fill the rest.
 // Its colliders live in their own list (VCOLS) and are only checked south of the city, so the city does not get slower.
+const LOW = { x0: 372, x1: 1760, z0: -1000, z1: -282, on: false };
 const VIL = { x0: -330, x1: 330, z0: -905, z1: -385, on: false, gate: -400, lanes: [-470, -560, -650, -740, -830], laneX: 268, lake: { x0: 140, x1: 312, z0: -892, z1: -772 } };
 const VCOLS = [];
 const inVillage = (x, z) => z < -330;
@@ -1590,7 +1594,7 @@ function buildVillage() {
   for (const s of [-1, 1]) putB(B.wood, G.box, s * 9, 2.4, VIL.gate + 14, 0.4, 4.8, 0.4, 0, woodD);
   putB(B.wood, G.box, 0, 4.4, VIL.gate + 14, 19, 2.6, 0.3, 0, col(0x1f3a2a)); textPlane(sTex, 17.6, 3.3, 0, 4.4, VIL.gate + 14.2, 0);
   // perimeter fence: a long low fence with posts all round
-  for (const [x0, z0, x1, z1] of [[VIL.x0, VIL.z1, -8, VIL.z1 + 0.4], [8, VIL.z1, VIL.x1, VIL.z1 + 0.4], [VIL.x0, VIL.z0, VIL.x1, VIL.z0 + 0.4], [VIL.x0, VIL.z0, VIL.x0 + 0.4, VIL.z1], [VIL.x1 - 0.4, VIL.z0, VIL.x1, VIL.z1]]) {
+  for (const [x0, z0, x1, z1] of [[VIL.x0, VIL.z1, -8, VIL.z1 + 0.4], [8, VIL.z1, VIL.x1, VIL.z1 + 0.4], [VIL.x0, VIL.z0, VIL.x1, VIL.z0 + 0.4], [VIL.x0, VIL.z0, VIL.x0 + 0.4, VIL.z1], [VIL.x1 - 0.4, VIL.z0, VIL.x1, -476], [VIL.x1 - 0.4, -464, VIL.x1, VIL.z1]]) {   // the east side is open at z −470: the road to «Нижний город»
     boxB(B.wood, x0, 0.4, z0, x1, 1.6, z1, { col: woodD }); vSolid(x0, z0, x1, z1, 1.6, true);
   }
   // cottages: pastel walls, a 45° roof with gables, lit windows, a porch light, a garage, a fence with a gate, a lawn, a mailbox
@@ -1682,6 +1686,228 @@ function buildVillage() {
     (rr() < 0.75 ? pine : birch)(x, z, 8 + rr() * 8);
   }
 }
+// ---------------- Season 3: «Нижний город» — the district south-east of the station (x 380…960, z −940…−290) ----------------
+// Ten places for «Охота по тарифу»: the ghetto, Boris's workshop, the alley and the warehouse, the scrapyard, the motel,
+// the call centre, the pier with the freighter «Беринг», the ring highway, the building site and the «Монолит» tower.
+// Interiors (motel floors, the call centre, the warehouse, the hold, the tower's lobby, floors and roof) stand east of the water
+// (x 1200…1700), out of sight: a mission walks in through a door and carries on there.
+const LCOLS = [], DRY = [];
+const lSolid = (x0, z0, x1, z1, h) => { const c = { minX: Math.min(x0, x1), maxX: Math.max(x0, x1), minZ: Math.min(z0, z1), maxZ: Math.max(z0, z1), h: h || 4 }; LCOLS.push(c); return c; };
+const lBox = (cx, cz, sx, sz, h) => lSolid(cx - sx / 2, cz - sz / 2, cx + sx / 2, cz + sz / 2, h);
+// the place of everything in the district: streets, blocks and the named spots missions use
+const LOWP = {
+  AV: [392, 520, 680, 820, 948], ST: [-302, -420, -560, -700, -820, -928],
+  boris: [600, -628], borisDoor: [600, -612], alley: [745, -360], warehouse: [760, -392], whDoor: [732, -404],
+  motel: [456, -760], motelDoor: [456, -744], call: [884, -362], callDoor: [884, -346], site: [750, -628],
+  tower: [750, -874], towerDoor: [750, -854], junk: [884, -812], pier: [972, -600], ship: [1012, -600], wash: [600, -820],
+  ghetto: [520, -360],
+};
+// interiors: name → centre; each is a closed room 50 × 30 (the roofs are open, with a parapet)
+const INT = { motel1: [1300, -380], motel2: [1300, -460], motel3: [1300, -540], motelRoof: [1300, -620], call: [1420, -380], server: [1420, -460],
+  wh: [1420, -540], hold: [1420, -620], lobby: [1540, -380], floor1: [1540, -460], floor2: [1540, -540], roof: [1540, -630], boris: [1660, -380] };
+const INT_W = 50, INT_D = 30;
+function buildLower() {
+  const metal = col(0x3a3c44), white = col(0xe8e8ec), dark = col(0x1c1d22), rust = col(0x7a3a22), conc = col(0x8a8a90);
+  const asph = (x0, z0, x1, z1) => boxB(B.asph, x0, 0.01, z0, x1, 0.022, z1, { topWorld: 1 / 10, sides: false });
+  const mk = (x0, z0, x1, z1, c) => boxB(B.mark, x0, 0.04, z0, x1, 0.06, z1, { sides: false, col: c });
+  const lamp = (x, z) => { putB(B.metal, G.cyl6, x, 2.8, z, 0.14, 5.6, 0.14, 0, metal); putB(B.metal, G.box, x, 5.6, z, 0.55, 0.18, 0.55, 0, metal); putB(B.neon, G.sph, x, 5.4, z, 0.26, 0.2, 0.26, 0, HDR(0xffc89a, 4.5)); };
+  const sign = (txt, w, h, x, y, z, ry, fg, bg, dead) => {
+    const t = cityText(1024, 256, (q, W, H) => { q.fillStyle = bg || 'rgba(0,0,0,0)'; q.fillRect(0, 0, W, H); q.font = 'bold 150px Arial'; q.textAlign = 'center'; q.textBaseline = 'middle';
+      if (dead) { let x0 = W / 2 - q.measureText(txt).width / 2; for (let i = 0; i < txt.length; i++) { const ch = txt[i], cw = q.measureText(ch).width; q.fillStyle = dead.indexOf(i) >= 0 ? 'rgba(80,60,70,.6)' : fg; q.shadowColor = fg; q.shadowBlur = dead.indexOf(i) >= 0 ? 0 : 24; q.fillText(ch, x0 + cw / 2, H / 2 + 6); x0 += cw; } }
+      else { q.fillStyle = fg; q.shadowColor = fg; q.shadowBlur = 24; q.fillText(txt, W / 2, H / 2 + 6); } });
+    textPlane(t, w, h, x, y, z, ry, new THREE.Color(1.8, 1.8, 1.8));
+  };
+  const winGrid = (x0, z0, x1, z1, floors, fh, face, litK, lc) => {   // windows on one face of a box: face 'n','s','e','w'
+    const along = face === 'n' || face === 's', L = along ? x1 - x0 : z1 - z0, n = Math.max(1, Math.floor(L / 3.4));
+    for (let f = 0; f < floors; f++) for (let k = 0; k < n; k++) {
+      const lit = Math.random() < litK, c = lit ? HDR(lc || pick([0xffc070, 0xffd8a0, 0x9ad0ff, 0xff9a6a]), 1.1 + Math.random() * 0.6) : col(0x15171f);
+      const u = (k + 0.5) / n, y = 1.6 + f * fh;
+      if (along) putB(lit ? B.bankL : B.trim, G.box, x0 + u * L, y, face === 'n' ? z1 + 0.04 : z0 - 0.04, 1.3, 1.4, 0.06, 0, c);
+      else putB(lit ? B.bankL : B.trim, G.box, face === 'e' ? x1 + 0.04 : x0 - 0.04, y, z0 + u * L, 0.06, 1.4, 1.3, 0, c);
+    }
+  };
+  const block = (x0, z0, x1, z1, floors, wc, litK) => {        // a tenement block: brick walls, windows on all sides, a roof rim
+    const H = floors * 3.1 + 0.6;
+    boxB(B.brick, x0, 0, z0, x1, H, z1, { col: wc }); boxB(B.trim, x0 - 0.2, H, z0 - 0.2, x1 + 0.2, H + 0.5, z1 + 0.2, { col: col(0x4a4448) });
+    for (const f of ['n', 's', 'e', 'w']) winGrid(x0, z0, x1, z1, floors, 3.1, f, litK === undefined ? 0.35 : litK);
+    lSolid(x0, z0, x1, z1, H);
+  };
+  // ground: cracked asphalt and dirt for the whole district, water east of the pier
+  boxB(B.walk, 372, -0.07, -948, 958, -0.05, -282, { topWorld: 1 / 6, sides: false, col: col(0x5a5852) });
+  boxB(B.water, 958, -1.6, -1100, 1180, -1.5, -150, { sides: false, col: col(0x0e2a3e) });
+  lSolid(958, -1000, 962, LOWP.pier[1] - 60, 3); lSolid(958, LOWP.pier[1] + 60, 962, -282, 3);   // the quay edge: no driving into the water (the pier is open)
+  // streets: the ring «Кольцо-2» round the district and the inner grid
+  const [AV, ST] = [LOWP.AV, LOWP.ST];
+  for (const x of AV) { asph(x - 7, ST[ST.length - 1] - 7, x + 7, ST[0] + 7); for (let z = ST[0] - 4; z > ST[ST.length - 1] + 4; z -= 10) mk(x - 0.15, z - 5, x + 0.15, z, x === AV[0] || x === AV[4] ? col(0xf0c040) : white); }
+  for (const z of ST) { asph(AV[0] - 7, z - 7, AV[4] + 7, z + 7); for (let x = AV[0] + 4; x < AV[4] - 4; x += 10) mk(x, z - 0.15, x + 5, z + 0.15, z === ST[0] || z === ST[ST.length - 1] ? col(0xf0c040) : white); }
+  // links: from the station's service road (x 663) and from the village's first lane (z −470)
+  asph(656, -302, 670, -240); asph(268, -474.5, 392, -465.5);
+  for (let x = AV[0] + 10; x < AV[4]; x += 36) for (const z of ST) if (x % 3 === 0 || true) { lamp(x, z + 8.5); }
+  for (const x of AV) for (let z = ST[0] - 18; z > ST[ST.length - 1]; z -= 40) lamp(x + 8.5, z);
+  // the ring's signs
+  sign('КОЛЬЦО-2', 9, 2.2, 663, 5.4, -296, 0, '#ffffff', '#1a4a8a'); putB(B.metal, G.cyl6, 663, 2.2, -296.2, 0.16, 4.4, 0.16, 0, metal);
+  // 1. the ghetto «Нижний квартал»: tenements, graffiti, burning barrels, the «Крысы» barricades
+  const GR = [0x7a4a3a, 0x6a5a4a, 0x5a4a44, 0x8a6a52, 0x4a4a52];
+  for (const [x0, x1] of [[399, 513], [527, 673]]) for (const [z0, z1] of [[-413, -309], [-553, -427]]) {
+    const w = x1 - x0, d = z1 - z0;
+    block(x0 + 2, z0 + 2, x0 + w * 0.42, z0 + d * 0.45, 5, col(pick(GR))); block(x0 + w * 0.55, z0 + 2, x1 - 2, z0 + d * 0.4, 4, col(pick(GR)));
+    block(x0 + 2, z0 + d * 0.6, x0 + w * 0.38, z1 - 2, 4, col(pick(GR))); block(x0 + w * 0.6, z0 + d * 0.55, x1 - 2, z1 - 2, 5, col(pick(GR)), 0.25);
+    // the yard between: dirt, a barrel fire, a burnt car shell, graffiti on the walls
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    putB(B.metal, G.cyl, cx, 0.5, cz, 0.7, 1, 0.7, 0, rust); putB(B.neon, G.sph, cx, 1.1, cz, 0.45, 0.4, 0.45, 0, HDR(0xff7a2a, 6));
+    boxB(B.trim, cx + 8, 0, cz - 2, cx + 12.4, 1.3, cz + 2, { col: col(0x2a2624) }); lBox(cx + 10.2, cz, 4.4, 4, 1.3);
+    for (let k = 0; k < 3; k++) putB(B.neon, G.box, x0 + 4 + k * 22, 1.6, z0 + 1.95, 5 + k, 1.3, 0.04, 0, HDR(pick([0xff3d8b, 0x3dd6ff, 0xa83dff, 0x3dff8a]), 1.3));
+  }
+  sign('НИЖНИЙ КВАРТАЛ', 10, 2.5, 460, 7, -302 - 7.6, PI, '#ff3d8b');
+  // barricades of the «Крысы» across the side streets (low: a car rams through, people take cover)
+  for (const [x, z, ry] of [[520, -385, 0], [600, -420, PI / 2], [460, -560, PI / 2], [520, -485, 0]]) { putB(B.trim, G.box, x, 0.6, z, 9, 1.2, 1.0, ry, col(0x5a5048)); putB(B.metal, G.cyl, x - 2, 0.55, z, 0.7, 1.1, 0.7, 0, rust); }
+  // 2. Boris's workshop: a box with three roller doors, the sign, a tyre stack, the lift inside (an interior)
+  const [bx, bz] = LOWP.boris;
+  boxB(B.container, bx - 22, 0, bz - 10, bx + 22, 6.5, bz + 14, { us: 1 / 3, vs: 1 / 6.5, col: col(0x6a6e78) }); boxB(B.roof, bx - 22.5, 6.5, bz - 10.5, bx + 22.5, 7, bz + 14.5, { col: dark }); lSolid(bx - 22, bz - 10, bx + 22, bz + 14, 7);
+  for (const k of [-1, 0, 1]) { putB(B.metal, G.box, bx + k * 13, 2.4, bz + 14.06, 9, 4.8, 0.1, 0, col(k ? 0x7a7e86 : 0x4a4e56)); }
+  sign('ШИНОМОНТАЖ 24', 12, 2.8, bx, 8.6, bz + 14.3, 0, '#ffd23a', '#16161c');
+  for (let k = 0; k < 5; k++) putB(B.trim, G.cyl, bx + 26, 0.35 + k * 0.45, bz + 10, 1.3, 0.42, 1.3, 0, col(0x141416));
+  // 3. the alley and the warehouse: two blocks with a 6 m passage, dumpsters, the warehouse with a loading bay
+  block(683, -413, 730, -380, 4, col(0x6a5040)); block(683, -372, 730, -309, 3, col(0x5a4a40));
+  for (let k = 0; k < 3; k++) { boxB(B.trim, 690 + k * 12, 0, -378.6, 693 + k * 12, 1.4, -376.6, { col: col(pick([0x2a5a3a, 0x3a3a4a])) }); lBox(691.5 + k * 12, -377.6, 3, 2, 1.4); }
+  const [wx, wz] = LOWP.warehouse;
+  boxB(B.container, wx - 20, 0, wz - 16, wx + 52, 9, wz + 12, { us: 1 / 3, vs: 1 / 9, col: col(0x7a6a5a) }); boxB(B.roof, wx - 20.5, 9, wz - 16.5, wx + 52.5, 9.6, wz + 12.5, { col: col(0x3a3a40) }); lSolid(wx - 20, wz - 16, wx + 52, wz + 12, 9.6);
+  putB(B.metal, G.box, LOWP.whDoor[0], 2.6, LOWP.whDoor[1] + 0.1, 0.1, 5.2, 6, 0, col(0x3a3e46)); sign('СКЛАД 14', 7, 1.75, wx + 10, 10.6, wz + 12.3, 0, '#e8e8e8', '#2a2a30');
+  // 4. the scrapyard «Ржавый двор»: a fence, stacks of crushed cars, the crane with a magnet, the press, searchlights
+  const [jx, jz] = LOWP.junk;
+  for (const [x0, z0, x1, z1] of [[827, -914, 941, -913], [827, -714, 900, -713], [827, -914, 828, -713], [940, -914, 941, -713]]) { boxB(B.metal, x0, 0, z0, x1, 2.6, z1, { col: col(0x5a5e66) }); lSolid(x0, z0, x1, z1, 2.6); }
+  const CARC = [0x7a3a2a, 0x3a4a6a, 0x5a5a4a, 0x6a2a2a, 0x2a4a3a, 0x8a7a5a, 0x4a4a52];
+  for (let i = 0; i < 26; i++) {
+    const x = 836 + (i % 6) * 17 + rand(-2, 2), z = -896 + Math.floor(i / 6) * 34 + rand(-3, 3); if (Math.abs(x - 900) < 9 && z > -760) continue;
+    const n = 1 + Math.floor(Math.random() * 3); for (let k = 0; k < n; k++) putB(B.trim, G.box, x, 0.75 + k * 1.45, z, 2.0, 1.4, 4.2, rand(-0.3, 0.3), col(pick(CARC)));
+    lBox(x, z, 3, 4.6, n * 1.45);
+  }
+  putB(B.metal, G.box, 930, 9, -760, 1.4, 18, 1.4, 0, col(0xd8a020)); putB(B.metal, G.box, 912, 17.6, -760, 36, 1.2, 1.2, 0, col(0xd8a020)); putB(B.metal, G.cyl, 898, 11, -760, 3.2, 0.8, 3.2, 0, dark);
+  boxB(B.metal, 836, 0, -740, 852, 4, -726, { col: col(0x4a5a6a) }); lSolid(836, -740, 852, -726, 4);
+  sign('РЖАВЫЙ ДВОР', 9, 2.2, 870, 4.4, -712.6, 0, '#ff8a3d', '#1c1a18');
+  // 5. the motel «Без звёзд»: three storeys of rooms off an outside gallery, the half-dead neon sign
+  const [mx, mz] = LOWP.motel;
+  boxB(B.brick, mx - 40, 0, mz - 30, mx + 40, 10, mz - 12, { col: col(0xc8b8a0) }); boxB(B.trim, mx - 40.3, 10, mz - 30.3, mx + 40.3, 10.6, mz - 11.7, { col: col(0x6a4a3a) }); lSolid(mx - 40, mz - 30, mx + 40, mz - 12, 10.6);
+  for (const y of [3.2, 6.4]) { boxB(B.trim, mx - 40, y, mz - 12, mx + 40, y + 0.25, mz - 9.5, { col: col(0x8a8478) }); boxB(B.metal, mx - 40, y + 0.25, mz - 9.6, mx + 40, y + 1.2, mz - 9.5, { col: metal }); }
+  for (let f = 0; f < 3; f++) for (let k = 0; k < 14; k++) { const x = mx - 37 + k * 5.6; putB(B.trim, G.box, x, 1.15 + f * 3.2, mz - 11.95, 1.1, 2.1, 0.08, 0, col(pick([0x7a2a2a, 0x2a4a6a, 0x5a4a2a]))); const lit = Math.random() < 0.4; putB(lit ? B.bankL : B.trim, G.box, x + 2, 1.9 + f * 3.2, mz - 11.95, 1.4, 1, 0.06, 0, lit ? HDR(0xff9a6a, 1.2) : col(0x15171f)); }
+  putB(B.metal, G.cyl6, mx + 46, 6, mz - 4, 0.3, 12, 0.3, 0, metal);
+  sign('МОТЕЛЬ «БЕЗ ЗВЁЗД»', 14, 3.4, mx + 46, 13.5, mz - 3.8, 0, '#ff3d8b', '#14101a', [1, 3, 10]);
+  // 6. the call centre «Око»: a four-storey glass office, the eye logo, cameras on poles, dishes on the roof
+  const [ox, oz] = LOWP.call;
+  boxB(B.glassA, ox - 38, 0, oz - 40, ox + 38, 16, oz - 14, { us: 1 / 4, vs: 1 / 4 }); boxB(B.trim, ox - 38.4, 16, oz - 40.4, ox + 38.4, 16.8, oz - 13.6, { col: col(0x2a2c34) }); lSolid(ox - 38, oz - 40, ox + 38, oz - 14, 16.8);
+  sign('ОКО', 8, 2, ox, 18.6, oz - 13.5, 0, '#3dd6ff', '#0a0f18');
+  for (const s of [-1, 1]) { putB(B.metal, G.cyl, ox + s * 20, 17.6, oz - 30, 2.4, 0.3, 2.4, 0, col(0xc8ccd4)); putB(B.metal, G.cyl6, ox + s * 30, 3, oz - 10, 0.14, 6, 0.14, 0, metal); putB(B.metal, G.box, ox + s * 30, 6, oz - 9.6, 0.4, 0.3, 0.7, 0, dark); putB(B.neon, G.sph, ox + s * 30, 6, oz - 9.2, 0.07, 0.07, 0.07, 0, HDR(0xff2020, 8)); }
+  // 7. the pier and the freighter «Беринг»: the deck at street level, containers, the bridge aft, cargo cranes
+  const [px, pz] = LOWP.pier, [sx, sz] = LOWP.ship;
+  boxB(B.trim, 948, 0, pz - 60, 985, 0.4, pz + 60, { col: conc }); lSolid(985, pz - 60, 987, pz - 4, 2); lSolid(985, pz + 4, 987, pz + 60, 2); lSolid(958, pz - 60.6, 985, pz - 60, 2); lSolid(958, pz + 60, 985, pz + 60.6, 2);
+  for (let k = -5; k <= 5; k++) putB(B.metal, G.cyl6, 984, 0.6, pz + k * 11, 0.5, 0.8, 0.5, 0, col(0x2a2a2e));
+  boxB(B.trim, sx - 12, -6, sz - 70, sx + 12, 0.35, sz + 70, { col: col(0x3a1a1a) }); boxB(B.trim, sx - 12.3, -1.2, sz - 70.3, sx + 12.3, -0.4, sz + 70.3, { col: col(0xd8d8d8) });
+  boxB(B.trim, sx - 11.5, 0.35, sz - 69.5, sx + 11.5, 0.45, sz + 69.5, { sides: false, col: col(0x5a3a2a) });
+  lSolid(sx + 11.7, sz - 70, sx + 12.3, sz + 70, 2); lSolid(sx - 12.3, sz - 70, sx - 11.7, sz - 4, 2); lSolid(sx - 12.3, sz + 4, sx - 11.7, sz + 70, 2); lSolid(sx - 12, sz + 69.6, sx + 12, sz + 70.4, 2); lSolid(sx - 12, sz - 70.4, sx + 12, sz - 69.6, 2);
+  lSolid(985, sz - 4.4, sx - 12, sz - 4, 2); lSolid(985, sz + 4, sx - 12, sz + 4.4, 2);
+  boxB(B.trim, 985, 0.3, sz - 4, sx - 12, 0.5, sz + 4, { col: col(0x6a6a70) });                                   // the gangway
+  boxB(B.office, sx - 11, 0.4, sz - 68, sx + 11, 14, sz - 52, { col: white }); lSolid(sx - 11, sz - 68, sx + 11, sz - 52, 14);
+  boxB(B.glassA, sx - 11.1, 11, sz - 52.1, sx + 11.1, 13, sz - 51.9, { us: 1 / 4, vs: 1 / 2 });
+  sign('БЕРИНГ', 8, 2, sx, 4, sz + 70.5, 0, '#e8e8e8');
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) for (let k = 0; k < 1 + ((r + c) % 2); k++) contSlot(sx - 5 + c * 10, 0.45 + k * 2.72, sz - 30 + r * 28, pick(CONT_COLS));
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) lBox(sx - 5 + c * 10, sz - 30 + r * 28, 2.6, 12.2, 5.6);
+  for (const z of [sz - 44, sz + 44]) { putB(B.metal, G.box, sx, 8, z, 1.0, 16, 1.0, 0, col(0xd8a020)); putB(B.metal, G.box, sx - 6, 15.6, z, 14, 0.8, 0.8, 0, col(0xd8a020)); }
+  // 8. the ring highway «Кольцо-2» is the outer ring of streets above: crash barriers on its outer side
+  for (const [x0, z0, x1, z1] of [[AV[0] - 8.5, ST[5] - 8, AV[0] - 7.6, ST[0] + 8], [AV[0] - 8, ST[5] - 8.5, AV[4] + 8, ST[5] - 7.6]]) boxB(B.metal, x0, 0.4, z0, x1, 1.1, z1, { col: col(0xb0b4bc) });
+  // 9. the building site «Новый горизонт»: a concrete frame, tower cranes, site cabins, a fence
+  const [cx9, cz9] = LOWP.site;
+  for (let f = 0; f < 6; f++) { boxB(B.trim, cx9 - 26, f * 4, cz9 - 16, cx9 + 6, f * 4 + 0.4, cz9 + 16, { col: conc }); for (let i = 0; i < 5; i++) for (let j = 0; j < 3; j++) putB(B.trim, G.box, cx9 - 24 + i * 7.4, f * 4 + 2.2, cz9 - 14 + j * 14, 0.6, 3.6, 0.6, 0, conc); }
+  lSolid(cx9 - 26, cz9 - 16, cx9 + 6, cz9 + 16, 24);
+  for (const [x, z, h] of [[cx9 + 24, cz9 - 12, 34], [cx9 - 40, cz9 + 22, 30]]) { putB(B.metal, G.box, x, h / 2, z, 1.6, h, 1.6, 0, col(0xe8c020)); putB(B.metal, G.box, x - 10, h, z, 30, 1.2, 1.2, 0, col(0xe8c020)); putB(B.neon, G.sph, x, h + 1, z, 0.3, 0.3, 0.3, 0, HDR(0xff2020, 8)); lBox(x, z, 2, 2, h); }
+  for (let k = 0; k < 3; k++) { boxB(B.trim, cx9 + 10 + k * 7, 0, cz9 + 18, cx9 + 16 + k * 7, 2.8, cz9 + 21, { col: col(0x2a6aa8) }); lBox(cx9 + 13 + k * 7, cz9 + 19.5, 6, 3, 2.8); }
+  sign('ЖК «НОВЫЙ ГОРИЗОНТ»', 12, 2.6, cx9 - 10, 4, cz9 + 24, 0, '#ffffff', '#2a6aa8');
+  // 10. the «Монолит» tower: 130 m of dark glass, lit floors, a red crown, the helipad on top; the lobby door at the street
+  const [tx, tz] = LOWP.tower;
+  boxB(B.glassA, tx - 24, 0, tz - 40, tx + 24, 130, tz - 20 + 0.01 + 0, { us: 1 / 6, vs: 1 / 6 });
+  boxB(B.glassA, tx - 24, 0, tz - 20, tx + 24, 130, tz - 20 + 0.2, { us: 1 / 6, vs: 1 / 6 });
+  lSolid(tx - 24, tz - 40, tx + 24, tz - 20, 130);
+  for (let y = 6; y < 130; y += 7) putB(B.bankL, G.box, tx, y, tz - 19.7, 46, 0.25, 0.08, 0, HDR(0xb0d8ff, 0.9));
+  boxB(B.neon, tx - 24.5, 130, tz - 40.5, tx + 24.5, 131.2, tz - 19.5, { col: HDR(0xff2a3a, 2.4) });
+  boxB(B.glassA, tx - 6, 0, tz - 20.2, tx + 6, 7, tz - 19.6, { us: 1 / 3, vs: 1 / 3 }); sign('МОНОЛИТ', 12, 3, tx, 9.5, tz - 19.4, 0, '#ff2a3a', '#0a0a10');
+  // the car wash (for «Мойка под огнём»)
+  const [wsx, wsz] = LOWP.wash;
+  // it stands right on the street: the car drives through it along x
+  boxB(B.metal, wsx - 8, 4.2, wsz - 6.8, wsx + 8, 4.6, wsz + 6.8, { col: col(0x2a7ac8) }); for (const s of [-1, 1]) { const z0 = s < 0 ? wsz - 6.8 : wsz + 6.4; boxB(B.metal, wsx - 8, 0, z0, wsx + 8, 4.2, z0 + 0.4, { col: col(0x2a7ac8) }); lSolid(wsx - 8, z0, wsx + 8, z0 + 0.4, 4.2); }
+  for (const s of [-1, 1]) sign('МОЙКА 24', 6, 1.5, wsx + s * 8.1, 5.6, wsz, s * PI / 2, '#3dd6ff', '#0a1424');
+  buildInteriors();
+}
+// the closed rooms: concrete floor, walls, ceiling strips; the plan (crates, desks, racks, drywall) comes from the floor's kind
+function buildInteriors() {
+  const W = INT_W, D = INT_D, wall = col(0x6a6a72), floorC = col(0x4a4846);
+  for (const [name, [cx, cz]] of Object.entries(INT)) {
+    const roof = /Roof|roof/.test(name), x0 = cx - W / 2, x1 = cx + W / 2, z0 = cz - D / 2, z1 = cz + D / 2;
+    boxB(B.walk, x0 - 1, -0.05, z0 - 1, x1 + 1, 0, z1 + 1, { topWorld: 1 / 3, sides: false, col: roof ? col(0x5a5a60) : floorC });
+    if (roof) {
+      for (const [a, b, c, d] of [[x0, z0, x1, z0 + 0.6], [x0, z1 - 0.6, x1, z1], [x0, z0, x0 + 0.6, z1], [x1 - 0.6, z0, x1, z1]]) { boxB(B.trim, a, 0, b, c, 1.1, d, { col: conc0() }); lSolid(a, b, c, d, 6); }
+      // the city far below: a field of lights under the parapet
+      boxB(B.bankL, x0 - 80, -40, z0 - 80, x1 + 80, -39.9, z1 + 80, { sides: false, col: HDR(0x2a3a6a, 0.6) });
+      if (name === 'roof') { boxB(B.mark, cx - 8, 0.01, cz - 8, cx + 8, 0.03, cz + 8, { sides: false, col: col(0xe8e8e8) }); putB(B.neon, G.box, cx, 0.05, cz, 1.4, 0.02, 9, 0, HDR(0xffd23a, 2)); putB(B.neon, G.box, cx, 0.05, cz, 6, 0.02, 1.4, 0, HDR(0xffd23a, 2)); }
+      continue;
+    }
+    for (const [a, b, c, d] of [[x0, z0, x1, z0 + 0.5], [x0, z1 - 0.5, x1, z1], [x0, z0, x0 + 0.5, z1], [x1 - 0.5, z0, x1, z1]]) { boxB(B.trim, a, 0, b, c, 4.2, d, { col: wall }); lSolid(a, b, c, d, 6); }
+    boxB(B.trim, x0, 4.2, z0, x1, 4.5, z1, { col: col(0x2a2a30) });
+    for (let x = x0 + 5; x < x1; x += 10) putB(B.neon, G.box, x, 4.15, cz, 4, 0.06, 0.4, 0, HDR(name === 'server' ? 0x7ad0ff : 0xfff0d0, 2.2));
+    const prop = (x, z, sx, sz, h, c) => { boxB(B.trim, x - sx / 2, 0, z - sz / 2, x + sx / 2, h, z + sz / 2, { col: c }); lBox(x, z, sx, sz, h); };
+    if (/motel/.test(name)) {
+      // a corridor along the middle, rooms on both sides behind drywall
+      for (let k = 0; k < 5; k++) { const rx = x0 + 5 + k * 10; for (const s of [-1, 1]) { prop(rx, cz + s * 11, 3.2, 2.2, 0.6, col(0x8a6a8a)); dryWall(rx + 2.5, cz + s * 4, 7, 0.2, s); } }
+    } else if (name === 'call') {
+      for (let r = 0; r < 4; r++) for (let k = 0; k < 6; k++) { const x = x0 + 7 + k * 7.2, z = z0 + 6 + r * 6; prop(x, z, 4.2, 1.4, 0.8, col(0x3a3c44)); putB(B.bankL, G.box, x, 1.2, z - 0.3, 1.0, 0.6, 0.06, 0, HDR(0x7ad0ff, 1.2)); }
+      for (let k = 0; k < 3; k++) dryWall(x0 + 14 + k * 11, z1 - 6, 0.2, 9, 1);
+    } else if (name === 'server') {
+      for (let r = 0; r < 3; r++) for (let k = 0; k < 4; k++) prop(x0 + 10 + k * 10, z0 + 7 + r * 8, 6, 1.2, 2.2, col(0x16181e));
+    } else if (name === 'wh' || name === 'hold') {
+      for (let k = 0; k < 14; k++) { const x = x0 + 5 + (k % 7) * 6.5 + rand(-1, 1), z = z0 + 6 + Math.floor(k / 7) * 16 + rand(-2, 2); prop(x, z, 2.2, 2.2, 1.6 + Math.floor(Math.random() * 2) * 1.2, col(name === 'hold' ? pick([0xb33a2e, 0x2e6bb3, 0x2fa36b]) : 0x8a6a42)); }
+    } else if (name === 'lobby') {
+      prop(cx, cz + 6, 12, 2, 1.1, col(0x1a1a20)); for (const s of [-1, 1]) prop(cx + s * 16, cz, 1.4, 1.4, 4.2, col(0x8a8a90));
+      putB(B.neon, G.box, cx, 3.2, z1 - 0.3, 14, 1.2, 0.05, 0, HDR(0xff2a3a, 2));
+    } else if (/floor/.test(name)) {
+      for (let k = 0; k < 4; k++) { dryWall(x0 + 10 + k * 10, cz - 6, 0.2, 9, 1); dryWall(x0 + 10 + k * 10, cz + 6, 0.2, 9, 1); prop(x0 + 5 + k * 10, z0 + 4, 3, 1.4, 0.8, col(0x3a3c44)); }
+    } else if (name === 'boris') {
+      prop(cx - 10, cz, 6, 3, 1.2, col(0xd8a020)); prop(cx + 12, cz - 8, 8, 1.4, 1.1, col(0x5a5e66)); prop(cx + 12, cz + 8, 8, 1.4, 1.1, col(0x5a5e66));
+    }
+  }
+  function conc0() { return col(0x8a8a90); }
+}
+// drywall: blocks walking, but bullets go through it and break it (two magazines of a pistol bring a panel down)
+const dryMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.95 });
+function dryWall(cx, cz, sx, sz) {
+  const m = new THREE.Mesh(box1, dryMat); m.scale.set(sx, 3.2, sz); m.position.set(cx, 1.6, cz); m.castShadow = false; m.receiveShadow = true; scene.add(m);
+  const c = lBox(cx, cz, sx, sz, 3.2); c.dry = true;
+  DRY.push({ m, c, hp: 260, max: 260, x0: c.minX, x1: c.maxX, z0: c.minZ, z1: c.maxZ });
+}
+function dryReset() { for (const d of DRY) { d.hp = d.max; d.m.visible = true; d.m.scale.y = 3.2; d.m.position.y = 1.6; if (LCOLS.indexOf(d.c) < 0) LCOLS.push(d.c); } }
+// a bullet inside a drywall panel: it goes on, the panel takes the damage and falls apart at zero
+function dryHit(p, dmg) {
+  for (const d of DRY) {
+    if (!d.m.visible || p.x < d.x0 - 0.05 || p.x > d.x1 + 0.05 || p.z < d.z0 - 0.05 || p.z > d.z1 + 0.05 || p.y > 3.2) continue;
+    d.hp -= dmg; if (Math.random() < 0.5) spawnP(p.clone(), { color: 0xe8e2d4, size: 0.25, vel: rv().multiplyScalar(3), life: 0.5, grav: 9 });
+    if (d.hp <= 0) {
+      d.m.visible = false; const i = LCOLS.indexOf(d.c); if (i >= 0) LCOLS.splice(i, 1);
+      for (let k = 0; k < 10; k++) spawnP(new V3(rand(d.x0, d.x1), rand(0.3, 2.8), rand(d.z0, d.z1)), { color: 0xd8d2c4, size: rand(0.4, 0.8), vel: rv().multiplyScalar(4), life: 1.2, grav: 14, geo: box1 });
+      sfx.crash && sfx.crash(6);
+    }
+    return true;
+  }
+  return false;
+}
+// navigation in the district: along the street grid
+function lowNavPts(pos, goal, out) {
+  const AV = LOWP.AV, ST = LOWP.ST, near = (v, list) => list.reduce((b, a) => (Math.abs(a - v) < Math.abs(b - v) ? a : b));
+  if (Math.hypot(goal.x - pos.x, goal.z - pos.z) < 30) { out.push(new V3(goal.x, 0, goal.z)); return; }
+  const onAv = AV.some((x) => Math.abs(pos.x - x) < 8), onSt = ST.some((z) => Math.abs(pos.z - z) < 8);
+  const gx = near(goal.x, AV), gz = near(goal.z, ST);
+  if (onAv && !onSt) { const ax = near(pos.x, AV); if (Math.abs(ax - gx) > 1) { out.push(new V3(ax, 0, gz)); out.push(new V3(gx, 0, gz)); } else out.push(new V3(ax, 0, near(goal.z, ST) === gz && Math.abs(goal.x - gx) < 10 ? goal.z : gz)); }
+  else if (onSt) { const sz = near(pos.z, ST); if (Math.abs(sz - gz) > 1) { out.push(new V3(gx, 0, sz)); out.push(new V3(gx, 0, gz)); } else out.push(new V3(goal.x, 0, sz)); }
+  else { out.push(new V3(near(pos.x, AV), 0, pos.z)); out.push(new V3(gx, 0, gz)); }
+  out.push(new V3(goal.x, 0, goal.z));
+}
+
 function buildTrack() {
   const N = TRK.N, P = TRK.pts, NR = TRK.nrm, metal = col(0x3a3c44), white = col(0xe8e8ec), red = col(0xd83a2a), conc = col(0xb8b8c0);
   const solid = (x0, z0, x1, z1, h) => addBox((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, h);
@@ -2151,7 +2377,7 @@ function buildWorld() {
   buildSignals(tlights); buildRoadSigns();
 
   CONTS.glb = !isTouch && perf.level === 0;
-  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage();
+  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage(); buildLower();
   contBuild();
 
   // one material per batch: a few draw calls for the whole city
@@ -2363,6 +2589,11 @@ function zoneRoutes() {
   L.push(R([[663, -244], [663, 244]], 7)); L.push(R([[668, -240], [853, -240], [853, 240], [668, 240]], 8));
   L.push(R([[-482, -146], [-482, 146]], 10)); L.push(R([[-458, 0], [-176, 0]], 7));
   L.push(R([[80, 456], [80, 575], [-238, 575]], 9)); L.push(R([[80, 575], [246, 575], [248, 758]], 9)); L.push(R([[-200, 575], [-200, 476]], 9));
+  // Season 3 district «Нижний город»: its avenues, streets and the two link roads
+  { const AV = LOWP.AV, ST = LOWP.ST;
+    for (const x of AV) L.push(R([[x, ST[0]], [x, ST[ST.length - 1]]], 6));
+    for (const z of ST) L.push(R([[AV[0], z], [AV[AV.length - 1], z]], 6));
+    L.push(R([[272, -470], [392, -470]], 4.5)); L.push(R([[663, -246], [663, ST[0]]], 6)); }
   return (ZR.list = L);
 }
 function routeAt(r, s, off, out) {
@@ -3650,7 +3881,7 @@ function liftDark(c) { const hsl = {}; c.getHSL(hsl); if (hsl.l < 0.06) c.setHSL
 // is turned towards the aim; death, a hit and punches are done on the bones in code. If the models fail to load, the old ones stay.
 const NR = { ready: false, G: {}, clips: {}, H: 2.0, carInfo: null };
 const NR_SRC = ['man', 'man2', 'man3', 'woman', 'woman2', 'woman3', 'michelle', 'anims', 'car'];
-const NR_BODY = { gleb: 'man', artem: 'man', timur: 'man3', savva: 'man2', rustam: 'man2', kira: 'woman', maya: 'michelle', zoya: 'woman2', nika: 'woman2', olga: 'woman3', mark: 'man3', vera: 'woman3', thug1: 'man2', thug2: 'man', thug3: 'man2', boss: 'man', crow: 'man2' };
+const NR_BODY = { vik: 'man', gleb: 'man', artem: 'man', timur: 'man3', savva: 'man2', rustam: 'man2', kira: 'woman', maya: 'michelle', zoya: 'woman2', nika: 'woman2', olga: 'woman3', mark: 'man3', vera: 'woman3', thug1: 'man2', thug2: 'man', thug3: 'man2', boss: 'man', crow: 'man2' };
 const NR_FEM = { woman: 1, woman2: 1, woman3: 1, michelle: 1 };
 const NR_CAST = { gleb: { hair: '#2a1c14', broad: true }, timur: { hair: '#15151a' }, artem: { hair: '#c9a35a' }, savva: { glasses: true, bald: true }, rustam: { hair: '#15121a', broad: true },
   kira: { hair: '#1a1420' }, zoya: { hair: '#2a1a12' }, olga: { hair: '#b03a2e' }, nika: { glasses: true, hair: '#15121a' }, vera: { hair: '#1a1414', jacket: '#1c1c22', pants: '#1c1c22' },
@@ -4043,10 +4274,11 @@ function updateWeather(dt, focusP) {
   const t = WX_TARGET[WX.kind], s = Math.min(1, dt * 0.08);   // ~20 s to change over
   WX.rain += (t[0] - WX.rain) * s; WX.snow += (t[1] - WX.snow) * s; WX.fog += (t[2] - WX.fog) * s; WX.cloud += (t[3] - WX.cloud) * s;
   // rain: lines and splashes; fog: the fog closes in; wet asphalt reflects more
-  rain.visible = WX.rain > 0.03; rain.material.opacity = 0.42 * WX.rain;
+  const indoor = state.act === 2 && hero && hero.pos.x > 1270 && (state.mode === 'foot' || state.mode === 'dialog') && !['roof', 'motelRoof'].some((n) => Math.abs(hero.pos.x - INT[n][0]) < INT_W / 2 + 3 && Math.abs(hero.pos.z - INT[n][1]) < INT_D / 2 + 3);   // Season 3 rooms: no rain or snow under a roof (the rooftops stay open)
+  rain.visible = WX.rain > 0.03 && !indoor; rain.material.opacity = 0.42 * WX.rain;
   scene.fog.near = 70 - 62 * WX.fog; scene.fog.far = 290 - 215 * WX.fog;
   if (KIT.groundMat) KIT.groundMat.envMapIntensity = 0.35 + 0.6 * Math.min(1, WX.rain + 0.4 * WX.fog);
-  if (WX.snow > 0.03) {
+  if (WX.snow > 0.03 && !indoor) {
     if (!WX.snowPts) wxSnowBuild();
     const S = WX.snowPts; S.m.visible = true; S.m.material.opacity = 0.9 * WX.snow;
     for (let i = 0; i < S.N; i++) { const k = i * 3; S.pos[k + 1] -= dt * (1.4 + (i % 5) * 0.25); S.pos[k] += Math.sin(state.t * 0.8 + i) * dt * 0.5; if (S.pos[k + 1] < 0) S.pos[k + 1] += 30; }
@@ -4181,6 +4413,7 @@ window.addEventListener('keydown', (e) => {
   if (ONL.on && state.mode === 'drive' && !e.repeat && (e.code === 'Enter' || e.code === 'KeyT')) { e.preventDefault(); toggleChat(true); return; }
   if (ONL.on && !e.repeat && e.code === 'KeyH') onlineHonkMine();
   if (ONL.on && !e.repeat && e.code === 'KeyG') talk(true);
+  if (!ONL.on && !e.repeat && e.code === 'KeyG') s3Flash();
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (state.mode === 'dialog' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) advanceDialog();
@@ -4226,6 +4459,7 @@ function holdBtn(el, set) { el.addEventListener('pointerdown', (e) => { e.preven
 holdBtn($('btnFire'), (v) => { touchFire = v; if (v && state.mode === 'dialog') advanceDialog(); });
 holdBtn($('btnDrift'), (v) => { touchDrift = v; });
 $('btnProf').addEventListener('click', (e) => { e.preventDefault(); quickProfile(); });
+$('btnFlash').addEventListener('click', (e) => { e.preventDefault(); s3Flash(); });
 holdBtn($('btnMelee'), (v) => { touchMelee = v; });
 // the fire button doubles as a look pad: hold it and slide the thumb to turn the view while shooting (first/third person)
 const fireLook = { id: null, x: 0, y: 0 };
@@ -4290,7 +4524,21 @@ function setNavGoal(v) {
   else if (vr !== undefined) { NG.x = vr; GA = [vr, snapLo(NG.z)]; GB = [vr, snapHi(NG.z)]; }
   else { GA = [snapLo(NG.x), snapLo(NG.z)]; GB = GA; }
 }
+// Season 3: the district is reached from the city by the southern highway and the village's east lane (z −470)
+const inLowA = (p) => p.x > 372 && p.z < -282, LOW_EXIT = new V3(0, 0, -160);
+function lowLinkPts(pos, g, out) {
+  const onLane = Math.abs(pos.z + 470) < 9 && pos.x > -10 && pos.x < 392;
+  if (!onLane) {
+    if (pos.z < -385 && Math.abs(pos.x) < 330 && Math.abs(pos.x) > 9) { vilNavPts(pos, new V3(268, 0, -470), out); out.pop(); }
+    else if (Math.abs(pos.x) > 9) out.push(new V3(0, 0, pos.z));
+    out.push(new V3(0, 0, -470));
+  }
+  out.push(new V3(392, 0, -470)); lowNavPts(new V3(392, 0, -470), g, out);
+}
 function updateNav(pos, goal) {
+  let lowTail = null; const lowHere = LOW.on && inLowA(pos);
+  if (LOW.on && !lowHere && inLowA(goal || GOAL)) { lowTail = goal || GOAL; goal = Math.abs(pos.x) < 200 && pos.z > -168 ? LOW_EXIT : null; }
+  if (lowHere && !inLowA(goal || GOAL)) { const g0 = goal || GOAL; NAV.pts.length = 0; setNavGoal(g0); lowNavPts(pos, new V3(392, 0, -470), NAV.pts); NAV.pts.pop(); NAV.pts.push(new V3(392, 0, -470), new V3(0, 0, -470), new V3(0, 0, -176), new V3(g0.x, 0, g0.z)); return navFinish(pos); }
   setNavGoal(goal || GOAL);
   NAV.pts.length = 0;
   const horiz = GA[1] === GB[1] && GA[0] !== GB[0], vert = GA[0] === GB[0] && GA[1] !== GB[1];
@@ -4298,6 +4546,8 @@ function updateNav(pos, goal) {
     || (vert && Math.abs(pos.x - GA[0]) < 9 && pos.z >= Math.min(GA[1], GB[1]) - 2 && pos.z <= Math.max(GA[1], GB[1]) + 2)
     || Math.hypot(pos.x - NG.x, pos.z - NG.z) < 12;
   if (TRK.on) trkNavPts(pos, goal || GOAL, NAV.pts);
+  else if (lowTail && !goal) lowLinkPts(pos, lowTail, NAV.pts);
+  else if (lowHere) lowNavPts(pos, goal || GOAL, NAV.pts);
   else if (VIL.on) vilNavPts(pos, goal || GOAL, NAV.pts);
   else if (onGoalRoad || AIR.on || STA.on) NAV.pts.push(NG.clone());
   else {
@@ -4318,6 +4568,10 @@ function updateNav(pos, goal) {
     }
     NAV.pts.push(NG.clone());
   }
+  if (lowTail && goal) { NAV.pts.push(new V3(0, 0, -176)); lowLinkPts(new V3(0, 0, -176), lowTail, NAV.pts); }
+  return navFinish(pos);
+}
+function navFinish(pos) {
   // drop the first point once the car is inside that intersection
   while (NAV.pts.length > 1 && Math.hypot(NAV.pts[0].x - pos.x, NAV.pts[0].z - pos.z) < 9) NAV.pts.shift();
   NAV.target = NAV.pts[0];
@@ -4338,6 +4592,7 @@ function setBeam(v) { beam.visible = !!v; if (v) beam.position.set(v.x, 45, v.z)
 function inColliders(p, y) {
   for (const c of colliders) if (p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
   if (p.z < -330) for (const c of VCOLS) if (p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
+  if (p.x > 360 && p.z < -270) for (const c of LCOLS) if (!c.dry && p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
   return false;
 }
 // the open city reaches the suburbs: the city square, the south highway to the village, the west highway to the track
@@ -4350,10 +4605,10 @@ function freeClamp(pos) {
   }
   pos.x = bx; pos.z = bz;
 }
-const COLL_C = [colliders], COLL_V = [colliders, VCOLS];   // south of the city the village colliders are checked too
+const COLL_C = [colliders], COLL_V = [colliders, VCOLS], COLL_L = [colliders, LCOLS];   // south of the city the village colliders are checked too
 function collideCircle(pos, vel, r) {
   let impact = 0;
-  for (const L of (pos.z < -330 ? COLL_V : COLL_C)) for (const c of L) {
+  for (const L of (pos.x > 360 && pos.z < -270 ? COLL_L : pos.z < -330 ? COLL_V : COLL_C)) for (const c of L) {
     if (pos.x < c.minX - r || pos.x > c.maxX + r || pos.z < c.minZ - r || pos.z > c.maxZ + r) continue;
     const cx = clamp(pos.x, c.minX, c.maxX), cz = clamp(pos.z, c.minZ, c.maxZ);
     let dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
@@ -4368,7 +4623,8 @@ function collideCircle(pos, vel, r) {
     if (vn < 0) { vel.x -= nx * vn * 1.35; vel.z -= nz * vn * 1.35; vel.multiplyScalar(0.94); impact = Math.max(impact, c.soft ? -vn * 0.35 : -vn); }
   }
   if (TRK.on && pos.x < TRK.x1 + 15) impact = Math.max(impact, trkWall(pos, vel, r));
-  if ((AIR.on || STA.on || TRK.on || VIL.on) && !ONL.on) { const Z = AIR.on ? AIR : STA.on ? STA : TRK.on ? TRK : VIL; pos.x = clamp(pos.x, Z.x0, Z.x1); pos.z = clamp(pos.z, Z.z0, Z.z1); }
+  if (LOW.on && !ONL.on) { pos.x = clamp(pos.x, -LIM, LOW.x1); pos.z = clamp(pos.z, LOW.z0, LIM + 2); }
+  else if ((AIR.on || STA.on || TRK.on || VIL.on) && !ONL.on) { const Z = AIR.on ? AIR : STA.on ? STA : TRK.on ? TRK : VIL; pos.x = clamp(pos.x, Z.x0, Z.x1); pos.z = clamp(pos.z, Z.z0, Z.z1); }
   else if (ONL.on) freeClamp(pos);
   else { pos.x = clamp(pos.x, -LIM, LIM); pos.z = clamp(pos.z, -LIM, LIM + 2); }
   return impact;
@@ -4424,6 +4680,8 @@ function updateBullets(dt) {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i]; b.life -= dt; prevP.copy(b.pos); b.pos.addScaledVector(b.vel, dt);
     let hit = b.life <= 0;
+    if (!hit && DRY.length && b.pos.x > 1200) dryHit(b.pos, b.dmg);
+    if (!hit && b.team === 'p' && S3.targets.length && s3HitTargets(prevP, b.pos, b.dmg)) hit = true;
     if (!hit && inColliders(b.pos)) { sparks(b.pos); hit = true; }
     if (hit && b.blast) wpnBlast(b.pos);
     if (!hit) {
@@ -4496,6 +4754,7 @@ function damageEnemyCar(e, d) {
   if (e.hp <= 0 && !e.dead) { e.dead = true; cineSlow(e.pos); explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); if (TASK.cur && TASK.cur.group && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'kill', payload: { id: TASK.cur.id } }); }
 }
 function damageEnemy(e, d) {
+  if (e.armor && hero && e.pos.distanceTo(hero.pos) > 9) { d *= 0.3; if (Math.random() < 0.4) spawnP(e.pos.clone().add(new V3(0, 1.3, 0)), { color: 0x9ad0ff, size: 0.3, vel: rv().multiplyScalar(3), life: 0.25, add: true }); }
   e.hp -= d; e.hitT = 0.12; if (e.hp > 0) hitHuman(e);
   if (e.onHalf && e.hp > 0 && e.hp < e.max / 2) { const f = e.onHalf; e.onHalf = null; f(e); }
   if (e.hp <= 0 && !e.dead) {
@@ -4579,6 +4838,7 @@ function showLine() {
 }
 function advanceDialog() {
   if (state.mode !== 'dialog') return;
+  if (!dlg.lines[dlg.i]) return;
   const text = dlg.lines[dlg.i][1];
   if (dlg.shown < text.length) { dlg.shown = text.length; $('dlgText').textContent = text; return; }
   dlg.i++;
@@ -4619,9 +4879,11 @@ function spawnEnemyCar() {
   const idx = trail.length - 22, p = trail[idx], nx = trail[idx + 1];
   if (p.distanceTo(pc.pos) < 30) return;
   const isPol = MIS && MIS.carStyle === 'police';
-  const m = isPol ? makeCar(0, 'police') : makeCar(pick([0x2b2b33, 0x3a1f2b, 0x1f2a3a, 0x332a22]), false);
+  const bike = MIS && MIS.carStyle === 'bikers' && Math.random() < 0.65;
+  const m = bike ? makeBike() : isPol ? makeCar(0, 'police') : makeCar(pick([0x2b2b33, 0x3a1f2b, 0x1f2a3a, 0x332a22]), false);
   if (MIS && MIS.carStyle === 'granit') { const bc = new THREE.Mesh(box1, basic(new THREE.Color(4, 1.5, 0.15))); bc.scale.set(0.9, 0.16, 0.32); bc.position.set(0, 1.62, -0.1); m.g.add(bc); }
   const e = Object.assign(m, { pos: p.clone(), vel: new V3(), h: Math.atan2(nx.x - p.x, nx.z - p.z), hp: isPol ? 1e6 : 50, ti: idx + 1, fireCd: rand(1, 2), stuck: 0, rev: 0, dead: false, police: isPol, noTarget: isPol });
+  if (bike) { e.bike = true; e.hp = 26; e.max = 26; e.hitR = 1.6; }
   e.vel.set(Math.sin(e.h), 0, Math.cos(e.h)).multiplyScalar(20);
   enemyCars.push(e); if (isPol) policeQuack(0.8);
   if (!state.firstChase) { state.firstChase = true; toast(MIS && MIS.chaseMsg ? MIS.chaseMsg : 'Хвост! «Шакалы» на хвосте', 2); }
@@ -4640,7 +4902,7 @@ function updateDrive(dt) {
   const throttle = clamp(thrKey + jt, -1, 1), steer = pc.steerSm;
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
   pc.steerIn = steer;
-  const ck = careK(), nitro = state.nitroT > 0 && ck > 0.5, imp = carPhysics(pc, dt, nitro ? 1 : throttle, steer, drift, (P.maxSpeed + (nitro ? 16 : 0)) * ck, P.drift);
+  const ck = careK(), nitro = state.nitroT > 0 && ck > 0.5 && !pc.locked, cap = MIS && MIS.speedCap ? MIS.speedCap : 1e9, imp = carPhysics(pc, dt, pc.locked ? 0 : nitro ? 1 : throttle, steer, drift, Math.min(cap, (P.maxSpeed + (nitro ? 16 : 0)) * ck), P.drift);
   if (P.regen && pc.hp < 100) pc.hp = Math.min(100, pc.hp + 1.6 * dt);
   if (imp > 9) { damagePlayer((imp - 9) * 1.1); sfx.crash(imp); sparks(pc.pos.clone().add(new V3(0, 1, 0))); }
   if (drift && Math.abs(pc.vr) > 6 && Math.random() < 0.6) spawnP(pc.pos.clone().add(new V3(rand(-1, 1), 0.3, 0)), { color: 0x9a9aa8, size: 0.6, vel: new V3(0, 1, 0), life: 0.8, grow: 2, opacity: 0.35 });
@@ -4684,7 +4946,7 @@ function updateDrive(dt) {
     const diff = wrapA(Math.atan2(tx - e.pos.x, tz - e.pos.z) - e.h);
     let steerE = clamp(-diff * 2.4, -1, 1), thr = Math.abs(diff) > 1.8 && dist < 12 ? 0.4 : 1;
     if (e.rev > 0) { thr = -1; steerE = -steerE; e.rev -= dt; }
-    const im = carPhysics(e, dt, thr, steerE, false, (dist > 45 ? 41 : 37) + (e.police ? 3 : 0));
+    const im = carPhysics(e, dt, thr, steerE, false, (dist > 45 ? 41 : 37) + (e.police ? 3 : 0) + (e.bike ? 7 : 0));
     if (im > 12) damageEnemyCar(e, (im - 12) * 1.5);
     if (Math.abs(e.vf) < 3 && thr > 0) e.stuck += dt; else e.stuck = 0;
     if (e.stuck > 1.1) { e.rev = 0.9; e.stuck = 0; }
@@ -4773,6 +5035,7 @@ function spawnEnemy(x, z, boss, cfg) {
   const m = makeHuman(cfg.look ? cfg.look : boss ? { model: 'boss', skin: '#c89a7a', colors: { Details: '#7a1426', Belt: '#7a1426' }, face: { brow: '#5a4228', iris: '#2a1a10', mouth: 'smirk', angry: true, scar: true } } : pick([{ model: 'thug1', skin, colors: { Details: '#b01e34' }, face: { brow: '#15151a', iris: '#3a2a1a', angry: true, mask: true } }, { model: 'thug2', skin, colors: { Shirt: '#8c1c2b', Pants: '#1b1b22', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true } }, { model: 'thug3', skin, colors: { Shirt: '#2a2a30', Pants: '#3a1418', Hair: '#15151a' }, face: { brow: '#15151a', iris: '#2a1a10', mouth: 'grim', angry: true, stubble: '#15151a' } }]), cfg.scale || (boss ? 1.18 : 1));
   const hp0 = cfg.hp || (boss ? 280 : 60);
   const e = Object.assign(m, { pos: freeSpot(x, z, 0.7), face: 0, hp: hp0, max: hp0, name: cfg.name, burst: cfg.burst, dmg: cfg.dmg, speed: cfg.speed, tgt: cfg.tgt, onHalf: cfg.onHalf, fireCd: rand(0.9, 1.6), strafe: Math.random() < 0.5 ? 1 : -1, strafeT: rand(1, 2.5), boss, prefer: boss ? 9 : rand(8, 13), react: cfg.react !== undefined ? cfg.react : rand(0.5, 1.0), walk: 0, dead: false, hitT: 0 });
+  if (cfg.armor) e.armor = true;
   e.g.position.copy(e.pos); enemies.push(e);
   return e;
 }
@@ -4926,7 +5189,7 @@ const LOOKS = {
 let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
   if (ONL.on) leaveRoom();
-  removeHeli(); AIR.on = false; STA.on = false; TRK.on = false; VIL.on = false; state.lightsOff = false; TR.field = []; TR.count = 0; if (TRKX.lights.length) trkLights(0); tMarksClear();
+  removeHeli(); AIR.on = false; STA.on = false; TRK.on = false; VIL.on = false; LOW.on = false; if (typeof S3 !== 'undefined' && S3) s3Clear(); if (pc) pc.locked = false; state.lightsOff = false; TR.field = []; TR.count = 0; if (TRKX.lights.length) trkLights(0); tMarksClear();
   for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
@@ -4945,7 +5208,7 @@ function freeSpot(x, z, r) {
   const p = new V3(x, 0, z);
   for (let k = 0; k < 60; k++) {
     let ok = true;
-    for (const c of colliders) if (p.x > c.minX - r && p.x < c.maxX + r && p.z > c.minZ - r && p.z < c.maxZ + r) { ok = false; break; }
+    for (const L of (p.x > 360 && p.z < -270 ? COLL_L : p.z < -330 ? COLL_V : COLL_C)) { for (const c of L) if (!c.dry && p.x > c.minX - r && p.x < c.maxX + r && p.z > c.minZ - r && p.z < c.maxZ + r) { ok = false; break; } if (!ok) break; }
     if (ok) return p;
     const a = k * 2.4, d = 1.5 + k * 0.5; p.set(x + Math.cos(a) * d, 0, z + Math.sin(a) * d);
   }
@@ -4982,6 +5245,8 @@ function updateAllies(dt) {
   for (const a of allies) {
     if (a.dead) continue;
     let near = null, nd = 40; for (const e of enemies) if (!e.dead) { const d = e.pos.distanceTo(a.pos); if (d < nd) { nd = d; near = e; } }
+    if (a.runner) continue;
+    if (a.follow && hero) { const to = hero.pos.clone().sub(a.pos).setY(0), d = to.length(); if (d > 2.6) { to.multiplyScalar(Math.min(d - 2.4, 4.8 * dt) / d); a.pos.add(to); collideCircle(a.pos, to, 0.5); a.face = Math.atan2(to.x, to.z); a.walk = (a.walk || 0) + to.length() * 9.5; } a.g.rotation.y = a.face; a.g.position.set(a.pos.x, 0, a.pos.z); poseHuman(a, { walk: a.walk || 0, move: d > 2.6 ? 0.8 : 0, t: state.t }); continue; }
     const want = near ? Math.atan2(near.pos.x - a.pos.x, near.pos.z - a.pos.z) : a.face;
     a.face = wrapA(a.face + wrapA(want - a.face) * Math.min(1, dt * 5));
     a.g.rotation.y = a.face; a.g.position.set(a.pos.x, 0, a.pos.z);
@@ -6304,7 +6569,7 @@ function setMood(m) {
 
 function startGen(ep, i, withIntro) {
   const E = EPS[ep], c = E.chapters[i]; saveLast(ep, i + 1);
-  clearStage(); setMood(c.mood || 'night');
+  if (E.season3) s3Vik(); clearStage(); setMood(c.mood || 'night');
   state.ep = ep; state.ch = i + 1; epSave(ep, i + 1); state.fireLock = true;
   const title = `Миссия ${i + 1} · ${c.t}`;
   let finished = false;
@@ -6315,14 +6580,16 @@ function startGen(ep, i, withIntro) {
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
   };
-  AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village';
+  AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village'; LOW.on = (c.zone || E.zone) === 'lower' || (c.zone || E.zone) === 'city' && !!E.season3;
   resetJet(c.jetAt);
   MIS = GEN[c.type](c, title, done, E);
   if (c.carStyle || E.carStyle) MIS.carStyle = c.carStyle || E.carStyle; if (c.chaseMsg || E.chaseMsg) MIS.chaseMsg = c.chaseMsg || E.chaseMsg;
   if (c.police) { MIS.carStyle = 'police'; MIS.chaseMsg = c.chaseMsg || 'Полиция на хвосте! Стрелять по ней нельзя'; withPolice(MIS, c); }
   if (c.heli) spawnHeli(c.heli);
+  if (c.speedCap) MIS.speedCap = c.speedCap;
   const mode0 = state.mode;
-  if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; });
+  const intro = () => { if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; }); };
+  if (E.season3 && c.type !== 'choice' && state.mode !== 'dialog') s3Trunk(intro); else intro();
 }
 
 // the business jet: parked in hangar 3, or set down where a chapter needs it
@@ -7040,6 +7307,7 @@ function updateHud(dt) {
   $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : (footView === 'top' ? 'W A S D — бег · мышь — прицел · клик — огонь' : 'W A S D — бег · мышь — обзор · клик — огонь') + ' · E — удар (серия: левой, правой, ногой) · правая кнопка — прицел · V — камера · B — щит · Esc — пауза';
   updateBoostsHud();
   updateSight(dt); updateThreats(dt);
+  { const fl = isS3() && state.mode === 'foot' && S3.flash > 0; document.body.classList.toggle('s3flash', fl); if (fl) $('flashN').textContent = S3.flash; }
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
   hurt = Math.max(0, hurt - dt * 1.5); $('hurt').style.opacity = hurt;
   drawMinimap();
@@ -7450,7 +7718,7 @@ const WEAPONS = [
 // Every gun takes cartridges from the same supply (PROF.inv.ammo); the magazine only adds a reload pause.
 const WPN_BY = {}; for (const w of WEAPONS) WPN_BY[w.id] = w;
 const WPN = { id: '', left: 0, rel: 0, shown: '' };
-function curW() { const w = WPN_BY[PROF.weapon]; return w && wpnOwned(w.id) ? w : WPN_BY.shmel; }
+function curW() { if (typeof S3 !== 'undefined' && S3 && S3.kitW && isS3()) return WPN_BY[S3.kitW]; const w = WPN_BY[PROF.weapon]; return w && wpnOwned(w.id) ? w : WPN_BY.shmel; }
 function wpnOwned(id) { return id === 'shmel' || PROF.god || (PROF.weapons || []).indexOf(id) >= 0; }
 function wpnOpen(w) { return PROF.god || (PROF.st.eps || []).length >= w.need; }
 function wpnTick(dt) {
@@ -9640,6 +9908,605 @@ function taskDone(ok, fromGroup) {
   document.body.classList.remove('task'); beam.visible = false; $('btnTask').textContent = 'Задания';
   setObjective('Открытый город: бери задания и заказы такси, сигналь (H) и общайся в чате.'); JOBS.wait = 10;
 }
+// ---------------- Season 3 «Охота по тарифу»: the trunk, flashbangs, the radio, the music, the new mission types ----------------
+var S3 = { kit: null, kitW: null, flash: 0, prevIdx: null, radioT: 25, radioI: 0, targets: [], dark: null, smokeT: 0, lastKit: 'tac' };
+const S3_KITS = {
+  tac: { name: 'Тактический', w: 'ten', flash: 0, quiet: true, desc: '«Тень» — пистолет-пулемёт с глушителем. Враги замечают тебя позже.' },
+  assault: { name: 'Штурмовой', w: 'voron', flash: 3, quiet: false, desc: '«Ворон» — штурмовая винтовка, и 3 светошумовые гранаты (G или кнопка «Граната»).' },
+};
+const isS3 = () => state.ep >= 17 && state.ep <= 19;
+// the trunk: before every mission of the season Vik opens the boot of the taxi and picks a set
+function s3Trunk(then) {
+  if (window.__S3AUTO) { s3Kit(window.__S3AUTO); then(); return; }
+  const prev = state.mode; state.mode = 'trunk';
+  const card = (k) => { const K = S3_KITS[k], W = WPN_BY[K.w]; return `<button id="tk_${k}" class="trunk-card${S3.lastKit === k ? ' on' : ''}" type="button"><img src="assets/arsenal/img/${K.w}.webp" alt="" onerror="this.remove()"><b>${K.name}</b><span>${K.desc}</span><small>${W.name} · урон ${W.dmg}×${W.pellets} · магазин ${W.mag}</small></button>`; };
+  showModal(`<div class="kicker">Багажник такси</div><h2 class="h2">Что берём?</h2><p class="lead">Набор выдаётся на миссию бесплатно, патроны — из общего запаса.</p><div class="trunk">${card('tac')}${card('assault')}</div>`, {
+    tk_tac: () => { hideModal(); s3Kit('tac'); state.mode = prev; then(); },
+    tk_assault: () => { hideModal(); s3Kit('assault'); state.mode = prev; then(); },
+  });
+}
+function s3Kit(k) { const K = S3_KITS[k]; S3.kit = k; S3.lastKit = k; S3.kitW = K.w; S3.flash = K.flash; updateAmmoHud(); }
+// a flashbang: thrown a few metres ahead; everyone within 9 m is stunned for three seconds
+function s3Flash() {
+  if (!isS3() || state.mode !== 'foot' || !hero || S3.flash <= 0) return;
+  S3.flash--; const a = hero.aimAng || hero.face, p = hero.pos.clone().add(new V3(Math.sin(a) * 7, 0, Math.cos(a) * 7));
+  flash.position.set(p.x, 2, p.z); flash.intensity = 9; for (let i = 0; i < 18; i++) spawnP(p.clone().add(new V3(0, 1, 0)), { color: 0xffffff, size: rand(0.6, 1.4), vel: rv().multiplyScalar(rand(4, 9)), life: 0.35, add: true });
+  sfx.boom && sfx.boom(0.6); let n = 0;
+  for (const e of enemies) if (!e.dead && e.pos.distanceTo(p) < 9) { e.react = Math.max(e.react, 3.2); n++; }
+  toast(n ? `Светошумовая: оглушено ${n}` : 'Светошумовая: мимо', 1.2);
+}
+// the radio «Полночь»: the DJ comments on the night (in the car, every 35–55 s)
+const S3_RADIO = [
+  'Радио «Полночь», два часа ночи. Если вы видите жёлтое такси — не машите ему. Говорят, за него обещан миллион.',
+  'Звонок в студию: «На Кольце-2 летело такси, а за ним три чёрных джипа. Это кино снимают?» Нет, друг, это наш город.',
+  'Сводка: в Нижнем квартале горят баррикады. «Крысы» ищут жёлтую машину. Таксист, если слышишь — не сворачивай на Литейную.',
+  'Мэрия опровергает слухи о связях с «Монолитом». Мэрия опровергает всё. Ставлю следующий трек.',
+  'Ставки растут: за голову таксиста уже полтора миллиона. Ребята, у вас нет совести. Зато есть синтвейв.',
+  'Говорят, таксист — бывший сапёр. Говорят, он не опоздал ни на один заказ. Ну что ж, город, держись.',
+  'Камеры «Ока» ослепли в трёх районах. Совпадение? На «Полночи» совпадений не бывает.',
+  'Если вы Елена и слышите нас — ваш папа на пресс-конференции. Он очень хочет, чтобы вы позвонили. Мы бы не звонили.',
+  'Сухогруз «Беринг» стоит в порту третьи сутки. Таможня молчит. А мы ставим что-нибудь тяжёлое.',
+  'Дождь до утра, видимость — ноль, совесть у синдиката — тоже. Это была погода.',
+];
+function s3Radio(dt) {
+  if (!isS3() || state.mode !== 'drive') return;
+  S3.radioT -= dt; if (S3.radioT > 0) return;
+  S3.radioT = rand(35, 55); toast('📻 «Полночь»: ' + S3_RADIO[S3.radioI++ % S3_RADIO.length], 6.5);
+}
+// the music: synthwave on the road, industrial in the fights (made by the game itself, no files)
+const MUS = { on: false, style: '', step: 0, next: 0, bus: null };
+function musicUpdate() {
+  if (!audio.ctx || !isS3()) { if (MUS.bus) MUS.bus.gain.setTargetAtTime(0, audio.ctx ? audio.ctx.currentTime : 0, 0.3); MUS.style = ''; return; }
+  const want = state.mode === 'drive' ? 'synth' : state.mode === 'foot' ? 'ind' : '';
+  const ac = audio.ctx;
+  if (!MUS.bus) { MUS.bus = ac.createGain(); MUS.bus.gain.value = 0; MUS.bus.connect(audio.master); MUS.noise = (() => { const b = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })(); }
+  MUS.bus.gain.setTargetAtTime(want && !muted ? (want === 'ind' ? 0.07 : 0.06) : 0, ac.currentTime, 0.6);
+  if (want !== MUS.style) { MUS.style = want; MUS.step = 0; MUS.next = ac.currentTime + 0.05; }
+  if (!want) return;
+  const bpm = want === 'synth' ? 100 : 128, st = 60 / bpm / 4;
+  while (MUS.next < ac.currentTime + 0.15) { musicStep(want, MUS.step, MUS.next, st); MUS.step = (MUS.step + 1) % 64; MUS.next += st; }
+}
+function musicStep(style, s, t, st) {
+  const ac = audio.ctx, out = MUS.bus;
+  const env = (node, g0, a, d) => { const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(g0, t + a); g.gain.exponentialRampToValueAtTime(0.0008, t + d); node.connect(g); g.connect(out); return g; };
+  const osc = (type, f, g0, d, a, lp) => { const o = ac.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); let n = o; if (lp) { const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = lp; o.connect(fl); n = fl; } env(n, g0, a || 0.005, d); o.start(t); o.stop(t + d + 0.05); return o; };
+  const noise = (g0, d, hp) => { const b = ac.createBufferSource(); b.buffer = MUS.noise; const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp; b.connect(f); env(f, g0, 0.002, d); b.start(t); b.stop(t + d + 0.05); };
+  const kick = (g0) => { const o = ac.createOscillator(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.18); env(o, g0, 0.002, 0.32); o.start(t); o.stop(t + 0.4); };
+  const bar = Math.floor(s / 16), b = s % 16;
+  if (style === 'synth') {
+    const roots = [55, 43.65, 65.41, 49], r = roots[bar % 4];                      // A – F – C – G
+    if (b % 4 === 0) kick(0.9); if (b === 4 || b === 12) noise(0.5, 0.25, 1800);
+    if (b % 2 === 0) noise(0.08, 0.05, 7000);
+    if (b % 2 === 0) osc('sawtooth', r * (b % 4 === 2 ? 2 : 1), 0.35, st * 1.8, 0.005, 420);
+    const arp = [1, 1.5, 2, 2.4, 3, 2.4, 2, 1.5]; osc('square', r * 4 * arp[b % 8], 0.06, st * 0.9, 0.003, 2600);
+    if (b === 0) { osc('sawtooth', r * 4, 0.05, st * 15, 0.4, 1200); osc('sawtooth', r * 4 * 1.26, 0.04, st * 15, 0.4, 1200); }
+  } else {
+    if (b % 4 === 0) kick(1.1); if (b === 4 || b === 12) { noise(0.6, 0.18, 900); osc('square', 180, 0.12, 0.08); }
+    if (b % 2 === 1) noise(0.12, 0.04, 6000);
+    if ([0, 3, 6, 8, 11, 14].indexOf(b) >= 0) osc('sawtooth', 41.2 * (bar % 2 ? 1.19 : 1), 0.4, st * 1.5, 0.003, 300);
+    if (b === 10 && bar % 2) osc('square', 659 + rand(-20, 20), 0.05, 0.12, 0.002, 4000);
+  }
+}
+// targets with hit points (servers, cameras, charges' boxes, trucks' fuel tanks): shot by the player's bullets
+function s3Target(x, y, z, kind, hp, onKill) {
+  const g = new THREE.Group();
+  if (kind === 'server') { const b = new THREE.Mesh(box1, std(0x15171c, { roughness: 0.5, metalness: 0.5 })); b.scale.set(1.2, 2.2, 1.0); b.position.y = 1.1; g.add(b); for (let k = 0; k < 6; k++) { const l = new THREE.Mesh(box1, basic(new THREE.Color(0.2, 2.5, 0.8))); l.scale.set(0.8, 0.05, 0.02); l.position.set(0, 0.4 + k * 0.3, 0.52); g.add(l); } }
+  else if (kind === 'cam') { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 6), std(0x3a3c44)); p.position.y = 1.3; g.add(p); const c = new THREE.Mesh(box1, std(0xd8dce4)); c.scale.set(0.35, 0.3, 0.7); c.position.y = 2.7; g.add(c); const r = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 4), basic(new THREE.Color(4, 0.2, 0.2))); r.position.set(0, 2.8, 0.36); g.add(r); }
+  else { const b = new THREE.Mesh(box1, std(0x5a6a3a)); b.scale.set(0.9, 0.6, 0.6); b.position.y = 0.3; g.add(b); const l = new THREE.Mesh(box1, basic(new THREE.Color(4, 0.6, 0.1))); l.scale.set(0.2, 0.08, 0.02); l.position.set(0, 0.45, 0.31); g.add(l); }
+  g.position.set(x, y || 0, z); scene.add(g); const T = { g, pos: new V3(x, 1.2, z), r: kind === 'cam' ? 0.9 : 1.0, hp, max: hp, dead: false, onKill, kind }; S3.targets.push(T); return T;
+}
+function s3HitTargets(p0, p1, dmg) {
+  for (const T of S3.targets) { if (T.dead) continue; if (segDist2(p0, p1, T.pos) < T.r * T.r) { T.hp -= dmg; sparks(p1); if (T.hp <= 0) { T.dead = true; explode(T.pos, 0.5); T.g.visible = false; if (T.onKill) T.onKill(T); } return true; } }
+  return false;
+}
+function s3Clear() {
+  for (const T of S3.targets) scene.remove(T.g); S3.targets.length = 0;
+  if (S3.dark) { hemi.intensity = S3.dark; S3.dark = null; }
+  for (const L of S3.lights || []) scene.remove(L.g); S3.lights = [];
+  dryReset();
+}
+// a simple motorcycle: frame, tank, two wheels, a rider in black with a red helmet light
+function makeBike() {
+  const g = new THREE.Group(), dk = std(0x111114, { roughness: 0.6, metalness: 0.4 }), wheels = [];
+  const body = new THREE.Mesh(box1, dk); body.scale.set(0.45, 0.5, 1.7); body.position.y = 0.75; g.add(body);
+  for (const z of [-0.85, 0.85]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.18, 12).rotateZ(PI / 2), std(0x0a0a0c, { roughness: 0.9 })); w.position.set(0, 0.42, z); g.add(w); wheels.push(w); }
+  const rider = new THREE.Mesh(box1, std(0x1a1a20)); rider.scale.set(0.55, 0.8, 0.5); rider.position.set(0, 1.35, -0.1); rider.rotation.x = 0.35; g.add(rider);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), std(0x7a1020, { roughness: 0.3, metalness: 0.4 })); head.position.set(0, 1.9, 0.12); g.add(head);
+  const lamp = new THREE.Mesh(box1, basic(new THREE.Color(5, 4.6, 3.8))); lamp.scale.set(0.2, 0.1, 0.04); lamp.position.set(0, 1.0, 0.88); g.add(lamp);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(g); return { g, wheels };
+}
+// the camera-cones of «Око» on the streets (mission «Слепые зоны»): a pole, a red cone on the road
+function s3CamCone(x, z, face) {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5, 6), std(0x3a3c44)); pole.position.y = 2.5; g.add(pole);
+  const cam = new THREE.Mesh(box1, std(0xd8dce4)); cam.scale.set(0.4, 0.35, 0.8); cam.position.set(0, 5, 0.3); g.add(cam);
+  const cone = new THREE.Mesh(new THREE.CircleGeometry(16, 24, -0.5, 1.0), new THREE.MeshBasicMaterial({ color: 0xff2a3a, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }));
+  cone.rotation.x = -PI / 2; cone.rotation.z = -PI / 2; cone.position.y = 0.08; g.add(cone);
+  g.position.set(x, 0, z); g.rotation.y = face; scene.add(g);
+  const L = { g, x, z, face, r: 16, half: 0.5, cone }; (S3.lights || (S3.lights = [])).push(L); return L;
+}
+// searchlights (mission types «тихое проникновение»): a sweeping cone on the ground
+function s3Searchlight(x, z, r, speed, a0) {
+  const g = new THREE.Group();
+  const disk = new THREE.Mesh(new THREE.CircleGeometry(r, 28), new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+  disk.rotation.x = -PI / 2; disk.position.y = 0.09; g.add(disk); scene.add(g);
+  const L = { g, x, z, r, speed, a: a0 || 0, rad: rand(8, 14), cx: x, cz: z, disk }; (S3.lights || (S3.lights = [])).push(L); return L;
+}
+// ---- the new mission types ----
+// storm: a chain of steps, each in a place (an interior or a street spot) with its goal; the stairs lead to the next one
+const S3_GOAL_TEXT = { clear: 'Зачисти помещение', hack: 'Взломай терминал: стой рядом', servers: 'Расстреляй серверные стойки', cams: 'Разбей камеры наблюдения', charges: 'Заложи заряды', bombs: 'Обезвредь бомбы — пока не поздно', hostage: 'Выведи человека к выходу: он идёт за тобой', hold: 'Удержи точку', defend: 'Держи оборону', evidence: 'Собери улики', boss: 'Победи', snipers: 'Сними снайперов', reach: 'Прорвись к выходу', elevator: 'Успей к лифту' };
+function s3Area(step) {
+  if (step.at && INT[step.at]) { const [cx, cz] = INT[step.at]; return { x0: cx - INT_W / 2 + 1, x1: cx + INT_W / 2 - 1, z0: cz - INT_D / 2 + 1, z1: cz + INT_D / 2 - 1, cx, cz, inside: true }; }
+  const [cx, cz] = step.at, w = step.w || 60, d = step.d || 50; return { x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2, cx, cz, inside: false };
+}
+function s3EdgePts(A, n) { const pts = []; for (let k = 0; k < n; k++) { const s = Math.floor(Math.random() * 4); pts.push(s === 0 ? [rand(A.x0 + 2, A.x1 - 2), A.z0 + 1.5] : s === 1 ? [rand(A.x0 + 2, A.x1 - 2), A.z1 - 1.5] : s === 2 ? [A.x0 + 1.5, rand(A.z0 + 2, A.z1 - 2)] : [A.x1 - 1.5, rand(A.z0 + 2, A.z1 - 2)]); } return pts; }
+function s3Cfg(c, step, heavyK) {
+  const fac = step.fac || c.fac || 'mask', quiet = S3.kit === 'tac';
+  return (k) => { const heavy = (step.heavy || 0) > 0 && k % 3 === 0; return Object.assign({ look: factionLook(fac, heavy), react: rand(0.6, 1.5) + (quiet ? 1.2 : 0), armor: step.armor && k % 2 === 0 }, heavy ? { hp: 130, scale: 1.12, burst: 2 } : {}, step.snipers ? { speed: 0.01, dmg: 14, hp: 70 } : {}); };
+}
+Object.assign(GEN, {
+  storm(c, title, done, E) {
+    const steps = c.steps; let si = -1, st = null, ally = null;
+    const enter = () => {
+      si++; if (si >= steps.length) return done();
+      s3Clear(); const S = steps[si], A = s3Area(S);
+      st = { S, A, prog: 0, left: S.secs || 0, need: S.n || 0, got: 0, exit: null, spT: 2, wave: 0, boss: null, gap: 1 };
+      if (si === 0 && c.car) placeCar(c.car[0], c.car[1], c.car[2] || 0);
+      const s0 = S.start || [A.inside ? A.x0 + 3 : A.cx, A.inside ? A.cz : A.z1 - 3, A.inside ? PI / 2 : PI];
+      if (state.act !== 2 || si === 0 || A.inside || S.start) beginFoot(s0[0], s0[1], s0[2]);
+      MIS.arena = { x0: A.x0, x1: A.x1, z0: A.z0, z1: A.z1 };
+      if (S.dark) { S3.dark = hemi.intensity; hemi.intensity *= 0.22; }
+      const cfg = s3Cfg(c, S);
+      for (let k = 0; k < (S.guards || 0); k++) spawnEnemy(rand(A.x0 + 4, A.x1 - 4), rand(A.z0 + 4, A.z1 - 4), false, cfg(k));
+      const pts = (n) => Array.from({ length: n }, () => { const q = freeSpot(rand(A.x0 + 6, A.x1 - 6), rand(A.z0 + 5, A.z1 - 5), 1.3); return [clamp(q.x, A.x0 + 2, A.x1 - 2), clamp(q.z, A.z0 + 2, A.z1 - 2)]; });
+      if (S.goal === 'servers' || S.goal === 'cams') pts(S.n).forEach(([x, z]) => s3Target(x, 0, z, S.goal === 'servers' ? 'server' : 'cam', S.goal === 'servers' ? 120 : 30, () => { st.got++; toast(`${S.goal === 'servers' ? 'Стойка' : 'Камера'}: ${st.got}/${S.n}`, 1.2); }));
+      if (S.goal === 'evidence') pts(S.n).forEach(([x, z]) => addPickup('doc', x, z, () => { st.got++; toast(`Улики: ${st.got}/${S.n}`, 1.2); addCoins(15); }));
+      if (S.goal === 'charges' || S.goal === 'bombs' || S.goal === 'hack' || S.goal === 'hold' || S.goal === 'defend') {
+        st.points = (S.goal === 'charges' || S.goal === 'bombs' ? pts(S.n) : [S.point || [A.cx, A.cz]]).map(([x, z]) => ({ x, z, done: false, t: 0, mark: s3Target(x, 0, z, 'box', 1e9) }));
+        if (S.goal === 'bombs') st.left = S.secs || 90;
+      }
+      if (S.goal === 'hostage') { const [hx, hz] = S.hostageAt || [A.x1 - 4, A.cz]; ally = spawnAlly(ALLY_LOOKS[S.who] || LOOKS.leva, hx, hz, { hp: 160, name: S.name || 'Заложник', face: -PI / 2 }); ally.follow = false; const ex = S.exitAt || [A.x0 + 2, A.cz]; st.exit = new V3(ex[0], 0, ex[1]); openTo(st.exit); }
+      if (S.goal === 'boss') { const B = S.boss; st.boss = spawnEnemy(B.at ? B.at[0] : A.cx, B.at ? B.at[1] : A.z0 + 4, true, { look: BOSS_LOOKS[B.look] || undefined, hp: B.hp, name: B.name, burst: B.burst, dmg: B.dmg, scale: B.scale, armor: B.armor, onHalf: () => { toast(`${B.name}: подмога!`, 1.6); queueWave(s3EdgePts(A, 3), 0.5, cfg); addMedkit(A.cx, A.cz); } }); }
+      if (S.snipers) for (const [x, z] of s3EdgePts(A, S.snipers)) spawnEnemy(x, z, false, Object.assign(cfg(0), { speed: 0.01, dmg: 14, hp: 70, react: 1.5 }));
+      if (S.medkit !== false) addMedkit(A.cx + rand(-6, 6), A.cz + rand(-4, 4));
+      setObjective(`${S.obj || (S.goal === 'boss' && S.boss ? 'Победи: ' + S.boss.name : S3_GOAL_TEXT[S.goal]) || 'Вперёд'}${S.n && S.goal !== 'clear' ? ` — 0/${S.n}` : ''}.`);
+      const say = () => { if (S.toast) toast(S.toast, 2.4); };
+      if (S.say && si > 0) playDialog(S.say.map(fixLine), say); else say();
+    };
+    // an exit may lie outside the fight area (a door, the street past the yard): the area grows to reach it
+    const openTo = (v) => { const A = MIS && MIS.arena; if (!A || !v) return; A.x0 = Math.min(A.x0, v.x - 4); A.x1 = Math.max(A.x1, v.x + 4); A.z0 = Math.min(A.z0, v.z - 4); A.z1 = Math.max(A.z1, v.z + 4); };
+    const goalDone = () => {
+      const S = st.S;
+      if (S.exitTo === false || si === steps.length - 1 && !S.exitAt) return enter();
+      const ex = S.exitAt || [st.A.inside ? st.A.x1 - 2 : st.A.cx, st.A.inside ? st.A.cz : st.A.z0 + 3];
+      st.exit = new V3(ex[0], 0, ex[1]); openTo(st.exit); setBeam(st.exit); st.leaving = true;
+      setObjective(S.exitObj || (steps[si + 1] && steps[si + 1].at && INT[steps[si + 1].at] ? 'Лестница — на следующий этаж.' : 'Выход — дальше.'));
+      if (S.goal === 'elevator') return;
+    };
+    const R = { title, arena: null, noFire: false,
+      onAllyDown: () => failChapter('Заложник ранен', 'Держи его за спиной и сначала зачищай коридор. Попробуй ещё раз.'),
+      update(dt) {
+        if (!st) return; const S = st.S, A = st.A, cfg = s3Cfg(c, S), alive = enemies.filter((e) => !e.dead && e.pos.x > A.x0 - 10 && e.pos.x < A.x1 + 10 && e.pos.z > A.z0 - 10 && e.pos.z < A.z1 + 10).length, clear = alive === 0 && !spawnQueue.length;   // foes left behind on an earlier step (snipers on a far roof) do not hold this one
+        // the last one or two foes stuck behind something for 25 s: they come out near the player
+        if (alive > 0 && alive <= 2 && !spawnQueue.length && !st.leaving) { if (alive !== st.lastAlive) st.stuckT = 0; st.stuckT = (st.stuckT || 0) + dt;
+          if (st.stuckT > 25) { st.stuckT = 0; for (const e of enemies) if (!e.dead && e.pos.x > A.x0 - 10 && e.pos.x < A.x1 + 10 && e.pos.z > A.z0 - 10 && e.pos.z < A.z1 + 10 && !e.boss) { const q = freeSpot(clamp(hero.pos.x + rand(-12, 12), A.x0 + 2, A.x1 - 2), clamp(hero.pos.z + rand(-12, 12), A.z0 + 2, A.z1 - 2), 0.8); e.pos.set(q.x, 0, q.z); e.g.position.copy(e.pos); } toast('Последние — выходят на тебя!', 1.4); } }
+        st.lastAlive = alive;
+        if (S.smoke && Math.random() < dt * 6) spawnP(new V3(rand(A.x0, A.x1), 0.6, rand(A.z0, A.z1)), { color: 0x9a9aa2, size: rand(3, 6), vel: new V3(rand(-0.5, 0.5), 0.3, rand(-0.5, 0.5)), life: 5, grow: 1.4, opacity: 0.5 });
+        if (st.leaving) { if (st.exit && hero.pos.distanceTo(st.exit) < 3) { st.leaving = false; setBeam(null); enter(); } return; }
+        // waves come from the edges while the goal is not done
+        if (S.waves && st.wave < S.waves.length && (clear || st.gapT > 0)) { st.gap -= dt; if (st.gap <= 0) { queueWave(s3EdgePts(A, S.waves[st.wave]), 0.4, cfg); st.wave++; st.gap = 6; } }
+        const waveDone = !S.waves || st.wave >= S.waves.length;
+        const spawnDrip = (every) => { st.spT -= dt; if (st.spT <= 0 && alive < 4) { st.spT = every; queueWave(s3EdgePts(A, 2), 0.3, cfg); } };
+        const nearPt = (q, r) => Math.hypot(hero.pos.x - q.x, hero.pos.z - q.z) < (r || 2.6);
+        const g = S.goal;
+        if (g === 'clear' || g === 'reach' && !S.exitAt) { if (clear && waveDone) goalDone(); }
+        else if (g === 'servers' || g === 'cams' || g === 'evidence') { if (st.got >= S.n && (clear || S.leaveFoes)) goalDone(); else if (S.drip) spawnDrip(S.drip); setObjective(`${S.obj || S3_GOAL_TEXT[g]} — ${st.got}/${S.n}.`); }
+        else if (g === 'charges' || g === 'bombs') {
+          let got = 0; for (const q of st.points) { if (q.done) { got++; continue; } if (nearPt(q)) { q.t += dt; if (q.t >= (g === 'bombs' ? 2.2 : 1.6)) { q.done = true; q.mark.g.visible = g === 'charges'; toast(g === 'bombs' ? 'Обезврежено!' : 'Заряд установлен', 1); sfx.key(); } } else q.t = Math.max(0, q.t - dt); }
+          st.got = got; if (S.drip) spawnDrip(S.drip);
+          const nx = st.points.find((q) => !q.done); setBeam(nx ? new V3(nx.x, 0, nx.z) : null);
+          if (g === 'bombs') { st.left -= dt; if (st.left <= 0) return failChapter('Взрыв', 'Не успел. Обезвреживай ближние бомбы первыми и не ввязывайся в перестрелки.'); }
+          setObjective(`${S.obj || S3_GOAL_TEXT[g]} — ${got}/${S.n}${g === 'bombs' ? ' · ' + fmt(st.left) : ''}. Стой рядом.`);
+          if (got >= S.n) { if (g === 'charges') { for (const q of st.points) explode(new V3(q.x, 0, q.z), 0.8); } goalDone(); }
+        } else if (g === 'hack' || g === 'hold' || g === 'defend') {
+          const q = st.points[0]; setBeam(new V3(q.x, 0, q.z));
+          const inside = nearPt(q, g === 'hold' ? 5 : 3);
+          if (inside || g === 'defend') st.prog += dt / (S.secs || 30); else if (g === 'hack') st.prog = Math.max(0, st.prog - dt * 0.02);
+          spawnDrip(Math.max(S.drip || 5, 6));
+          setObjective(`${S.obj || S3_GOAL_TEXT[g]}: ${Math.round(st.prog * 100)}%${!inside && g !== 'defend' ? ' — вернись к точке!' : ''}`);
+          if (st.prog >= 1) { setBeam(null); goalDone(); }
+        } else if (g === 'hostage') {
+          if (!ally.follow && hero.pos.distanceTo(ally.pos) < 3.5) { ally.follow = true; toast(`${ally.name}: иду за тобой!`, 1.6); setBeam(st.exit); }
+          if (ally.follow && ally.pos.distanceTo(st.exit) < 3.5) { if (clear || !enemies.some((e) => !e.dead && e.pos.distanceTo(st.exit) < 14)) { ally.follow = false; goalDone(); } else setObjective('У выхода ещё охрана — добей её, потом выводи.'); }
+          if (S.drip) spawnDrip(S.drip);
+        } else if (g === 'boss') { if (st.boss && st.boss.dead && clear && waveDone) goalDone(); }
+        else if (g === 'elevator' || g === 'reach') {
+          if (!st.exit) { const ex = S.exitAt; st.exit = new V3(ex[0], 0, ex[1]); openTo(st.exit); setBeam(st.exit); st.left = S.secs || 0; }
+          if (S.secs) { st.left -= dt; setObjective(`${S.obj || S3_GOAL_TEXT[g]} — ${fmt(st.left)}.`); if (st.left <= 0) return failChapter('Не успел', 'Двери закрылись. Беги, не останавливаясь у каждого врага.'); }
+          if (S.drip) spawnDrip(S.drip);
+          if (hero.pos.distanceTo(st.exit) < 3.2) { setBeam(null); st.exit = null; enter(); }
+        }
+        if (st.left > 0 && g !== 'bombs' && g !== 'elevator' && g !== 'reach' && S.survive) { st.left -= dt; }
+      },
+      hud() { const S = st && st.S; if (!S) return {}; if (S.goal === 'hack' || S.goal === 'hold' || S.goal === 'defend') return { bars: [{ label: S.barName || 'Готово', frac: st.prog, color: '#4dffa6' }] }; if (S.goal === 'bombs' || (S.secs && (S.goal === 'elevator' || S.goal === 'reach'))) return { timer: fmt(st.left), bad: st.left < 15 }; if (st.boss && !st.boss.dead) return {}; return {}; } };
+    MIS = R; enter(); return R;
+  },
+  // stealth: searchlights sweep the yard; stepping into a beam raises the alarm (a wave and a penalty), three alarms fail
+  stealth(c, title, done) {
+    const [gx, gz] = c.goal; beginFoot(c.start[0], c.start[1], hdg(c.start[2])); if (c.car) placeCar(c.car[0], c.car[1], c.car[2] || 0);
+    s3Clear(); const L = c.lights.map(([x, z, r, sp]) => s3Searchlight(x, z, r || 5, sp || 0.6, rand(0, 6)));
+    let alarm = 0, cool = 0, got = 0; const goal = new V3(gx, 0, gz);
+    if (c.items) c.items.forEach(([x, z]) => addPickup('doc', x, z, () => { got++; toast(`${c.itemName || 'Найдено'}: ${got}/${c.items.length}`, 1.2); }));
+    setBeam(c.items ? null : goal); setObjective(c.obj || 'Пройди незаметно: не попадай в лучи прожекторов.');
+    return { title, update(dt) {
+      for (const l of L) { l.a += dt * l.speed; l.x = l.cx + Math.cos(l.a) * l.rad; l.z = l.cz + Math.sin(l.a * 1.3) * l.rad; l.g.position.set(l.x, 0, l.z); }
+      cool -= dt;
+      if (cool <= 0 && L.some((l) => Math.hypot(hero.pos.x - l.x, hero.pos.z - l.z) < l.r)) {
+        alarm++; cool = 6; sfx.key(); toast(`Тревога ${alarm}/3!`, 1.6); const cfg = s3Cfg(c, { fac: c.fac }); queueWave(s3EdgePts({ x0: hero.pos.x - 25, x1: hero.pos.x + 25, z0: hero.pos.z - 25, z1: hero.pos.z + 25 }, 2 + alarm), 0.6, cfg);
+        if (alarm >= 3) return failChapter('Тревога', 'Охрана подняла всех. Двигайся между лучами, а не через них.');
+      }
+      if (c.items && got >= c.items.length) { setBeam(goal); setObjective('Всё собрано. Уходи к выходу.'); }
+      if ((!c.items || got >= c.items.length) && hero.pos.distanceTo(goal) < 3) done();
+    }, hud() { return { bars: [{ label: 'Тревога', frac: alarm / 3, color: '#ff4a3a' }] }; } };
+  },
+  // footchase: the informant runs a route; stay close; within 2.5 m — caught; more than 45 m for 6 s — lost
+  footchase(c, title, done) {
+    beginFoot(c.start[0], c.start[1], hdg(c.start[2])); if (c.car) placeCar(c.car[0], c.car[1], c.car[2] || 0);
+    const R0 = c.route.map(([x, z]) => new V3(x, 0, z)), r = spawnAlly(LOOKS[c.look] || LOOKS.leva, R0[0].x, R0[0].z, { hp: 1e6, name: c.name || 'Информатор', face: 0 });
+    r.runner = true; let i = 1, lost = 0;
+    if (c.guards) for (const [x, z] of c.guards) spawnEnemy(x, z, false, { look: factionLook(c.fac || 'mask'), react: 1.2 });
+    setObjective(`Догони: ${c.name || 'информатор'}. Не отставай больше чем на 45 м.`);
+    return { title, update(dt) {
+      const T = R0[Math.min(i, R0.length - 1)], d = hero.pos.distanceTo(r.pos);
+      const sp = d < 8 ? 8.4 : d < 20 ? 7.2 : 5.2; /* the hero runs 9 m/s: you gain on him, but slowly */ const to = T.clone().sub(r.pos).setY(0), L = to.length();
+      if (L < 1.5) { if (i < R0.length - 1) i++; else i = 1; } else { to.multiplyScalar(Math.min(1, sp * dt / L)); r.pos.add(to); collideCircle(r.pos, to, 0.5); r.face = Math.atan2(to.x, to.z); r.g.position.set(r.pos.x, 0, r.pos.z); r.g.rotation.y = r.face; if (r.cur !== 'Run') playAct(r, 'Run', 0.2); }
+      setBeam(r.pos);
+      if (d < 2.6) { setBeam(null); r.runner = false; playAct(r, 'Idle', 0.2); done(); return; }
+      if (d > 45) { lost += dt; if (lost > 6) return failChapter('Ушёл', 'Информатор растворился во дворах. Срезай углы и не отставай.'); } else lost = 0;
+    }, hud() { const d = hero.pos.distanceTo(r.pos); return { timer: d < 12 ? 'Почти догнал!' : `${Math.round(d)} м`, bad: d > 35 }; } };
+  },
+  // carry: crates one at a time to the car (slower with a crate), enemies drip in
+  carry(c, title, done) {
+    const [cx, cz] = c.car; placeCar(cx, cz, c.car[2] || 0); beginFoot(c.start[0], c.start[1], hdg(c.start[2]));
+    const drop = new V3(cx, 0, cz + (c.dropDz || -3)); let carrying = false, got = 0, spT = 4;
+    const cfg = s3Cfg(c, { fac: c.fac });
+    const place = () => c.crates.forEach(([x, z]) => addPickup('ammo', x, z, () => { if (carrying) { toast('Сначала отнеси ящик к машине', 1.2); return; } carrying = true; P.speedFoot0 = P.speedFoot0 || 1; toast('Ящик взят — к машине!', 1.2); setBeam(drop); }));
+    place(); setObjective(`Погрузи ящики в машину — 0/${c.crates.length}.`);
+    return { title, update(dt) {
+      if (carrying) { if (hero.pos.distanceTo(drop) < 3) { carrying = false; got++; sfx.key(); toast(`Погружено: ${got}/${c.crates.length}`, 1.2); setBeam(null); setObjective(`Погрузи ящики в машину — ${got}/${c.crates.length}.`); if (got >= c.crates.length) return done(); } }
+      spT -= dt; if (spT <= 0 && aliveFoes() < 4) { spT = c.every || 9; queueWave(s3EdgePts({ x0: cx - 30, x1: cx + 30, z0: cz - 30, z1: cz + 30 }, 2), 0.5, cfg); }
+    } };
+  },
+  // pinned: the taxi is boxed in by SUVs; shoot from the window until they burn, then (optionally) break out to a point
+  pinned(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2])); pc.locked = true;
+    const cars = []; let phase = 0; const goal = c.goal ? new V3(c.goal[0], 0, c.goal[1]) : null;
+    for (const [x, z, h] of c.suvs) { const m = makeCar(0x111114, false); const e = Object.assign(m, { pos: new V3(x, 0, z), vel: new V3(), h: hdg(h), hp: c.hp || 60, max: c.hp || 60, script: true, kind: 'suv', path: [new V3(x + Math.sin(hdg(h)) * 60, 0, z + Math.cos(hdg(h)) * 60)], pi: 0, speed: 0, stops: {}, wait: 1e9, fireCd: rand(1, 2), shoot: true, invuln: false, noTarget: false, noExplode: false, dead: false, stuck: 0, rev: 0, vf: 0 }); e.g.position.copy(e.pos); e.g.rotation.y = e.h; e.g.scale.set(1.08, 1.15, 1.08); enemyCars.push(e); cars.push(e); }
+    setObjective(c.obj || 'Тебя зажали! Стреляй из окна по внедорожникам (пробел / «Огонь»).');
+    return { title, chase: { max: 0 }, update(dt) {
+      if (phase === 0) { pc.vel.set(0, 0, 0); pc.vf = 0; if (cars.every((e) => e.dead || e.disabled)) { phase = 1; pc.locked = false; if (!goal) return done(); setBeam(goal); setObjective(c.obj2 || 'Путь свободен — уходи!'); toast('Прорвались!', 1.6); MIS.chase.max = c.chase || 2; state.spawnT = 3; } }
+      else if (pc.pos.distanceTo(goal) < 10) done();
+    }, navGoal: () => goal || pc.pos, navName: c.goalName || '' };
+  },
+  // cams: drive through the district past «Око» cameras; inside a red cone the suspicion grows; reach the goal before 100
+  cams(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2])); s3Clear();
+    const cams = c.cams.map(([x, z, f]) => s3CamCone(x, z, f)); let sus = 0; const goal = new V3(c.goal[0], 0, c.goal[1]); setBeam(goal);
+    setObjective(c.obj || `Доберись до точки «${c.goalName}», не попадая в красные зоны камер «Ока».`);
+    return { title, chase: { max: c.chase || 0 }, navGoal: () => goal, navName: c.goalName, update(dt) {
+      let inside = false;
+      for (const L of cams) { const dx = pc.pos.x - L.x, dz = pc.pos.z - L.z, d = Math.hypot(dx, dz); if (d > L.r) continue; const a = wrapA(Math.atan2(dx, dz) - L.face); if (Math.abs(a) < L.half) inside = true; }
+      sus = inside ? sus + dt * 34 : Math.max(0, sus - dt * 6);
+      if (sus >= 100) return failChapter('Засекли', 'Камера «Ока» поймала номер такси. Объезжай красные зоны переулками.');
+      if (pc.pos.distanceTo(goal) < 10) done();
+    }, hud() { return { bars: [{ label: 'Камеры видят', frac: sus / 100, color: '#ff2a3a' }] }; } };
+  },
+  // wash: reach the car wash under fire and stay inside for 6 s (the beacon is washed off), pursuers come all the way
+  wash(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2])); const W = new V3(LOWP.wash[0], 0, LOWP.wash[1]); let t = 0; setBeam(W);
+    setObjective('На такси маячок синдиката! Доберись до мойки и простой под струями 6 секунд.');
+    return { title, chase: { max: c.chase || 3 }, navGoal: () => W, navName: 'Мойка', update(dt) {
+      if (Math.abs(pc.pos.x - W.x) < 7.5 && Math.abs(pc.pos.z - W.z) < 6 && Math.abs(pc.vf || 0) < 5) { t += dt; if (Math.random() < dt * 30) spawnP(pc.pos.clone().add(new V3(rand(-1, 1), 2.5, rand(-2, 2))), { color: 0xcfe8ff, size: 0.3, vel: new V3(0, -6, 0), life: 0.4 }); if (t >= 6) { toast('Маячок смыт!', 1.6); done(); } }
+      else t = Math.max(0, t - dt * 0.5);
+    }, hud() { return { bars: [{ label: 'Мойка', frac: t / 6, color: '#3dd6ff' }] }; } };
+  },
+  // choice: the deal on the roof; two endings
+  choice(c, title, done) {
+    beginFoot(INT.roof[0], INT.roof[1] + 8, PI); const boss = spawnAlly(BOSS_LOOKS.baron, INT.roof[0], INT.roof[1] - 6, { hp: 1e6, name: 'Барон', face: 0 });
+    const eln = spawnAlly(ALLY_LOOKS.elena || LOOKS.leva, INT.roof[0] + 4, INT.roof[1] + 9, { hp: 1e6, name: 'Елена', face: PI });
+    state.mode = 'dialog';
+    playDialog(c.offer.map(fixLine), () => {
+      showModal(`<div class="kicker">Крыша «Монолита»</div><h2 class="h2">Сделка</h2><p class="lead">Кейс с десятью миллионами и чистые документы. Взамен — Елена.</p><div class="btns"><button id="endA" class="btn primary" type="button">Месть по тарифу</button><button id="endB" class="btn" type="button">Уйти на покой</button></div>`, {
+        endA: () => { hideModal(); S3.ending = 'A'; PROF.st.s3end = 'A'; saveProfile(); playDialog(c.endA.map(fixLine), () => ride('A')); },
+        endB: () => { hideModal(); S3.ending = 'B'; PROF.st.s3end = 'B'; saveProfile(); playDialog(c.endB.map(fixLine), () => ride('B')); },
+      });
+    });
+    // the last ride differs: A — the record to the press over the north link road; B — the taxi to the pier, where it blows up
+    let goal = null, end = 0;
+    const R = { title, noFire: true, chase: null, navName: 'Финал', navGoal: () => goal || (pc ? pc.pos : new V3()), update(dt) {
+      if (!goal || state.mode !== 'drive') return;
+      setBeam(goal);
+      if (end > 0) { end -= dt; pc.vel.multiplyScalar(0.9); if (end <= 0) { goal = null; done(); } return; }
+      if (Math.hypot(pc.pos.x - goal.x, pc.pos.z - goal.z) < 9) {
+        end = 2.2;
+        if (S3.ending === 'B') { explode(pc.pos.clone(), 1.6); toast('Жёлтое такси горит у причала. Для города Вик и Елена погибли.', 3); }
+        else toast('Запись — в редакции. Утром её услышит весь город.', 3);
+      }
+    } };
+    const ride = (k) => {
+      beginDrive(LOWP.tower[0], LOWP.ST[4], DIRS.W); MIS.chase = null;
+      goal = k === 'A' ? new V3(663, 0, -300) : new V3(LOWP.pier[0] - 16, 0, LOWP.pier[1]);
+      setBeam(goal); setObjective(k === 'A' ? 'Последний заказ: отвези запись в редакцию — на север, к вокзалу.' : 'Последний заказ: к причалу. Там такси «погибнет» вместе с вами.');
+    };
+    return R;
+  },
+});
+
+// ---------------- Season 3 «Охота по тарифу»: episodes 17–19 ----------------
+Object.assign(WHO, {
+  elena: { name: 'Елена', color: '#ff9ad0', init: 'Е' },
+  boris: { name: 'Борис, армейский друг Вика', color: '#d8a020', init: 'Б' },
+  shilo: { name: 'Шило, главарь «Крыс»', color: '#7aff5a', init: 'Ш' },
+  golos: { name: 'Голос, диспетчер «Ока»', color: '#3dd6ff', init: 'Г' },
+  knyaz: { name: 'Князь, глава «Монолита»', color: '#ff2a3a', init: 'К' },
+  dj: { name: 'Диджей радио «Полночь»', color: '#c38bff', init: '📻' },
+  thug: { name: 'Боец «Монолита»', color: '#ff6a6a', init: 'М' },
+});
+Object.assign(FACTIONS, {
+  rats: { thug1: { Details: '#7aff5a' }, thug2: { Shirt: '#3a4a3a', Pants: '#2a2a32', Hair: '#15151a' }, thug3: { Shirt: '#4a5a3a', Pants: '#22222a', Hair: '#15151a' }, heavy: { Shirt: '#2a3a2a', Pants: '#1a1a1e' } },
+  mono: { thug1: { Details: '#ff2a3a' }, thug2: { Shirt: '#141418', Pants: '#0e0e10', Hair: '#15151a' }, thug3: { Shirt: '#1a1a20', Pants: '#0e0e10', Hair: '#15151a' }, heavy: { Shirt: '#0a0a0c', Pants: '#0a0a0c' } },
+});
+Object.assign(ALLY_LOOKS, {
+  elena: { model: 'maya', skin: '#f0d0b8', colors: { Shirt: '#d8d0e8', Pants: '#2a2a35', Hair: '#3a2418' }, face: { fem: true, brow: '#3a2418', iris: '#4a7a9a', mouth: 'neutral' } },
+  boris: { model: 'gleb', skin: '#d9a98a', colors: { Shirt: '#4a5a3a', Pants: '#2a2a2e' }, face: { brow: '#6a6a6a', iris: '#4a5a6a', mouth: 'grin', stubble: '#7a7a7a' } },
+});
+const LP = LOWP, A_ = LP.AV, S_ = LP.ST;
+EPS[17] = {
+  title: 'Жёлтый в чёрном городе', faction: 'mono', zone: 'lower', season3: true, chaseMsg: 'Чёрные внедорожники «Монолита» на хвосте!',
+  logline: 'Последний заказ дождливой ночи: напуганная девушка, два чёрных внедорожника и миллион за жёлтое такси. Вик не собирался воевать. Синдикат решил за него.',
+  endTitle: 'Такси снова на ходу', endLead: 'Борис поставил новый дизель и броню в двери. «Крысы» отступили. Но «Охота по тарифу» только начинается: за голову Вика уже полтора миллиона.',
+  teaser: 'Акт II «Счётчик тикает»: мотель «Без звёзд», камеры «Ока» и колл-центр, который видит весь город.',
+  chapters: [
+    { t: 'Последний заказ', type: 'deliver', zone: 'city', start: [0, -40, 'S'], chase: 0,
+      pts: [
+        { p: [80, 40], name: 'Заказ: Елена', say: [['elena', 'Вы такси? Пожалуйста… просто поезжайте. Куда угодно.'], ['hero', 'Куда угодно — это тариф «ночной». Пристегнитесь.'], ['elena', 'Только не останавливайтесь. Пожалуйста.']] },
+        { p: [160, -40], name: '«Куда угодно»', t: 70 },
+      ],
+      about: 'Дождливая ночь. Последний заказ через приложение: забрать пассажирку у бара и ехать, куда она скажет.',
+      intro: [['dj', 'Радио «Полночь». Дождь до утра, город спит. Всем, кто за рулём, — спокойной смены.'], ['hero', 'Последний заказ — и домой.']],
+      outro: [['elena', 'Там… там два чёрных джипа. Они ехали за мной от самого бара.'], ['hero', 'Вижу. Держитесь.']] },
+    { t: 'Зажали', type: 'pinned', zone: 'lower', start: [160, -40, 'N'], suvs: [[160, -52, 'S'], [168, -28, 'N']], hp: 70, goal: [A_[0], -470], goalName: 'Нижний город', chase: 2,
+      obj: 'Такси зажали два внедорожника! Стреляй из окна (пробел / «Огонь»).', obj2: 'Прорвались! Уходи в Нижний город: через южное шоссе и посёлок.',
+      about: 'Два внедорожника синдиката зажали такси. Вик достаёт из-под сиденья пистолет.',
+      intro: [['thug', 'Таксист! Девчонку — нам, и катись.'], ['elena', 'Не отдавайте меня! У меня запись… про мэра и «Монолит».'], ['hero', 'Ремень. Голову ниже.']],
+      outro: [['elena', 'Вы… вы правда стреляли.'], ['hero', 'Двенадцать лет вожу такси. До этого — восемь лет в армии. Рассказывайте про запись.'], ['elena', 'Мэр и Князь из «Монолита». Деньги, оружие, порт. Я записала случайно. Папа сказал молчать.'], ['dj', 'Срочно в эфир: «Монолит» объявил награду за жёлтое такси. Миллион. Таксист, если ты нас слышишь — удачи.']] },
+    { t: 'Переулок', type: 'deliver', start: [A_[0], -470, 'E'], chase: 3, ramp: 1,
+      pts: [{ p: [745, -366], name: 'Узкий переулок', t: 115 }],
+      about: '«Охота по тарифу» началась: за жёлтым такси едут все, кому нужен миллион. Укрыть машину в узком переулке у склада 14.',
+      intro: [['hero', 'Есть переулок у реки, туда не пролезет ни один джип.'], ['elena', 'А мы пролезем?'], ['hero', 'Мы — такси. Мы пролезаем везде.']],
+      outro: [['hero', 'Сидите в машине. На складе кто-то есть — свет в окнах.']] },
+    { t: 'Склад у реки', type: 'storm', fac: 'mono', car: [745, -366, PI],
+      steps: [
+        { at: [745, -360], w: 36, d: 50, goal: 'clear', guards: 4, start: [745, -352, PI], exitAt: LP.whDoor, exitObj: 'Дверь склада — внутрь.', obj: 'Зачисти переулок' },
+        { at: 'wh', goal: 'clear', guards: 5, waves: [3, 3], obj: 'Зачисти склад: укрывайся за ящиками' },
+        { at: 'wh', goal: 'evidence', n: 3, guards: 2, obj: 'Найди патроны и аптечки в ящиках', exitTo: false },
+      ],
+      about: 'В переулке и на складе засели люди «Монолита». Зачистить пистолетом, используя ящики как укрытие.',
+      intro: [['hero', 'Пистолет, восемь патронов в магазине и ящики вместо брони. Как в учебке.']],
+      outro: [['elena', 'Вы в порядке?'], ['hero', 'Мотор — нет. Пуля в радиатор. Едем, пока едет.']] },
+    { t: 'Сломанный дизель', type: 'escape', zone: 'lower', start: [745, -366, 'W'], secs: 110, chase: 1, goal: [A_[1], S_[1]], goalName: 'Нижний квартал', speedCap: 17,
+      about: 'Радиатор пробит: такси едет не быстрее 50 км/ч. Дотянуть до Нижнего квартала, где живёт Борис.',
+      intro: [['hero', 'Пятьдесят в час, и стрелка температуры в красном. Борис в Нижнем квартале. Он починит.'], ['elena', 'А если нас догонят?'], ['hero', 'Тогда будем стрелять медленно.']],
+      outro: [['hero', 'Всё. Дальше машина не едет. До мастерской — пешком, через квартал «Крыс».']] },
+    { t: 'Час пик в гетто', type: 'storm', fac: 'rats', car: [A_[1], S_[1] - 6, 0],
+      steps: [
+        { at: [460, -365], w: 110, d: 100, goal: 'reach', exitAt: [520, -433], start: [520, -425, PI], drip: 7, snipers: 2, obj: 'Пробейся через двор к улице', toast: '«Крысы» на крышах!' },
+        { at: [600, -490], w: 140, d: 110, goal: 'clear', guards: 6, waves: [3, 4], start: [520, -440, PI / 2], obj: 'Зачисти перекрёсток «Крыс»' },
+      ],
+      about: 'Район держит уличная банда «Крысы». Пройти пешком с Еленой за спиной — через дворы и баррикады.',
+      intro: [['shilo', 'Это кто тут такой жёлтый и без машины? Миллион сам пришёл!'], ['hero', 'Елена, держись за мной. Шаг в шаг.']],
+      outro: [['hero', 'Перекрёсток наш. До Бориса два квартала.']] },
+    { t: 'Баррикады «Крыс»', type: 'footchase', fac: 'rats', start: [520, -466, PI], name: 'Разведчик «Крыс»', look: 'leva',
+      route: [[520, -494], [520, -560], [680, -560], [680, -700], [520, -700], [520, -560]], guards: [[680, -566], [676, -640]],   // along the streets: the chase does not stick to walls
+      about: 'Разведчик «Крыс» видел Елену и бежит звать своих. Догнать раньше, чем он добежит до штаба.',
+      intro: [['elena', 'Тот парень с рацией! Он нас видел!'], ['hero', 'Стой здесь. Я быстро.']],
+      outro: [['hero', 'Рация — в лужу. Ты никого не видел.'], ['thug', 'Да я… да никого!']] },
+    { t: 'Мастерская Бориса', type: 'storm', fac: 'rats', car: [LP.boris[0] - 30, LP.boris[1] + 20, 0],
+      steps: [
+        { at: 'boris', goal: 'defend', secs: 45, point: [INT.boris[0] - 10, INT.boris[1]], drip: 6, obj: 'Борис чинит такси — держи оборону', barName: 'Ремонт', medkit: true },
+      ],
+      about: 'Борис, старый армейский друг, берётся за такси. «Крысы» лезут в мастерскую со всех сторон.',
+      intro: [['boris', 'Вик? Живой? А это что за красота на руках?'], ['hero', 'Это заказ. Нужен дизель, радиатор и броня в двери. Час.'], ['boris', 'Час — это если никто не мешает. А мешать будут.']],
+      outro: [['boris', 'Дизель стоит. Броню вварю к утру.'], ['hero', 'Утра не будет. Шило собирает своих.']] },
+    { t: 'Оборона гаража', type: 'storm', fac: 'rats', car: [LP.boris[0] - 30, LP.boris[1] + 20, 0],
+      steps: [
+        { at: [LP.boris[0], LP.boris[1] + 26], w: 70, d: 34, goal: 'hold', secs: 32, point: [LP.boris[0], LP.boris[1] + 18], start: [LP.boris[0], LP.boris[1] + 18, 0], drip: 4, obj: 'Удержи ворота мастерской', barName: 'Ворота' },
+        { at: [LP.boris[0], LP.boris[1] + 26], w: 70, d: 34, goal: 'boss', boss: { name: 'Шило', look: 'lisa', hp: 600, burst: 3, dmg: 8 }, obj: 'Победи Шило', exitTo: false },
+      ],
+      about: 'Вся банда «Крыс» у ворот мастерской. Удержать ворота, пока Борис варит броню, и поговорить с Шило по-взрослому.',
+      intro: [['shilo', 'Борис! Отдай жёлтого — и живи. Миллион на всех!'], ['boris', 'Вик, у меня тут сварка. Займи гостей.']],
+      outro: [['shilo', 'Всё, всё! Нет никакого миллиона, «Монолит» нас тоже кинет…'], ['hero', 'Передай своим: жёлтое такси — не ваш тариф.']] },
+    { t: 'Ящики Бориса', type: 'carry', fac: 'mono', car: [LP.boris[0] - 30, LP.boris[1] + 20, PI / 2], start: [LP.boris[0] - 22, LP.boris[1] + 18, PI],
+      crates: [[LP.boris[0] + 18, LP.boris[1] + 20], [LP.boris[0] - 10, LP.boris[1] + 32], [LP.boris[0] + 26, LP.boris[1] + 32], [LP.boris[0] - 26, LP.boris[1] + 36]], every: 8,
+      about: 'Тайник Бориса: армейские ящики с патронами и оружием. Погрузить в багажник, пока «Монолит» не перекрыл квартал.',
+      intro: [['boris', 'Четыре ящика. Мои армейские запасы. Теперь твои.'], ['hero', 'Багажник у такси большой. Влезет всё.']],
+      outro: [['boris', 'Тактический набор — для тихой работы. Штурмовой — когда тихо уже не получится. Выбирай у багажника.'], ['elena', 'Вы что, на войну собираетесь?'], ['hero', 'Война пришла за нами сама.']] },
+    { t: 'Ночной курьер', type: 'stop', zone: 'lower', start: [A_[2], S_[3], 'E'], car: [A_[3], S_[3], 'E'], hp: 240, speed: 25, name: 'Курьер «Монолита»', chase: 2,
+      route: [[A_[3], S_[3]], [A_[3], S_[1]], [A_[4], S_[1]], [A_[4], S_[4]], [A_[2], S_[4]], [A_[2], S_[2]], [A_[3], S_[2]], [A_[3], S_[3]]],
+      about: 'Курьер синдиката везёт список «охотников» с адресами. Остановить его машину, пока он не доехал до своих.',
+      intro: [['dj', '«Полночь» снова в эфире: кто-то видел жёлтое такси с новой бронёй. Ставки — полтора миллиона.'], ['elena', 'Тот фургон — я его знаю. Курьер «Монолита».'], ['hero', 'Значит, у него список. Догоняем.']],
+      outro: [['elena', 'Здесь все: «Крысы», «Шакалы», даже какие-то мотоциклисты. И адрес… мотель «Без звёзд». Это там, где спрятана моя подруга. И копия записи.'], ['hero', 'Значит, нам туда.']] },
+    { t: 'Награда за голову', type: 'hunt', zone: 'lower', start: [A_[0], S_[2], 'E'], kills: 7, chase: 3, carStyle: 'bikers',
+      about: 'Охотники за наградой на мотоциклах и машинах прочёсывают Нижний город. Сбить семерых, пока они не нашли мастерскую Бориса.',
+      intro: [['dj', 'Говорят, по Кольцу-2 гоняет банда мотоциклистов. Ищут жёлтое. Не стойте у них на пути.'], ['hero', 'Сами нашлись. Елена, голову ниже.']],
+      outro: [['boris', 'Чисто. Теперь можно в мотель.'], ['elena', 'Спасибо… Я не знаю, как вас благодарить.'], ['hero', 'По счётчику. Потом.']] },
+  ],
+};
+EPS[18] = {
+  title: 'Счётчик тикает', faction: 'mono', zone: 'lower', season3: true, chaseMsg: '«Монолит» на хвосте!',
+  logline: 'Копия записи спрятана в мотеле «Без звёзд», и синдикат уже там. «Око» видит каждую улицу. Вик решает ударить первым.',
+  endTitle: 'Глаза синдиката выколоты', endLead: 'Колл-центр «Око» ослеп, Борис спасён, а на сухогрузе «Беринг» в порту — склад «Монолита» и оригинал записи.',
+  teaser: 'Акт III «Конечная остановка»: сухогруз, шоссе под ливнем и небоскрёб «Монолит».',
+  chapters: [
+    { t: 'Мотель «Без звёзд»', type: 'deliver', start: [LP.boris[0] - 30, S_[3], 'W'], chase: 3, ramp: 1,
+      pts: [{ p: [LP.motelDoor[0], S_[4]], name: 'Мотель «Без звёзд»', t: 80 }],
+      about: 'В мотеле прячется подруга Елены с копией записи. «Монолит» узнал адрес. Успеть первыми.',
+      intro: [['elena', 'Аня ждёт в номере на третьем этаже. Если они уже там…'], ['hero', 'Тогда мы будем вторыми. Но последними — точно.']],
+      outro: [['hero', 'Чёрные джипы у входа. Опоздали на минуту. Елена — в машине. Борис, присмотри.']] },
+    { t: 'Первый этаж', type: 'storm', fac: 'mono', car: [LP.motelDoor[0], S_[4], 0],
+      steps: [
+        { at: 'motel1', goal: 'clear', guards: 6, waves: [3], obj: 'Зачисти первый этаж: стены тонкие — стреляй сквозь них' },
+        { at: 'motel1', goal: 'hostage', who: 'leva', name: 'Портье', hostageAt: [INT.motel1[0] + 20, INT.motel1[1] + 10], exitAt: [INT.motel1[0] + 23, INT.motel1[1]], drip: 9, exitObj: 'Лестница — на второй этаж.' },
+      ],
+      about: 'Первый этаж мотеля. Гипсокартонные стены: пули пробивают их насквозь — и твои, и чужие.',
+      intro: [['hero', 'Картон, а не стены. Значит, укрытий нет ни у кого.']],
+      outro: [['hero', 'Портье в безопасности. Наверх.']] },
+    { t: 'Тонкие стены', type: 'storm', fac: 'mono',
+      steps: [
+        { at: 'motel2', goal: 'clear', guards: 7, waves: [3, 4], heavy: 1, obj: 'Второй этаж: ломай стены и выбивай их из номеров' },
+        { at: 'motel3', goal: 'bombs', n: 3, secs: 75, guards: 4, drip: 10, obj: 'Третий этаж заминирован: обезвредь бомбы' },
+      ],
+      about: 'Второй этаж — бойцы в номерах, третий — заминирован, чтобы уничтожить Аню вместе с записью.',
+      intro: [['thug', 'Он на лестнице! Подрывайте третий!'], ['hero', 'Не сегодня.']],
+      outro: [['hero', 'Аня? Аня! Живая. Запись?'], ['elena', '(по рации) Вик, она у вас?'], ['hero', 'У меня. Идём на крышу — внизу их слишком много.']] },
+    { t: 'Крыша мотеля', type: 'storm', fac: 'mono',
+      steps: [{ at: 'motelRoof', goal: 'defend', secs: 40, point: [INT.motelRoof[0], INT.motelRoof[1]], drip: 6, snipers: 2, obj: 'Продержись на крыше: Борис подгоняет машину', barName: 'Борис едет' }],
+      about: 'На крыше мотеля. Борис гонит такси к чёрному ходу. Продержаться, сняв снайперов на соседних крышах.',
+      intro: [['boris', 'Вик, буду через минуту! Не высовывайся!'], ['hero', 'Тут не высунешься — снайперы.']],
+      outro: [['boris', 'Карета подана! Прыгайте!'], ['dj', 'Мотель «Без звёзд» горит, а жёлтое такси снова ушло. Ставки — два миллиона.']] },
+    { t: 'Слепые зоны', type: 'cams', zone: 'lower', start: [LP.motelDoor[0], S_[4], 'E'], goal: [A_[3], S_[1]], goalName: 'Колл-центр «Око»', chase: 0,
+      cams: [[A_[1] + 14, S_[4] - 8, -PI / 2], [A_[2], S_[3] + 14, PI], [A_[2] - 14, S_[2] - 8, -PI / 2], [A_[3] + 10, S_[3] - 20, 0], [A_[1], S_[2] + 20, PI], [A_[3] - 30, S_[1] - 8, PI / 2], [A_[4] - 12, S_[2] + 8, -PI / 2]],
+      about: '«Око» видит город через камеры. Доехать до колл-центра, объезжая красные зоны обзора.',
+      intro: [['elena', 'На записи было ещё кое-что: колл-центр «Око». Они ведут нас по камерам.'], ['hero', 'Значит, поедем туда, где камер нет. А потом — туда, где они есть. Чтобы их не стало.']],
+      outro: [['hero', 'Нас не видели. Но маячок…'], ['boris', 'Какой маячок?'], ['hero', 'Тот, что мигает под бампером. Его ставили в мотеле.']] },
+    { t: 'Мойка под огнём', type: 'wash', zone: 'lower', start: [A_[3], S_[1], 'S'], chase: 3,
+      about: 'Под бампером маячок синдиката. Смыть его на мойке — под струями высокого давления, пока погоня поливает свинцом.',
+      intro: [['boris', 'Магнитный маячок. Под водой высокого давления отвалится.'], ['hero', 'Мойка «24» за два квартала. Держитесь.']],
+      outro: [['hero', 'Чисто. Теперь «Око» слепо на наш счёт.']] },
+    { t: 'Колл-центр «Око»', type: 'stealth', fac: 'mono', start: [LP.call[0] - 40, LP.call[1] + 30, PI], goal: [LP.callDoor[0], LP.callDoor[1]], car: [LP.call[0] - 50, S_[0], 0],
+      lights: [[LP.call[0] - 20, LP.call[1] + 14, 5, 0.7], [LP.call[0] + 6, LP.call[1] + 20, 5, 0.6], [LP.call[0] + 24, LP.call[1] + 12, 5, 0.8], [LP.call[0] - 6, LP.call[1] + 4, 4.5, 0.9]],
+      items: [[LP.call[0] - 28, LP.call[1] + 4], [LP.call[0] + 30, LP.call[1] + 2], [LP.call[0] + 2, LP.call[1] + 26]], itemName: 'Пропуск',
+      about: 'Двор колл-центра под прожекторами. Собрать три пропуска охранников и войти незамеченным.',
+      intro: [['hero', 'Тихо. Три пропуска — три двери. Прожекторы ходят по кругу, считай до пяти.']],
+      outro: [['hero', 'Внутри. Сейчас здесь станет громко.']] },
+    { t: 'Серверная', type: 'storm', fac: 'mono',
+      steps: [
+        { at: 'call', goal: 'cams', n: 6, guards: 6, drip: 8, obj: 'Разбей камеры в зале «Ока»' },
+        { at: 'server', goal: 'servers', n: 6, guards: 4, drip: 7, obj: 'Расстреляй серверные стойки', exitTo: false },
+      ],
+      about: 'Зал операторов и серверная «Ока». Ослепить синдикат: камеры, потом стойки.',
+      intro: [['golos', 'Таксист. Я вижу тебя на сорока экранах.'], ['hero', 'Сейчас станет тридцать девять.']],
+      outro: [['dj', 'Внимание: в трёх районах погасли все камеры. На «Полночи» это называют справедливостью.']] },
+    { t: 'Диспетчер', type: 'storm', fac: 'mono',
+      steps: [
+        { at: 'call', goal: 'hack', secs: 35, point: [INT.call[0], INT.call[1] + 10], drip: 5, obj: 'Скачай базу «Ока» с главного терминала', barName: 'Загрузка' },
+        { at: 'call', goal: 'boss', boss: { name: 'Голос', look: 'ten', hp: 650, burst: 3, dmg: 8 }, exitTo: false },
+      ],
+      about: 'Главный терминал: база «Ока» со всеми схемами синдиката. И сам диспетчер — Голос.',
+      intro: [['golos', 'Ты не уйдёшь отсюда, таксист. Я вызвала всех.'], ['hero', 'Значит, все уйдут вместе.']],
+      outro: [['golos', 'Князь… тебя… всё равно найдёт…'], ['elena', 'Вик! Бориса забрали! Его везут на свалку «Ржавый двор»!']] },
+    { t: 'Свалка', type: 'storm', fac: 'mono', car: [A_[3] + 10, S_[3] - 14, PI],
+      steps: [
+        { at: [884, -760], w: 110, d: 90, goal: 'clear', guards: 6, waves: [3, 4], snipers: 2, start: [884, -716, PI], obj: 'Пробейся через свалку: за горами машин засады' },
+      ],
+      about: '«Ржавый двор»: горы раздавленных машин, кран с магнитом и снайперы на штабелях.',
+      intro: [['hero', 'Ржавый двор. Здесь можно спрятать целую армию. Или одного Бориса.']],
+      outro: [['hero', 'Пресс работает. Борис там.']] },
+    { t: 'Пресс', type: 'storm', fac: 'mono',
+      steps: [
+        { at: [884, -840], w: 110, d: 90, goal: 'hostage', who: 'boris', name: 'Борис', hostageAt: [905, -880], exitAt: [884, -716], drip: 6, guards: 5, start: [884, -800, PI] },
+      ],
+      about: 'Бориса держат у пресса. Освободить и вывести к воротам свалки.',
+      intro: [['boris', 'Вик! Я тут… немного занят.'], ['hero', 'Иду. Держись за мной, не геройствуй.']],
+      outro: [['boris', 'Они грузят что-то на сухогруз «Беринг». Князь лично приезжал.'], ['hero', 'Значит, порт.']] },
+    { t: 'Сухогруз «Беринг»', type: 'tail', zone: 'lower', start: [A_[4], S_[4] - 45, 'S'], car: [A_[4], S_[4], 'N'], speed: 17, name: 'Чёрный седан Князя', stops: { 1: 4 },
+      route: [[A_[4], S_[3]], [A_[4], S_[2]], [LP.pier[0] - 10, S_[2]], [LP.pier[0] - 10, -600]],
+      about: 'Седан Князя едет к порту. Проследить, держась дальше 15 метров, — узнать, где причал «Беринга».',
+      intro: [['elena', 'Это его машина. Князь.'], ['hero', 'Не близко. Нас не должны видеть.']],
+      outro: [['hero', 'Причал. «Беринг». Князь поднялся на борт.'], ['boris', 'Утром сухогруз уходит. С Князем или без — но с оригиналом записи.']] },
+  ],
+};
+EPS[19] = {
+  title: 'Конечная остановка', faction: 'mono', zone: 'lower', season3: true, chaseMsg: '«Монолит» бросил на тебя всех!',
+  logline: 'Сухогруз, шоссе под ливнем, небоскрёб «Монолит» и крыша, на которой Князь предложит сделку. Конечная.',
+  get endTitle() { return PROF.st.s3end === 'B' ? 'Уйти на покой' : 'Месть по тарифу'; },
+  get endLead() { return PROF.st.s3end === 'B' ? 'Жёлтое такси взорвалось у причала «Беринга». Утром в новостях напишут, что таксист и пассажирка погибли. А по трассе на север едет старый седан: двое, музыка и никакого счётчика.' : 'Запись — в каждом выпуске новостей. Мэр подал в отставку, «Монолит» под следствием. А по ночам в городе всё ещё ездит жёлтое такси: «Призрачный таксист» возит честных людей и не берёт денег с тех, кому страшно.'; },
+  teaser: 'Сезон «Охота по тарифу» пройден. Спасибо, что ездили с нами.',
+  chapters: [
+    { t: 'Палуба', type: 'storm', fac: 'mono', car: [LP.pier[0] - 18, -600, PI / 2],
+      steps: [{ at: [LP.ship[0], -600], w: 24, d: 136, goal: 'clear', guards: 6, waves: [3, 3], snipers: 2, heavy: 1, start: [LP.ship[0], -600, PI], obj: 'Зачисти палубу «Беринга»: контейнеры — укрытие' }],
+      about: 'Палуба сухогруза: контейнеры, краны и бойцы «Монолита» на надстройке.',
+      intro: [['boris', 'Я на причале, прикрою. Иди.'], ['hero', 'Тихо не получится. Штурмовой набор.']],
+      outro: [['hero', 'Палуба наша. Трюм.']] },
+    { t: 'Трюм', type: 'storm', fac: 'mono',
+      steps: [
+        { at: 'hold', goal: 'evidence', n: 4, guards: 6, drip: 9, obj: 'Найди в трюме папки с документами синдиката' },
+        { at: 'hold', goal: 'boss', boss: { name: 'Боцман', look: 'kassir', hp: 750, burst: 3, dmg: 9, armor: true }, exitTo: false },
+      ],
+      about: 'В трюме — ящики с оружием и папки со схемами «Монолита». И Боцман в бронежилете: бить вблизи.',
+      intro: [['hero', 'Документы, накладные, оружие. Вот оно — «просто порт».']],
+      outro: [['boris', 'Вик! Князь ушёл с корабля! Его кортеж на Кольце-2, и за вами — все мотоциклисты города!']] },
+    { t: 'Шоссе «Кольцо-2»', type: 'escape', zone: 'lower', start: [A_[4], S_[2], 'N'], secs: 120, chase: 4, carStyle: 'bikers', goal: [A_[0], S_[5]], goalName: 'Южный съезд',
+      about: 'Ливень, Кольцо-2 и мотоциклисты со всех сторон. Уйти на полной скорости к южному съезду.',
+      intro: [['dj', '«Полночь»: на Кольце-2 ливень и мотоциклы. Если вы не жёлтое такси — сидите дома.'], ['hero', 'Пристегнитесь. Будет быстро.']],
+      outro: [['hero', 'Оторвались. Ненадолго.']] },
+    { t: 'Мотоциклисты', type: 'hunt', zone: 'lower', start: [A_[0], S_[5], 'E'], kills: 8, chase: 4, carStyle: 'bikers',
+      about: 'Мотоциклисты-охотники не отстанут. Сбить восьмерых: из окна и тараном.',
+      intro: [['elena', 'Они снова сзади! Вик, их много!'], ['hero', 'Значит, промахнуться будет трудно.']],
+      outro: [['hero', 'Мотоциклов больше нет.'], ['dj', 'Говорят, на Кольце-2 теперь можно ездить спокойно. Спасибо, таксист.']] },
+    { t: 'Конвой', type: 'stop', zone: 'lower', convoy: 3, start: [A_[2] - 110, S_[5], 'E'], car: [A_[2], S_[5], 'E'], hp: 300, speed: 24, name: 'Грузовик «Монолита»', chase: 2,
+      route: [[A_[4], S_[5]], [A_[4], S_[0]], [A_[0], S_[0]], [A_[0], S_[5]], [A_[2], S_[5]]],
+      about: 'Три грузовика с оружием из трюма уходят по Кольцу. Взорвать всю колонну.',
+      intro: [['boris', 'Грузовики с оружием. Если уйдут — завтра это будет у каждой банды.'], ['hero', 'Не уйдут.']],
+      outro: [['hero', 'Колонны нет. Остался Князь.']] },
+    { t: 'Дождь из свинца', type: 'helichase', zone: 'lower', start: [A_[2], S_[2], 'E'], from: [A_[3] + 40, S_[2] - 40], hp: 1500, downAt: 0.5, speed: 21, chase: 2, fireFrom: 0.85, fleeTo: [LP.tower[0], LP.tower[1] + 40], name: 'Вертолёт «Монолита»',
+      about: 'Вертолёт синдиката поливает Нижний город из пулемёта. Сбить его, не останавливаясь под ливнем.',
+      intro: [['elena', 'Сверху! Вертолёт!'], ['hero', 'Держитесь крепче. Сейчас будет дождь из свинца — с обеих сторон.']],
+      outro: [['hero', 'Дымит, уходит к «Монолиту». Значит, и нам туда.']] },
+    { t: 'Стройка', type: 'storm', fac: 'mono', car: [LP.site[0] - 40, S_[3], 0],
+      steps: [
+        { at: [LP.site[0], LP.site[1]], w: 90, d: 70, goal: 'charges', n: 3, guards: 5, drip: 9, snipers: 2, start: [LP.site[0] - 30, LP.site[1] + 30, PI], obj: 'Заложи заряды под кран: он рухнет на баррикаду «Монолита»' },
+      ],
+      about: 'Стройка «Новый горизонт» перекрывает подъезд к «Монолиту». Обрушить кран на баррикаду.',
+      intro: [['boris', 'Я сапёр в запасе, ты сапёр в отставке. Три заряда — и путь свободен.'], ['hero', 'Как в старые времена.']],
+      outro: [['hero', 'Кран лёг ровно на баррикаду. Вход в «Монолит» открыт.']] },
+    { t: 'Холл «Монолита»', type: 'storm', fac: 'mono', car: [LP.towerDoor[0], S_[4], 0],
+      steps: [{ at: 'lobby', goal: 'clear', guards: 7, waves: [4, 4], heavy: 1, armor: true, obj: 'Холл «Монолита»: бойцы в броне — бей вблизи или гранатой' }],
+      about: 'Холл небоскрёба. Охрана в тяжёлой броне: издалека пули почти не берут.',
+      intro: [['knyaz', 'Таксист в моём холле. Как мило. Поднимайся, если сможешь.'], ['hero', 'Смогу. Я всегда довожу до двери.']],
+      outro: [['hero', 'Лифт обесточен. Лестница.']] },
+    { t: 'Этажи', type: 'storm', fac: 'mono',
+      steps: [
+        { at: 'floor1', goal: 'clear', guards: 7, waves: [3], smoke: true, obj: 'Дымовые завесы: враги в дыму' },
+        { at: 'floor2', goal: 'elevator', secs: 55, exitAt: [INT.floor2[0] + 23, INT.floor2[1]], guards: 6, drip: 6, dark: true, obj: 'Свет вырубили. Успей к служебному лифту' },
+      ],
+      about: 'Офисные этажи: дым, темнота и гипсокартонные перегородки, которые пули пробивают насквозь.',
+      intro: [['hero', 'Дым — значит, боятся. Темнота — значит, очень боятся.']],
+      outro: [['hero', 'Лифт на крышу. Последний этаж.']] },
+    { t: 'Дым и броня', type: 'storm', fac: 'mono',
+      steps: [{ at: 'floor2', goal: 'boss', boss: { name: 'Тень, телохранитель Князя', look: 'ten', hp: 850, burst: 3, dmg: 9, armor: true }, smoke: true, guards: 4 }],
+      about: 'Телохранитель Князя в броне и дыму. Подойти близко и закончить.',
+      intro: [['thug', 'Князь сказал: таксиста — живым. Я не расслышал.']],
+      outro: [['hero', 'Крыша.']] },
+    { t: 'Крыша', type: 'storm', fac: 'mono',
+      steps: [{ at: 'roof', goal: 'boss', boss: { name: 'Князь', look: 'granin', hp: 1100, burst: 3, dmg: 10, armor: true, at: [INT.roof[0], INT.roof[1] - 10] }, waves: [3, 3], snipers: 2, start: [INT.roof[0], INT.roof[1] + 12, PI] }],
+      about: 'Вертолётная площадка «Монолита». Князь, его последние бойцы и ветер.',
+      intro: [['knyaz', 'Знаешь, таксист, я уважаю профессионалов.'], ['hero', 'Тогда оплати поездку.']],
+      outro: [['knyaz', '(раненый) Стой… Стой. Поговорим.']] },
+    { t: 'Расплата', type: 'choice',
+      offer: [['knyaz', 'Кейс. Десять миллионов. Чистые документы — новая жизнь где угодно.'], ['knyaz', 'Взамен — девчонка и запись. Ты таксист, Вик. Ты просто доставил пассажира не туда.'], ['elena', 'Вик…'], ['hero', '…']],
+      endA: [['hero', 'Счётчик выключен, Князь. Поездка окончена.'], ['elena', 'Запись — в редакциях. Во всех.'], ['dj', '«Полночь», утро. Мэр подал в отставку. А в городе, говорят, ездит Призрачный таксист.'], ['hero', 'Куда едем?'], ['elena', 'Куда угодно.']],
+      endB: [['hero', 'Документы оставь себе. А мы — уже мертвы.'], ['boris', 'Заряд под бензобаком. Такси жалко…'], ['hero', 'Такси — это просто машина.'], ['elena', 'А мы?'], ['hero', 'А мы — пассажиры. Куда угодно.']] },
+  ],
+};
+Object.assign(EP_NAMES, { 17: 'Жёлтый в чёрном городе', 18: 'Счётчик тикает', 19: 'Конечная остановка' });
+
+// Season 3 is played by Vik: the game puts him at the wheel and gives the player's own driver back in the menu
+function s3Vik() {
+  const vi = CHARS.findIndex((c) => c.id === 'vik'); if (vi < 0 || CH.id === 'vik') return;
+  if (S3.prevIdx === null) S3.prevIdx = curIdx; curIdx = vi; CH = CHARS[vi]; applyChar(); if (hero) { scene.remove(hero.g); hero = null; }
+}
+function s3VikBack() { if (S3.prevIdx === null) return; curIdx = S3.prevIdx; S3.prevIdx = null; CH = CHARS[curIdx]; applyChar(); if (hero) { scene.remove(hero.g); hero = null; } }
 // local activities in the suburbs: the same missions as in episodes 15 and 16, repeatable for coins
 function zoneTasks() {
   if (!pc) return [];
@@ -9720,6 +10587,7 @@ function loadLast() { try { const v = JSON.parse(localStorage.getItem('nf-last')
 // ---------------- drivers ----------------
 // stats: [health, shooting, driving], 1–5 each, 10 points per driver
 const CHARS = [
+  { id: 'vik', sex: 'm', name: 'Вик', nick: 'Таксист', age: 38, bio: 'Бывший армейский сапёр. Двенадцать лет за рулём жёлтого такси — и ни одного опоздания.', stats: [4, 4, 3], perk: ['Армейская выучка', '+15 к здоровью пешком и на 10% больше урона'], accent: '#ffc43d', fx: { footHp: 15, dmg: 1.1 }, look: { model: 'gleb', skin: '#d9a98a', colors: { Shirt: '#3a4a2a', Pants: '#22222a' }, face: { brow: '#2a2018', iris: '#4a5a3a', mouth: 'neutral', stubble: '#2a2018' } } },
   { id: 'gleb', sex: 'm', name: 'Глеб', nick: 'Бугай', age: 41, bio: 'Двадцать лет таскал контейнеры в порту. Дверь машины открывает плечом.', stats: [5, 2, 3], perk: ['Крепкий', '+30 к здоровью пешком'], accent: '#9fd36b', fx: { footHp: 30 }, look: { model: 'gleb', skin: '#d9a98a', colors: { Shirt: '#56683a', Pants: '#2b2b33' }, face: { brow: '#3a2a20', iris: '#5a4030', mouth: 'grin', stubble: '#3a2a20' } } },
   { id: 'timur', sex: 'm', name: 'Тимур', nick: 'Фара', age: 28, bio: 'Ночной стритрейсер. Проходит повороты, не сбрасывая газ.', stats: [2, 3, 5], perk: ['Гонщик', 'Максимальная скорость выше на 2 деления'], accent: '#5aa8ff', fx: { speed: 2 }, look: { model: 'timur', skin: '#c58c66', colors: { Shirt: '#1f6fd1', Pants: '#22222a', Hair: '#e2b64e' }, face: { brow: '#2a2018', iris: '#3a2a1a', mouth: 'smirk' } } },
   { id: 'artem', sex: 'm', name: 'Артём', nick: 'Прицел', age: 33, bio: 'Бывший армейский стрелок и биатлонист. Попадает в цель на ходу и под дождём.', stats: [3, 5, 2], perk: ['Меткий', 'Пули наносят на 25% больше урона'], accent: '#ff7a5a', fx: { dmg: 1.25 }, look: { model: 'artem', skin: '#e8c0a0', colors: { Main: '#3c3f4a', DarkGreen: '#2a2c34', Helmet: '#7a2a24' }, face: { brow: '#6a4a2a', iris: '#3a6a9a', mouth: 'neutral' } } },
@@ -9822,6 +10690,7 @@ function updateSelect(dt) {
   poseHuman(showFig, { idle: true, t: state.t });
 }
 function showSelect() {
+  s3VikBack(); S3.kitW = null;
   if (ONL.on) leaveRoom();
   initAudio();
   state.mode = 'select'; hideModal();
@@ -10052,7 +10921,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(dt); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; cineUpdate(dt); if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(dt); s3Radio(dt); musicUpdate(); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; cineUpdate(dt); if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateWeather(dt, focus); updateRain(dt, focus);
@@ -10085,7 +10954,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { get S3() { return S3; }, LOW, DRY, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
