@@ -522,6 +522,9 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .chip { border: 1px solid var(--hair-2); background: transparent; color: var(--muted); border-radius: 2px; font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; }
 .chip.active { background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); }
 .hud-chip { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+/* iPhone: no background blur at all (each blurred layer over the live canvas costs memory every frame) */
+.ios * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.ios .card, .ios .gate-card, .ios .prof-card { background: rgba(14,16,34,.97); }
 .pc-card { border: 1px solid var(--hair); background: #0c0d12; border-radius: 3px; font: 600 10.5px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
 .pc-card:hover { transform: translateY(-2px); border-color: var(--hair-2); }
 .sel-detail { background: rgba(255,255,255,.025); border: 1px solid var(--hair); border-radius: var(--r); }
@@ -713,7 +716,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v58'; window.__errs = [];
+window.APP_VER = 'v59'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -750,6 +753,7 @@ const sr = (a, b) => a + srand() * (b - a);
 const pick = (arr) => arr[Math.floor(srand() * arr.length)];
 
 const isTouch = window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
+if (/iPhone|iPod/.test(navigator.userAgent)) document.documentElement.classList.add('ios');
 
 // ---------------- renderer / scene ----------------
 THREE.ColorManagement.legacyMode = false;
@@ -833,7 +837,14 @@ function setupPost() {
   } catch (e) { composer = null; }
 }
 setupPost();
-function render() { if (composer) composer.render(); else renderer.render(scene, camera); }
+// a phone with a full-screen window open (profile, entry screen, a message): the 3D picture behind it stays still —
+// iPhone Safari killed the tab while the profile scrolled over a live WebGL scene (out of memory)
+const coverOpen = () => !$('prof').hidden || !$('gate').hidden || !$('modal').hidden;
+let coverDrawn = 0;
+function render() {
+  if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else coverDrawn = 0;
+  if (composer) composer.render(); else renderer.render(scene, camera);
+}
 function resize() {
   // the stage box is the real visible size (iOS Safari reports stale innerHeight right after rotation)
   const st = document.getElementById('stage'), r = st ? st.getBoundingClientRect() : null;
