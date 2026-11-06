@@ -10307,12 +10307,12 @@ EPS[17] = {
       about: 'Два внедорожника синдиката зажали такси. Вик достаёт из-под сиденья пистолет.',
       intro: [['thug', 'Таксист! Девчонку — нам, и катись.'], ['elena', 'Не отдавайте меня! У меня запись… про мэра и «Монолит».'], ['hero', 'Ремень. Голову ниже.']],
       outro: [['elena', 'Вы… вы правда стреляли.'], ['hero', 'Двенадцать лет вожу такси. До этого — восемь лет в армии. Рассказывайте про запись.'], ['elena', 'Мэр и Князь из «Монолита». Деньги, оружие, порт. Я записала случайно. Папа сказал молчать.'], ['dj', 'Срочно в эфир: «Монолит» объявил награду за жёлтое такси. Миллион. Таксист, если ты нас слышишь — удачи.']] },
-    { t: 'Переулок', type: 'deliver', start: [A_[0], -470, 'E'], chase: 3, ramp: 1,
-      pts: [{ p: [745, -366], name: 'Узкий переулок', t: 115 }],
+    { t: 'Переулок', type: 'deliver', start: [A_[0], -470, 'E'], chase: 2, ramp: 1,
+      pts: [{ p: [735, -382], name: 'Узкий переулок', t: 115 }],
       about: '«Охота по тарифу» началась: за жёлтым такси едут все, кому нужен миллион. Укрыть машину в узком переулке у склада 14.',
       intro: [['hero', 'Есть переулок у реки, туда не пролезет ни один джип.'], ['elena', 'А мы пролезем?'], ['hero', 'Мы — такси. Мы пролезаем везде.']],
       outro: [['hero', 'Сидите в машине. На складе кто-то есть — свет в окнах.']] },
-    { t: 'Склад у реки', type: 'storm', fac: 'mono', car: [745, -366, PI],
+    { t: 'Склад у реки', type: 'storm', fac: 'mono', car: [735, -382, PI],
       steps: [
         { at: [745, -360], w: 36, d: 50, goal: 'clear', guards: 4, start: [745, -352, PI], exitAt: LP.whDoor, exitObj: 'Дверь склада — внутрь.', obj: 'Зачисти переулок' },
         { at: 'wh', goal: 'clear', guards: 5, waves: [3, 3], obj: 'Зачисти склад: укрывайся за ящиками' },
@@ -10321,7 +10321,7 @@ EPS[17] = {
       about: 'В переулке и на складе засели люди «Монолита». Зачистить пистолетом, используя ящики как укрытие.',
       intro: [['hero', 'Пистолет, восемь патронов в магазине и ящики вместо брони. Как в учебке.']],
       outro: [['elena', 'Вы в порядке?'], ['hero', 'Мотор — нет. Пуля в радиатор. Едем, пока едет.']] },
-    { t: 'Сломанный дизель', type: 'escape', zone: 'lower', start: [745, -366, 'W'], secs: 110, chase: 1, goal: [A_[1], S_[1]], goalName: 'Нижний квартал', speedCap: 17,
+    { t: 'Сломанный дизель', type: 'escape', zone: 'lower', start: [735, -388, 'N'], secs: 110, chase: 1, goal: [A_[1], S_[1]], goalName: 'Нижний квартал', speedCap: 18,
       about: 'Радиатор пробит: такси едет не быстрее 50 км/ч. Дотянуть до Нижнего квартала, где живёт Борис.',
       intro: [['hero', 'Пятьдесят в час, и стрелка температуры в красном. Борис в Нижнем квартале. Он починит.'], ['elena', 'А если нас догонят?'], ['hero', 'Тогда будем стрелять медленно.']],
       outro: [['hero', 'Всё. Дальше машина не едет. До мастерской — пешком, через квартал «Крыс».']] },
@@ -10446,7 +10446,7 @@ EPS[18] = {
       about: 'Бориса держат у пресса. Освободить и вывести к воротам свалки.',
       intro: [['boris', 'Вик! Я тут… немного занят.'], ['hero', 'Иду. Держись за мной, не геройствуй.']],
       outro: [['boris', 'Они грузят что-то на сухогруз «Беринг». Князь лично приезжал.'], ['hero', 'Значит, порт.']] },
-    { t: 'Сухогруз «Беринг»', type: 'tail', zone: 'lower', start: [A_[4], S_[4] - 45, 'S'], car: [A_[4], S_[4], 'N'], speed: 17, name: 'Чёрный седан Князя', stops: { 1: 4 },
+    { t: 'Сухогруз «Беринг»', type: 'tail', zone: 'lower', start: [A_[4], S_[4] - 62, 'S'], car: [A_[4], S_[4], 'N'], speed: 17, name: 'Чёрный седан Князя', stops: { 1: 4 },
       route: [[A_[4], S_[3]], [A_[4], S_[2]], [LP.pier[0] - 10, S_[2]], [LP.pier[0] - 10, -600]],
       about: 'Седан Князя едет к порту. Проследить, держась дальше 15 метров, — узнать, где причал «Беринга».',
       intro: [['elena', 'Это его машина. Князь.'], ['hero', 'Не близко. Нас не должны видеть.']],
@@ -10982,7 +10982,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { get S3() { return S3; }, LOW, DRY, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { get S3() { return S3; }, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
