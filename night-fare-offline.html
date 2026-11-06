@@ -720,7 +720,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v65'; window.__errs = [];
+window.APP_VER = 'v67'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -4603,7 +4603,10 @@ function liftDark(c) { const hsl = {}; c.getHSL(hsl); if (hsl.l < 0.06) c.setHSL
 // assets/models/*.glb (meshopt + webp). People: Idle / Walk / Run from anims.glb, blended by speed; the arm with the gun
 // is turned towards the aim; death, a hit and punches are done on the bones in code. If the models fail to load, the old ones stay.
 const NR = { ready: false, G: {}, clips: {}, H: 2.0, carInfo: null };
-const NR_SRC = ['man', 'man2', 'man3', 'woman', 'woman2', 'woman3', 'michelle', 'anims', 'car'];
+// iPhone: Safari ends the tab when memory runs out at start — the four heavy people (≈50 pictures of 1024 px, 6.6 MB of files)
+// are not loaded there; the characters made of them wear the light bodies
+const NR_LITE = /iPhone|iPod/.test(navigator.userAgent) ? { man2: 'man', man3: 'man', woman2: 'woman', woman3: 'woman' } : {};
+const NR_SRC = ['man', 'man2', 'man3', 'woman', 'woman2', 'woman3', 'michelle', 'anims', 'car'].filter((k) => !NR_LITE[k]);
 const NR_BODY = { vik: 'man', gleb: 'man', artem: 'man', timur: 'man3', savva: 'man2', rustam: 'man2', kira: 'woman', maya: 'michelle', zoya: 'woman2', nika: 'woman2', olga: 'woman3', mark: 'man3', vera: 'woman3', thug1: 'man2', thug2: 'man', thug3: 'man2', boss: 'man', crow: 'man2' };
 const NR_FEM = { woman: 1, woman2: 1, woman3: 1, michelle: 1 };
 const NR_CAST = { gleb: { hair: '#2a1c14', broad: true }, timur: { hair: '#15151a' }, artem: { hair: '#c9a35a' }, savva: { glasses: true, bald: true }, rustam: { hair: '#15121a', broad: true },
@@ -4714,6 +4717,7 @@ function nrPerson(look) {
   const fem = !!(look.face && look.face.fem) || ['kira', 'maya', 'zoya', 'olga', 'nika', 'vera'].includes(look.model);
   let base = NR_BODY[look.model] || (fem ? 'woman2' : 'man');
   if (look.ped) base = fem ? pick(['woman', 'woman2', 'michelle']) : pick(['man', 'man2']);   // passers-by: the light models
+  base = NR_LITE[base] || base;
   const gangDark = /^thug/.test(look.model) && !look.fac && !look.ped ? { jacket: pick(['#16161a', '#1d1d22', '#2a1418']), pants: '#141418', hair: '#15151a' } : null;
   const C = look.colors || {}, cast = look.ped ? {} : gangDark || NR_CAST[look.model] || {}, jacket = cast.jacket || C.Shirt || C.Main || C.Jacket || C.Coat || C.Black, pants = cast.pants || C.Pants || C.Trousers || C.DarkGreen, hair = cast.hair || C.Hair;
   const model = THREE.SkeletonUtils.clone(NR.G[base].scene), outer = new THREE.Group(), inner = new THREE.Group();
@@ -9063,8 +9067,19 @@ async function vkidFinish(a) {
 // MAX on the site: the player taps «Начать» in the game's MAX bot (link max.ru/<bot>?start=<one-time mark>), the bot tells our
 // server, and the site, which keeps asking, gets the session. Same MAX account as in the MAX mini app. The mark lives 10 minutes.
 let maxPollRun = 0;
+// a request that cannot hang: iOS freezes an app on the home screen while the player is in Telegram/MAX, and a request
+// caught in the middle may never answer — after 12 s it counts as a network error and the waiting loop asks again
+function fetchT(url, opt, ms) {
+  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null, t = ac && setTimeout(() => ac.abort(), ms || 12000);
+  return fetch(url, Object.assign({}, opt, ac ? { signal: ac.signal } : {})).finally(() => { if (t) clearTimeout(t); });
+}
+// the login waits sleep 2 s between questions; coming back to the app wakes them at once
+let pollWake = [];
+function pollSleep(ms) { return new Promise((r) => { const t = setTimeout(go, ms); function go() { clearTimeout(t); pollWake = pollWake.filter((f) => f !== go); r(); } pollWake.push(go); }); }
+const pollKick = () => { if (!document.hidden) pollWake.slice().forEach((f) => f()); };
+document.addEventListener('visibilitychange', pollKick); addEventListener('focus', pollKick); addEventListener('pageshow', pollKick);
 async function nfPublic(body) {
-  try { const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(body) }); return await r.json().catch(() => ({ error: 'bad_answer' })); }
+  try { const r = await fetchT(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(body) }); return await r.json().catch(() => ({ error: 'bad_answer' })); }
   catch (e) { return { error: 'network' }; }
 }
 // The link is fetched in advance, so the button is a plain link that opens MAX right on the tap
@@ -9111,7 +9126,7 @@ async function maxSiteWait() {
         return error || !data.user ? 'Не удалось войти через MAX.' : await cloudLoadProfile(data.user);
       }
     }
-    await new Promise((r) => setTimeout(r, 2000));
+    await pollSleep(2000);
   }
 }
 // Telegram on a phone goes through the game's bot, the same way as MAX: the page oauth.telegram.org brought Safari down on iPhone.
@@ -9149,14 +9164,14 @@ async function tgBotWait() {
         return error || !data.user ? 'Не удалось войти через Telegram.' : await cloudLoadProfile(data.user);
       }
     }
-    await new Promise((r) => setTimeout(r, 2000));
+    await pollSleep(2000);
   }
 }
 // linking: a signed-in player adds Telegram or VK to the same profile. The intent survives the trip to Telegram/VK in localStorage.
 async function nfCall(body) {
   const { data } = await CLOUD.sb.auth.getSession(); const tok = data && data.session && data.session.access_token;
   if (!tok) return { error: 'bad_session' };
-  try { const r = await fetch(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(Object.assign({ access_token: tok }, body)) }); return await r.json().catch(() => ({ error: 'bad_answer' })); }
+  try { const r = await fetchT(SB_URL + '/functions/v1/nf-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(Object.assign({ access_token: tok }, body)) }); return await r.json().catch(() => ({ error: 'bad_answer' })); }
   catch (e) { return { error: 'network' }; }
 }
 function linkStart(plat) { store.set('nf-link', { plat, t: Date.now() }); return plat === 'vk' ? vkSiteLogin() : tgSiteLogin(); }
@@ -12886,7 +12901,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
