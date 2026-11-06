@@ -5535,7 +5535,7 @@ function collideCircle(pos, vel, r) {
   }
   if (TRK.on && pos.x < TRK.x1 + 15) impact = Math.max(impact, trkWall(pos, vel, r));
   if (LOW.on && !ONL.on) { pos.x = clamp(pos.x, -LIM, LOW.x1); pos.z = clamp(pos.z, LOW.z0, LIM + 2); }
-  if (CITY && !ONL.on) { pos.x = clamp(pos.x, CITY.x0, CITY.x1); pos.z = clamp(pos.z, CITY.z0, CITY.z1); }
+  else if (CITY && !ONL.on) { pos.x = clamp(pos.x, CITY.x0, CITY.x1); pos.z = clamp(pos.z, CITY.z0, CITY.z1); }   // one chain: the lower town must not fall through to the old city's border
   else if ((AIR.on || STA.on || TRK.on || VIL.on) && !ONL.on) { const Z = AIR.on ? AIR : STA.on ? STA : TRK.on ? TRK : VIL; pos.x = clamp(pos.x, Z.x0, Z.x1); pos.z = clamp(pos.z, Z.z0, Z.z1); }
   else if (ONL.on) freeClamp(pos);
   else { pos.x = clamp(pos.x, -LIM, LIM); pos.z = clamp(pos.z, -LIM, LIM + 2); }
