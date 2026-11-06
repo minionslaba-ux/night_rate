@@ -507,6 +507,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .ep-season { flex-basis: 100%; margin: 8px 0 2px; color: #ffd23a; font: 700 10.5px/1.2 var(--font-body); letter-spacing: .14em; text-transform: uppercase; }
 .chip.s3 { border-color: rgba(255,210,58,.55); color: #ffd23a; }
 .btn.s3new { margin-left: 10px; border: 1px solid #ffd23a; color: #ffd23a; background: rgba(0,0,0,.35); }
+.btn.s3new.cities { border-color: #5ad1ff; color: #5ad1ff; }
 @media (max-width: 560px) { .btn.s3new { margin: 10px 0 0; } }
 .card-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; cursor: pointer; }
 #modalCard { position: relative; }
@@ -631,7 +632,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
     <div class="kicker pv-k">Порт-Северный · 02:47</div>
     <h1 class="logo pv-logo">Ночной тариф<span>Эпизод 1. Кейс</span></h1>
     <p class="pv-tag">Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».</p>
-    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button></div>
+    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
   </div>
   <p class="site-legal"><a href="ob-igre.html" target="_blank" rel="noopener">Об игре</a> · <a href="tseny.html" target="_blank" rel="noopener">Цены</a> · <a href="oferta.html" target="_blank" rel="noopener">Оферта</a> · <a href="politika.html" target="_blank" rel="noopener">Персональные данные</a> · <a href="pravila.html" target="_blank" rel="noopener">Правила</a> · <a href="kontakty.html" target="_blank" rel="noopener">Контакты</a><br>Моисеенко Константин Иванович · ИНН 470313493504 · 12+</p>
 </div>
@@ -12433,6 +12434,7 @@ function showEnd() {
 
 $('btnPlay').addEventListener('click', showSelect);
 $('btnS3').addEventListener('click', () => { showSelect(); selEp = 17; ep2Pick = 1; renderChapters(); });
+$('btnCities').addEventListener('click', () => { showSelect(); selEp = 20; ep2Pick = epMax(20); renderChapters(); const a = document.querySelector('#epChips .chip.active'); if (a && a.scrollIntoView) a.scrollIntoView({ block: 'nearest' }); });
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
 $('btnOnline').addEventListener('click', startOnline);
