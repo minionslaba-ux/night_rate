@@ -11,14 +11,14 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="description" content="«Ночной тариф» — бесплатная браузерная 3D-игра: ночной город, такси, погони и перестрелки. Сюжет из 14 эпизодов и онлайн «Открытый город» с чатом, группами и 60 000 заданий. Играй на телефоне и компьютере без установки.">
+<meta name="description" content="«Ночной тариф» — бесплатная браузерная 3D-игра: ночной город, такси, погони и перестрелки. 19 эпизодов сюжета с новым сезоном «Охота по тарифу» и онлайн «Открытый город» с чатом и заданиями. Играй на телефоне и компьютере без установки и без регистрации.">
 <link rel="canonical" href="https://nightfaregame.com/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Ночной тариф">
 <meta property="og:title" content="Ночной тариф — ночной город, такси и погони">
-<meta property="og:description" content="Бесплатная 3D-игра в браузере: сюжет из 14 эпизодов и онлайн «Открытый город» с другими игроками.">
+<meta property="og:description" content="Бесплатная 3D-игра в браузере: 19 эпизодов сюжета, новый сезон «Охота по тарифу» и онлайн «Открытый город». Без установки и регистрации.">
 <meta property="og:url" content="https://nightfaregame.com/">
-<meta property="og:image" content="https://nightfaregame.com/icons/icon-512.png">
+<meta property="og:image" content="https://nightfaregame.com/promo/1.jpg">
 <meta property="og:locale" content="ru_RU">
 <meta name="twitter:card" content="summary">
 <script>
@@ -575,7 +575,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
     <div class="stats stat-line"><span id="onlStat" class="onl-stat" hidden></span><b id="coins">0</b> <span class="coin-l">монет</span><span class="kills-w" hidden> · <b id="kills">0</b> сбито</span><span class="sep"> · </span><span id="wpnStat" class="wpn-stat"></span></div>
     <div id="boosts" class="stats boosts"></div>
     <button id="btnAmmo" class="ammo-buy" type="button" hidden></button>
-    <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
+    <div id="godBadge" class="stats god" hidden></div>
     <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnJob" class="chip hud-chip" type="button" hidden>Отказаться от заказа</button><button id="btnTask" class="chip hud-chip" type="button" hidden>Задания</button><button id="btnTow" class="chip hud-chip tow" type="button" hidden>Эвакуатор</button><button id="mute" class="chip hud-chip snd-chip" type="button" aria-label="Звук" title="Звук"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="w" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="x" d="m16 9 6 6M22 9l-6 6"/></svg></button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
   </div>
   <div id="bars" class="bars" hidden></div>
@@ -611,7 +611,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
     <p class="pv-tag">Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».</p>
     <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button></div>
   </div>
-  <p class="site-legal"><a href="tseny.html" target="_blank" rel="noopener">Цены</a> · <a href="oferta.html" target="_blank" rel="noopener">Оферта</a> · <a href="politika.html" target="_blank" rel="noopener">Персональные данные</a> · <a href="pravila.html" target="_blank" rel="noopener">Правила</a> · <a href="kontakty.html" target="_blank" rel="noopener">Контакты</a><br>Моисеенко Константин Иванович · ИНН 470313493504 · 12+</p>
+  <p class="site-legal"><a href="ob-igre.html" target="_blank" rel="noopener">Об игре</a> · <a href="tseny.html" target="_blank" rel="noopener">Цены</a> · <a href="oferta.html" target="_blank" rel="noopener">Оферта</a> · <a href="politika.html" target="_blank" rel="noopener">Персональные данные</a> · <a href="pravila.html" target="_blank" rel="noopener">Правила</a> · <a href="kontakty.html" target="_blank" rel="noopener">Контакты</a><br>Моисеенко Константин Иванович · ИНН 470313493504 · 12+</p>
 </div>
 
 <div id="select" class="select" hidden>
@@ -7611,7 +7611,7 @@ let achBusy = false;
 function walletAdd(n) { if (!n) return; PROF.coins += n; PROF.st.earned += Math.max(0, n); saveProfile(); checkAch(); }
 function canPay(price) { return PROF.god || PROF.coins >= price; }
 function pay(price) { if (!canPay(price)) return false; if (!PROF.god) PROF.coins -= price; saveProfile(); return true; }
-function profStat(k, n) { if (k === 'chapters') runEnd('win'); PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
+function profStat(k, n) { if (k === 'chapters') runEnd('win'); PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(loginNudge, 3000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
 const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: 'https://t.me/nightfaregame', maxUrl: '' };
@@ -7966,7 +7966,7 @@ const HINT = { k: '', t: 0 };
 function updateBoostsHud() {
   const I = PROF.inv, txt = `Нитро ×${I.nitro} (N) · Щит ×${I.shield} (B) · Рем ×${I.repair} · Аптечки ×${I.medkit}`;
   if (txt !== boostsShown) { boostsShown = txt; $('boosts').textContent = txt; $('nitroN').textContent = I.nitro; $('shieldN').textContent = I.shield; }
-  $('godBadge').hidden = !PROF.god; updateAmmoHud();
+  $('godBadge').hidden = !PROF.god; if (PROF.god && !$('godBadge').textContent) $('godBadge').textContent = 'ТЕСТ · бессмертие';   // the text is set only for a tester, so the page itself carries no such label updateAmmoHud();
 }
 // ---------------- profile panel ----------------
 let profTab = 'me', profMsg = '';
@@ -8450,6 +8450,9 @@ function startGate() {
     platformLogin().then((err) => { updateProfChip(); if (!err && PROF.login) { finishGate(); toast(PROF.god ? 'Тестовый профиль' : `Привет, ${PROF.name}!`, 2); } else if (!PROF.login) gateAgain(err || 'Не удалось войти.'); });
     return;
   }
+  // the website opens straight into the game: no install screen and no forced sign-in (a guest keeps progress on this device;
+  // signing in is offered in the profile and once after the first mission). Ad networks reject sites that hide content behind a login.
+  if (!VK_AUTH) return finishGate();   // (the install and sign-in screens below stay for an explicit sign-in)
   const needInstall = !isStandalone() && !store.get('nf-installed');
   gateStep = needInstall ? 'install' : 'register';
   if (store.get('nf-last-login') && !PROF.login) gateMode = 'login';
@@ -8457,10 +8460,12 @@ function startGate() {
   $('gate').hidden = false; renderGate();
 }
 // играть можно только с профилем: гостевого входа нет (прогресс, который был у гостя на этом устройстве, переносится в новый профиль)
-const needRegister = () => !PROF.login;
+const needRegister = () => !PROF.login && inMiniApp;   // on the website a guest may play; in Telegram / VK / MAX the sign-in is automatic anyway
 // show the sign-in screen again (after logout, account deletion, or a failed sign-in in a mini app)
 function gateAgain(msg) { if (typeof closeProfile === 'function' && !$('prof').hidden) $('prof').hidden = true; gateStep = inMiniApp ? 'platform' : 'register'; gateMsg = msg || ''; gateForm = false; $('gate').hidden = false; renderGate(); }
 function gateNext() { if (gateStep === 'install') { gateStep = 'register'; gateMsg = ''; if (!needRegister()) return finishGate(); renderGate(); } else finishGate(); }
+// a guest on the website: once, after the second mission, offer to sign in so the progress is kept on every device (with «Играть без входа»)
+function loginNudge() { if (inMiniApp || PROF.login || store.get('nf-login-nudge') || !$('gate').hidden || state.mode === 'drive' || state.mode === 'foot') return; store.set('nf-login-nudge', 1); gateStep = 'register'; gateMsg = ''; $('gate').hidden = false; renderGate(); }
 function finishGate() { $('gate').hidden = true; updateProfChip(); }
 function renderGate() {
   const c = $('gateCard');
@@ -8490,9 +8495,11 @@ function renderGate() {
       <p class="lead">Войди через Telegram, ВКонтакте или MAX — профиль создастся сам. Монеты, машины и пройденные миссии будут с тобой на любом устройстве.</p>
       <button id="gTg" class="btn tg big" type="button">${viaLabel('tg', 'Telegram')}</button><button id="gVk" class="btn vk big" type="button">${viaLabel('vk', 'ВКонтакте')}</button>${gateMaxUrl ? `<a id="gMaxGo" class="btn max big" href="${esc(gateMaxUrl)}" target="_blank" rel="noopener"><i class="bico">${BRAND_ICO.max}</i> Открыть бота в MAX ещё раз</a>` : maxLinkHtml('btn max big', viaLabel('max', 'MAX'), 'id="gMax"')}
       <p class="note gate-nopass">Пароль не нужен: подтверди вход в Telegram, ВКонтакте или MAX — и всё.</p>
+      ${inMiniApp ? '' : '<button id="gGuest" class="btn linkish" type="button">Играть без входа — прогресс останется на этом устройстве</button>'}
       <div class="pmsg">${esc(gateMsg)}</div>
       <p class="gate-consent">Входя, вы соглашаетесь с <a href="politika.html" target="_blank" rel="noopener">политикой обработки персональных данных</a>, <a href="oferta.html" target="_blank" rel="noopener">офертой</a> и <a href="pravila.html" target="_blank" rel="noopener">правилами игры</a>.</p>
       <form id="gCodeForm" class="gate-code"><input id="gCode" type="text" maxlength="9" placeholder="Код с другого устройства" autocapitalize="characters" autocomplete="off"><button class="btn" type="submit">Войти по коду</button></form>`;
+    if ($('gGuest')) $('gGuest').onclick = finishGate;
     $('gCodeForm').onsubmit = (e) => {
       e.preventDefault(); const v = $('gCode').value.trim(); if (!v || CLOUD.busy) return;
       gateMsg = 'Связываюсь с сервером…'; renderGate();
