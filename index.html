@@ -509,6 +509,9 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .btn.s3new { margin-left: 10px; border: 1px solid #ffd23a; color: #ffd23a; background: rgba(0,0,0,.35); }
 .btn.s3new.cities { border-color: #5ad1ff; color: #5ad1ff; }
 .btn.s3new.locked { opacity: .62; border-style: dashed; }
+.mrg-box { position: absolute; z-index: 3; transform-origin: 100% 100%; pointer-events: auto; }
+.mrg-label { color: rgba(255,255,255,.45); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 4px; text-align: right; }
+#mrgSlot { width: 950px; height: 300px; overflow: hidden; }
 .pv-path { margin: 10px 0 0; color: #cfd6e6; font-size: 13px; letter-spacing: .02em; opacity: .9; }
 .chip.locked { opacity: .42; }
 .chip.next { box-shadow: inset 0 0 0 1.5px #4dffa6; }
@@ -640,6 +643,8 @@ body.online:not(.task) .stat-line .sep { display: none; }
     <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
     <p id="pvPath" class="pv-path"></p>
   </div>
+  <div id="mrgBox" class="mrg-box" hidden><div class="mrg-label">Реклама</div><div id="mrgSlot"></div>
+  </div>
   <p class="site-legal"><a href="ob-igre.html" target="_blank" rel="noopener">Об игре</a> · <a href="tseny.html" target="_blank" rel="noopener">Цены</a> · <a href="oferta.html" target="_blank" rel="noopener">Оферта</a> · <a href="politika.html" target="_blank" rel="noopener">Персональные данные</a> · <a href="pravila.html" target="_blank" rel="noopener">Правила</a> · <a href="kontakty.html" target="_blank" rel="noopener">Контакты</a><br>Моисеенко Константин Иванович · ИНН 470313493504 · 12+</p>
 </div>
 
@@ -708,7 +713,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v55'; window.__errs = [];
+window.APP_VER = 'v56'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -756,7 +761,8 @@ const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') ||
 { const mark = (on) => { try { if (on) localStorage.setItem('nf-run', '1'); else localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } };
   addEventListener('pagehide', () => mark(false)); addEventListener('pageshow', () => mark(true)); document.addEventListener('visibilitychange', () => mark(!document.hidden));
   setTimeout(() => { try { localStorage.setItem('nf-crash', '0'); } catch (e) { /* storage unavailable */ } }, 120000); }   // two minutes without a crash: the count starts over
-const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if (CRASH >= 2) localStorage.setItem('nf-gfx', 'auto'); } catch (e) { /* storage unavailable */ } return { pref: v === 'auto' || CRASH >= 1 ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' || CRASH >= 1, crash: CRASH }; })();   // HD by default; «chosen» = the player picked it in the pause menu (or a crash picked «auto»)   // HD by default; «chosen» = the player picked it in the pause menu
+const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if (CRASH >= 2) localStorage.setItem('nf-gfx', 'auto'); } catch (e) { /* storage unavailable */ } const phone = isTouch && Math.min(screen.width, screen.height) < 600;   // phones start light (HD in the pause menu); tablets and computers in HD
+  return { pref: v === 'hd' && CRASH === 0 ? 'hd' : v === 'auto' || CRASH >= 1 || phone ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' || CRASH >= 1, crash: CRASH }; })();   // HD by default; «chosen» = the player picked it in the pause menu (or a crash picked «auto»)   // HD by default; «chosen» = the player picked it in the pause menu
 const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 ? 1 : isTouch ? 1.5 : 1.75), PR_HD = Math.min(DPR, 2);
 const HD = () => GFX.pref === 'hd';
 if (CRASH >= 1) setTimeout(() => toast('Игра перезапустилась после сбоя: включена облегчённая графика. Вернуть HD можно в паузе.', 5), 6000);
@@ -767,6 +773,8 @@ renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 $('stage').appendChild(renderer.domElement);
+// the static geometry keeps no JS copy (see dropArray): after a lost and restored WebGL context the page simply starts again
+renderer.domElement.addEventListener('webglcontextrestored', () => { try { localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } location.reload(); });
 
 const scene = new THREE.Scene();
 const FOG = new THREE.Color(0x251d3f);
@@ -1054,12 +1062,15 @@ function putB(b, geo, x, y, z, sx, sy, sz, ry, col, rx, rz) {
 // A batch becomes one mesh per 320 m square of the map (by triangle centre), so the camera and the shadow
 // map skip the parts of the world that are out of view instead of drawing the whole map every frame.
 const CHUNK = 320;
+// the batched static geometry: once on the GPU its JS copy is dropped (the bounds are computed before the first upload)
+function dropArray() { if (this.array && this.array.length > 3000) this.array = null; }
 function meshB(b, mat, shadow, whole) {
   if (!b.p.length) return null;
   const mk = (P_, N_, U_, C_) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(P_, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N_, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(U_, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(C_, 3));
+    for (const k of ['position', 'normal', 'uv', 'color']) g.attributes[k].onUpload(dropArray);
     const m = new THREE.Mesh(g, mat); m.receiveShadow = true; if (shadow) m.castShadow = true; m.matrixAutoUpdate = false; m.updateMatrix(); return m;
   };
   const nTri = b.p.length / 9;
@@ -3629,6 +3640,7 @@ function updatePoliceLights(dt) {
   let nd = 1e9, ne = null;
   if (state.mode === 'drive' && pc) for (const e of enemyCars) { if (!e.police || e.dead) continue; const d = e.pos.distanceTo(pc.pos); if (d < nd) { nd = d; ne = e; } }
   if (!audio.ctx) return;
+  if (POLICE.siren && POLICE.siren.g.context !== audio.ctx) POLICE.siren = null;
   if (!POLICE.siren) {
     const ac = audio.ctx, g = ac.createGain(), f = ac.createBiquadFilter(), o1 = ac.createOscillator(), o2 = ac.createOscillator(), g2 = ac.createGain();
     o1.type = 'sawtooth'; o2.type = 'square'; g2.gain.value = 0.35; f.type = 'lowpass'; f.frequency.value = 2400; f.Q.value = 0.7; g.gain.value = 0;
@@ -8422,6 +8434,28 @@ function adLoad() {
   if (adLoaded) return; adLoaded = true; window.yaContextCb = window.yaContextCb || [];
   const sc = document.createElement('script'); sc.src = 'https://yandex.ru/ads/system/context.js'; sc.async = true; document.head.appendChild(sc);
 }
+// VK Реклама (ad.mail.ru): a 950×300 banner on the main screen of the website, only where it fits beside or under the menu
+// (scaled down to 60 % at most); never in the mini apps, never during a mission
+const MRG = { slot: '2105016', client: 'ad-2105016', put: false };
+function mrgPlace() {
+  const box = $('mrgBox'); if (!box) return;
+  if (PLATFORM !== 'web' || (PROF && PROF.noAds) || state.mode !== 'preview') { box.hidden = true; return; }
+  const c = document.querySelector('.pv-content'), f = document.querySelector('.site-legal'), W = innerWidth, H = innerHeight;
+  if (!c) { box.hidden = true; return; }
+  const r = c.getBoundingClientRect(), foot = f ? f.getBoundingClientRect().height + 12 : 40;
+  const side = Math.min(1, (W - r.right - 48) / 950), below = Math.min(1, (H - r.bottom - foot - 40) / 320, (W - 48) / 950);
+  const k = Math.max(side, below);
+  if (k < 0.6) { box.hidden = true; return; }
+  box.hidden = false; box.style.right = '24px'; box.style.bottom = (foot + 8) + 'px'; box.style.transform = `scale(${k.toFixed(3)})`;
+  if (!MRG.put) {
+    MRG.put = true;
+    const ins = document.createElement('ins'); ins.className = 'mrg-tag'; ins.style.cssText = 'display:inline-block;width:950px;height:300px'; ins.setAttribute('data-ad-client', MRG.client); ins.setAttribute('data-ad-slot', MRG.slot);
+    $('mrgSlot').appendChild(ins);
+    const sc = document.createElement('script'); sc.async = true; sc.src = 'https://ad.mail.ru/static/ads-async.js'; document.head.appendChild(sc);
+    (window.MRGtag = window.MRGtag || []).push({});
+  }
+}
+addEventListener('resize', () => { if (state.mode === 'preview') mrgPlace(); });
 function adBetween() {
   if (!adCan() || Date.now() - (store.get('nf-ad-at') || 0) < AD_GAP) return;
   store.set('nf-ad-at', Date.now()); adLoad();
@@ -10782,10 +10816,14 @@ function s3Radio(dt) {
 }
 // the music: synthwave on the road, industrial in the fights (made by the game itself, no files)
 const MUS = { on: false, style: '', step: 0, next: 0, bus: null };
+// a sound error must never stop the frame: report once, rebuild the sound on the next tap
+let audioFaultN = 0;
+function audioFault(e) { if (audioFaultN++ === 0 && window.__errs) { window.__errs.push({ m: 'audio: ' + String(e && e.message || e).slice(0, 200), p: 'loop' }); if (window.__errFlush) window.__errFlush(); } MUS.bus = null; if (typeof POLICE !== 'undefined') POLICE.siren = null; }
 function musicUpdate() {
   if (!audio.ctx || !isS3()) { if (MUS.bus) MUS.bus.gain.setTargetAtTime(0, audio.ctx ? audio.ctx.currentTime : 0, 0.3); MUS.style = ''; return; }
   const want = state.mode === 'drive' ? 'synth' : state.mode === 'foot' ? 'ind' : '';
   const ac = audio.ctx;
+  if (MUS.bus && MUS.bus.context !== ac) { MUS.bus = null; MUS.noise = null; }   // the sound was rebuilt (iPhone after switching apps): the old bus belongs to the closed context
   if (!MUS.bus) { MUS.bus = ac.createGain(); MUS.bus.gain.value = 0; MUS.bus.connect(audio.master); MUS.noise = (() => { const b = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })(); }
   MUS.bus.gain.setTargetAtTime(want && !muted ? (want === 'ind' ? 0.21 : 0.17) : 0, ac.currentTime, 0.6);   // measured: at 0.07/0.06 the music sat ~40 dB under the gunshots — barely audible
   if (want !== MUS.style) { MUS.style = want; MUS.step = 0; MUS.next = ac.currentTime + 0.05; }
@@ -12477,7 +12515,7 @@ function showPreview() {
   pvEnemy.g.visible = true; pc.g.visible = true; showDisc.visible = false; arrow.visible = false; setBeam(null);
   if (showFig) showFig.g.visible = false;
   pv.x = -140; pv.shot = 0; pv.shotT = 0; snapCam = true;
-  renderMenuPath();
+  renderMenuPath(); setTimeout(mrgPlace, 300);
 }
 function nextShot() { pv.shot = (pv.shot + 1) % 4; pv.shotT = 0; snapCam = true; }
 function updatePreview(dt) {
@@ -12599,7 +12637,7 @@ function showEnd() {
 
 $('btnPlay').addEventListener('click', showSelect);
 $('btnS3').addEventListener('click', () => openLine(LINES[1]));
-setInterval(() => { if (state.mode === 'preview') renderMenuPath(); }, 3000);   // the cloud profile may arrive after the menu is up
+setInterval(() => { if (state.mode === 'preview') { renderMenuPath(); mrgPlace(); } }, 3000);   // the cloud profile may arrive after the menu is up
 $('btnCities').addEventListener('click', () => openLine(LINES[2]));
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
@@ -12685,7 +12723,7 @@ function loop(now) {
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
-  updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); updatePoliceLights(dt); s3Radio(dt); musicUpdate(); updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; cineUpdate(dt); if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
+  updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); try { updatePoliceLights(dt); s3Radio(dt); musicUpdate(); } catch (e) { audioFault(e); } updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; cineUpdate(dt); if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
   if (window.__camOv) { camera.position.copy(window.__camOv.p); camera.lookAt(window.__camOv.l); }
   updateWeather(dt, focus); updateRain(dt, focus);
