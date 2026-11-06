@@ -539,6 +539,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .hint { transition: opacity .6s; }
 body.hint-off .hint { opacity: 0; pointer-events: none; }
 body.online:not(.task) .stat-line .sep { display: none; }
+@media (orientation: landscape) and (max-height: 480px) { .stat-line .coin-l { display: none; } #bars.bars { max-width: min(26vw, 300px); } }   /* phone held sideways: the boss bar and the coin line stay apart */
 /* a narrow portrait screen: the navigator goes under the task on the left, the timer/bars under the buttons — nothing stacks on the top row */
 @media (orientation: portrait) and (max-width: 600px) {
   .hud-tl { max-width: 54vw; }
@@ -7459,6 +7460,32 @@ function applyProgress(pr) {
     if (pr.last && pr.last.ep) localStorage.setItem('nf-last', JSON.stringify(pr.last));
   } catch (e) { /* storage unavailable */ }
 }
+// ---------- coins for money (Robokassa, website only): the server keeps the prices and the ledger ----------
+// a paid invoice becomes coins here exactly once (the server marks it «claimed» in the same step)
+const COIN_PACKS = [['p100', 100, 300, 0], ['p300', 300, 1000, 11], ['p500', 500, 1750, 17], ['p1000', 1000, 3800, 27], ['p2000', 2000, 8000, 33]];
+const PAY = { checked: false, ready: false, test: true, busy: false };
+const payFn = async (body) => { const r = await fetch(SB_URL + '/functions/v1/nf-pay', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(body) }); return r.json().catch(() => ({ error: 'bad_answer' })); };
+const payTok = async () => { try { const { data } = await CLOUD.sb.auth.getSession(); return data && data.session && data.session.access_token; } catch (e) { return null; } };
+async function payCheck() { PAY.checked = true; try { const r = await payFn({ action: 'packs' }); PAY.ready = !!r.ready; PAY.test = r.test !== false; if (!$('prof').hidden && profTab === 'shop') renderProfile(); } catch (e) { /* offline: no coin block */ } }
+async function payBuy(id) {
+  if (PAY.busy) return;
+  if (!PROF.cloud) { $('prof').hidden = true; gateStep = 'register'; gateMsg = 'Войди, чтобы купить монеты: они придут в профиль и будут на всех устройствах.'; $('gate').hidden = false; renderGate(); return; }
+  PAY.busy = true; profMsg = 'Открываю оплату…'; renderProfile();
+  try {
+    const tok = await payTok(); const r = tok ? await payFn({ action: 'create', access_token: tok, pack: id }) : { error: 'bad_session' };
+    if (r.url) { cloudSave(); location.href = r.url; return; }
+    profMsg = r.error === 'not_configured' ? 'Оплата скоро появится.' : r.error === 'bad_session' ? 'Войди в профиль ещё раз.' : 'Не удалось открыть оплату. Попробуй позже.';
+  } catch (e) { profMsg = 'Нет связи с сервером.'; }
+  PAY.busy = false; renderProfile();
+}
+async function payClaim() {
+  if (!PROF.cloud || !CLOUD.sb) return;
+  try {
+    const tok = await payTok(); if (!tok) return;
+    const r = await payFn({ action: 'claim', access_token: tok });
+    if (r.coins > 0) { PROF.coins += r.coins; saveProfile(); cloudSave(); updateProfChip(); toast(`Оплата прошла: +${r.coins.toLocaleString('ru-RU')} монет`, 3); sfx.bell(); if (!$('prof').hidden) renderProfile(); }
+  } catch (e) { /* will try at the next start */ }
+}
 async function cloudLoadProfile(user) {
   CLOUD.links = null;
   const { data: row, error } = await CLOUD.sb.from('profiles').select('login, name, data, progress, is_tester').eq('id', user.id).maybeSingle();
@@ -7475,6 +7502,7 @@ async function cloudLoadProfile(user) {
     applyLoadout(); updateProfChip();
     if (src === guest) { try { localStorage.removeItem(profKey(null)); } catch (e) { /* storage unavailable */ } saveProfile(); }
     cloudSaveSoon();   // story progress from this device (episodes, «Continue») goes up right away, even for a fresh profile
+    setTimeout(payClaim, 1500);   // coins paid for on the website (also right after the return from the payment page)
   };
   if (gs > 0 && cs === 0) { finish(guest); toast('Прогресс гостя перенесён в профиль', 2); }
   else if (gs > 0 && cs > 0 && Math.abs(gs - cs) > 50) {
@@ -8051,7 +8079,10 @@ function renderProfile() {
         <small class="wperk">★ ${w.perk} · магазин ${w.mag} · перезарядка ${String(w.reload).replace('.', ',')} с</small>${act}</div>`;
     }).join('') + '</div><div class="note">Модели оружия: набор Flat Guns East/West (CC0).</div>';
   } else if (profTab === 'shop') {
-    h = `<div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button" ${canPay(it.price) ? '' : 'disabled'}>${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
+    if (PLATFORM === 'web' && !PAY.checked) payCheck();
+    const payShow = PLATFORM === 'web' && PAY.ready && (!PAY.test || PROF.god);
+    h = `${payShow ? `<div class="plabel">Монеты${PAY.test ? ' · тестовый режим' : ''}</div><div class="pitems">${COIN_PACKS.map(([id, rub, coins, bonus]) => `<div class="pitem shop coin-pack"><b>${coins.toLocaleString('ru-RU')} монет${bonus ? ` <em>+${bonus}%</em>` : ''}</b><span>${bonus ? 'Выгоднее, чем по 3 монеты за рубль' : '3 монеты за рубль'}</span><button class="btn sm primary" data-act="buy-coins" data-id="${id}" type="button">${rub} ₽</button></div>`).join('')}</div><div class="note">Оплата через Робокассу. Монеты придут в профиль после оплаты — на всех устройствах.${PROF.cloud ? '' : ' Чтобы купить, войди в профиль.'}</div>` : ''}
+    <div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button" ${canPay(it.price) ? '' : 'disabled'}>${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
     <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
     <div class="pmsg">${esc(profMsg)}</div>`;
   } else if (profTab === 'up') {
@@ -8092,6 +8123,7 @@ function profAction(act, id) {
   else if (act === 'buy-neon') { if (pay(500)) { PROF.neons.push(id); PROF.neon = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'buy-item') { if (pay(ITEMS[id].price)) { PROF.inv[id] = (PROF.inv[id] || 0) + (ITEMS[id].pack || 1); saveProfile(); updateAmmoHud(); } }
   else if (act === 'buy-up') { const l = PROF.up[id]; if (l < UP_MAX && pay(upPrice(l))) { PROF.up[id]++; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'buy-coins') { payBuy(id); return; }
   else if (act === 'buy-pack') {
     if (PROF.god) { PACKS[id].grant(PROF); saveProfile(); applyLoadout(); checkAch(); profMsg = `«${PACKS[id].name}» выдан (тестовый профиль).`; }
     else profMsg = 'Покупка наборов скоро появится. Деньги не списываются.';
@@ -11083,6 +11115,13 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
+// back from the Robokassa page: ?pay=ok / ?pay=fail (the coins themselves come from the server ledger, not from this address)
+(() => {
+  const m = /[?&]pay=(ok|fail)\b/.exec(location.search); if (!m) return;
+  try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* old browser */ }
+  setTimeout(() => toast(m[1] === 'ok' ? 'Оплата получена — монеты придут в профиль через несколько секунд' : 'Оплата не завершена', 4), 3000);
+  if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
+})();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
 window.__nightFare = { get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
