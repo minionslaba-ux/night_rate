@@ -713,7 +713,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v56'; window.__errs = [];
+window.APP_VER = 'v57'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -758,7 +758,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'h
 // graphics quality: «auto» adapts to the device (and climbs to HD when there is headroom); «hd» keeps the full screen resolution,
 // hardware anti-aliasing, sharper shadows and the detailed models on phones too
 // a tab the browser killed (iOS: «на странице повторно возникла проблема» — out of memory) leaves nf-run behind: the next start goes lighter
-const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') || 0; if (localStorage.getItem('nf-run') === '1') { n++; localStorage.setItem('nf-crash', String(n)); } localStorage.setItem('nf-run', '1'); } catch (e) { /* storage unavailable */ } return n; })();
+let CRASH_CRUMB = null;
+const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') || 0; if (localStorage.getItem('nf-run') === '1') { CRASH_CRUMB = localStorage.getItem('nf-crumb'); n++; localStorage.setItem('nf-crash', String(n)); } localStorage.setItem('nf-run', '1'); } catch (e) { /* storage unavailable */ } return n; })();
 { const mark = (on) => { try { if (on) localStorage.setItem('nf-run', '1'); else localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } };
   addEventListener('pagehide', () => mark(false)); addEventListener('pageshow', () => mark(true)); document.addEventListener('visibilitychange', () => mark(!document.hidden));
   setTimeout(() => { try { localStorage.setItem('nf-crash', '0'); } catch (e) { /* storage unavailable */ } }, 120000); }   // two minutes without a crash: the count starts over
@@ -9129,6 +9130,16 @@ window.__errFlush = () => {
     .catch(() => {}).then(() => { window.__errSending = false; });
 };
 setTimeout(() => window.__errFlush(), 3000);
+// a black box for crashes the page cannot report itself (iOS kills the tab): every 2 s a short note of what the game is doing;
+// if the last run ended with the tab killed in the foreground, the next start sends that note to client_errors
+let crumbAct = '';
+document.addEventListener('pointerdown', (e) => { const t = e.target && e.target.closest && e.target.closest('button,a,[id]'); crumbAct = t ? (t.id || t.className || t.tagName).toString().slice(0, 40) : ''; }, true);
+function crumbNow() {
+  let mem = ''; try { const i = renderer.info.memory; mem = i.geometries + 'g/' + i.textures + 't'; } catch (e) { /* not yet */ }
+  return JSON.stringify({ v: APP_VER, m: state.mode, ep: state.ep, ch: state.ch, city: CITY ? CITY.id : '', gate: !$('gate').hidden, prof: !$('prof').hidden, modal: !$('modal').hidden, gfx: GFX.pref, pr: renderer.getPixelRatio(), mem, act: crumbAct, up: Math.round(performance.now() / 1000), dpr: window.devicePixelRatio, scr: screen.width + 'x' + screen.height, sa: !!(window.navigator.standalone || matchMedia('(display-mode: standalone)').matches), plat: PLATFORM });
+}
+setInterval(() => { try { localStorage.setItem('nf-crumb', crumbNow()); } catch (e) { /* storage unavailable */ } }, 2000);
+if (CRASH_CRUMB) { window.__errs.push({ m: 'crash: the tab was killed; last note: ' + CRASH_CRUMB.slice(0, 260), p: 'crash x' + CRASH }); setTimeout(() => window.__errFlush(), 4000); }
 
 // ---------------- entry: «install the game» banner, then registration ----------------
 let deferredInstall = null;
@@ -9256,7 +9267,7 @@ function renderGate() {
       gateMsg = 'Связываюсь с сервером…'; renderGate();
       loginWithCode(v).then((err) => { if (err || !PROF.login) { gateMsg = err || 'Код не подошёл.'; renderGate(); return; } finishGate(); toast(`Привет, ${PROF.name}!`, 2); });
     };
-    vkidLoad().catch(() => {});   // load early: VK's window must open right on the tap, or the browser blocks it
+    if (!isTouch) vkidLoad().catch(() => {});   // load early on a computer (a popup must open right on the tap); a phone goes to VK by redirect and loads it on the tap
     $('gVk').onclick = () => { if (CLOUD.busy) return; $('gVk').disabled = true; $('gVk').textContent = 'Открываю ВКонтакте…'; vkSiteLogin().then((err) => { if (err) { gateMsg = err; renderGate(); } }); };
     if ($('gMax') && $('gMax').tagName === 'A') $('gMax').onclick = (e) => {
       const url = $('gMax').href;
