@@ -751,9 +751,15 @@ THREE.ColorManagement.legacyMode = false;
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 // graphics quality: «auto» adapts to the device (and climbs to HD when there is headroom); «hd» keeps the full screen resolution,
 // hardware anti-aliasing, sharper shadows and the detailed models on phones too
-const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); } catch (e) { /* storage unavailable */ } return { pref: v === 'auto' ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' }; })();   // HD by default; «chosen» = the player picked it in the pause menu
-const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, isTouch ? 1.5 : 1.75), PR_HD = Math.min(DPR, isTouch ? 2.25 : 2);
+// a tab the browser killed (iOS: «на странице повторно возникла проблема» — out of memory) leaves nf-run behind: the next start goes lighter
+const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') || 0; if (localStorage.getItem('nf-run') === '1') { n++; localStorage.setItem('nf-crash', String(n)); } localStorage.setItem('nf-run', '1'); } catch (e) { /* storage unavailable */ } return n; })();
+{ const mark = (on) => { try { if (on) localStorage.setItem('nf-run', '1'); else localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } };
+  addEventListener('pagehide', () => mark(false)); addEventListener('pageshow', () => mark(true)); document.addEventListener('visibilitychange', () => mark(!document.hidden));
+  setTimeout(() => { try { localStorage.setItem('nf-crash', '0'); } catch (e) { /* storage unavailable */ } }, 120000); }   // two minutes without a crash: the count starts over
+const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if (CRASH >= 2) localStorage.setItem('nf-gfx', 'auto'); } catch (e) { /* storage unavailable */ } return { pref: v === 'auto' || CRASH >= 1 ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' || CRASH >= 1, crash: CRASH }; })();   // HD by default; «chosen» = the player picked it in the pause menu (or a crash picked «auto»)   // HD by default; «chosen» = the player picked it in the pause menu
+const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 ? 1 : isTouch ? 1.5 : 1.75), PR_HD = Math.min(DPR, 2);
 const HD = () => GFX.pref === 'hd';
+if (CRASH >= 1) setTimeout(() => toast('Игра перезапустилась после сбоя: включена облегчённая графика. Вернуть HD можно в паузе.', 5), 6000);
 renderer.setPixelRatio(HD() ? PR_HD : PR_BASE);
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -2210,12 +2216,64 @@ function cityPools(C) {
   if (!P.length) return;
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
   const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.0, 0.62, 0.32), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  m.renderOrder = 1; scene.add(m);
+  m.renderOrder = 1; m.userData.own = true; m.userData.ownMat = true; scene.add(m);
 }
 // a sign with text that fits its plate (shared by the cities)
 function signC(txt, w, h, x, y, z, ry, fg, bg) {
   const t = cityText(1024, 256, (q, W, H) => { q.fillStyle = bg; q.fillRect(0, 0, W, H); q.font = 'bold 150px Arial'; const tw = q.measureText(txt).width; if (tw > W * 0.92) q.font = `bold ${Math.floor(150 * W * 0.92 / tw)}px Arial`; q.fillStyle = fg; q.shadowColor = fg; q.shadowBlur = 24; q.fillText(txt, W / 2, H / 2 + 6); });
-  textPlane(t, w, h, x, y, z, ry, new THREE.Color(1.8, 1.8, 1.8));
+  const m = textPlane(t, w, h, x, y, z, ry, new THREE.Color(1.8, 1.8, 1.8)); m.userData.own = true; m.userData.ownMat = true; m.userData.ownMap = true;
+}
+// A city is built only while one of its missions runs and dropped when another place is needed:
+// three maps at once (about 100 MB of geometry) do not fit next to the main city in a phone's memory.
+let CITY_MATS = null;
+function cityMats() {
+  if (CITY_MATS) return CITY_MATS;
+  const S = (o) => new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true }, o)), Bm = (o) => new THREE.MeshBasicMaterial(Object.assign({ vertexColors: true }, o));
+  CITY_MATS = {
+    trim: [S({ roughness: 0.9, envMapIntensity: 0.3 }), true], roof: [S({ roughness: 0.95, envMapIntensity: 0.2 }), false],
+    metal: [S({ roughness: 0.4, metalness: 0.7, envMapIntensity: 0.8 }), true], neon: [KIT.neonMat || Bm({}), false],
+    asph: [S({ map: asphaltTex, color: 0x9a9aa2, roughness: 0.85, envMapIntensity: 0.6 }), false],
+    glassA: [S({ map: airGlassTex, emissiveMap: airGlassTex, emissive: new THREE.Color(0.42, 0.38, 0.32), color: 0x8a90a0, roughness: 0.15, metalness: 0.55, envMapIntensity: 1.6 }), false],
+    glass: [S({ map: airGlassTex, emissiveMap: airGlassTex, emissive: new THREE.Color(0.36, 0.4, 0.5), color: 0x6a7c9a, roughness: 0.12, metalness: 0.6, envMapIntensity: 1.8 }), true],
+    stone: [S({ map: stoneTex, roughness: 0.85, envMapIntensity: 0.4 }), true], brick: [S({ map: brickWallTex, roughness: 0.9, envMapIntensity: 0.3 }), true],
+    archwin: [Bm({ map: archWinTex, color: new THREE.Color(1.25, 1.2, 1.1) }), false], sign: [Bm({ map: signAtlas, color: new THREE.Color(1.7, 1.7, 1.7) }), false],
+    ad: [Bm({ map: adAtlas, color: new THREE.Color(1.25, 1.25, 1.25) }), false],
+    walk: [KIT.walkMat || S({ map: pavingTex, color: 0x9a948c, roughness: 0.6, envMapIntensity: 0.9 }), false], grass: [KIT.grassMat || S({ map: grassTex, roughness: 1 }), false],
+    leaf: [KIT.leafMat || S({ roughness: 0.9, envMapIntensity: 0.3 }), true], mark: [S({ roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), false],
+    wood: [S({ map: woodTex, roughness: 0.85 }), true], water: [S({ color: 0x0b2236, roughness: 0.08, metalness: 0.2, envMapIntensity: 1.8 }), false],
+    bankL: [KIT.bankLight || Bm({}), false], awning: [S({ roughness: 0.8, envMapIntensity: 0.3 }), true],
+  };
+  return CITY_MATS;
+}
+function cityUse(C) {
+  for (const k in CITIES) if (CITIES[k] !== C && CITIES[k].group) cityUnload(CITIES[k]);
+  if (!C || C.group) return;
+  const saved = {}; for (const k in B) { saved[k] = B[k]; B[k] = batch(); }
+  const before = new Set(scene.children);
+  C.cols.length = 0; C.lamps.length = 0; C.leaves = null; C.ferry = null; C.wheelG = null;
+  try { ({ paris: buildParis, london: buildLondon, ny: buildNY })[C.id](); } finally {
+    const M = cityMats();
+    for (const k in B) {
+      if (!B[k].p.length) continue;
+      const mm = M[k]; if (!mm) continue;
+      const o = meshB(B[k], mm[0], mm[1]); if (o) o.traverse((q) => { if (q.isMesh) q.userData.own = true; });
+    }
+    for (const k in saved) B[k] = saved[k];
+  }
+  const grp = new THREE.Group(); grp.name = 'city-' + C.id;
+  for (const o of scene.children.slice()) if (!before.has(o)) grp.add(o);   // add() takes it out of the scene
+  scene.add(grp); C.group = grp;
+}
+// free the GPU buffers of what a city or a mission made; the shared unit shapes and the player's car stay (three.js re-uploads anything used again)
+function freeGeoms(root) {
+  const keep = new Set([box1, box1Up].concat(Object.values(G)));
+  for (const r of [pc && pc.g, hero && hero.g]) if (r) r.traverse((o) => { if (o.geometry) keep.add(o.geometry); });
+  root.traverse((o) => { if (o.geometry && !keep.has(o.geometry)) o.geometry.dispose(); });
+}
+function cityUnload(C) {
+  C.group.traverse((o) => { if (o.isMesh && o.userData.ownMat) { if (o.userData.ownMap && o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+  freeGeoms(C.group);
+  scene.remove(C.group); C.group = null; C.cols.length = 0; C.lamps.length = 0;
 }
 
 // ---------- LONDON ----------
@@ -2986,7 +3044,7 @@ function buildWorld() {
   buildSignals(tlights); buildRoadSigns();
 
   CONTS.glb = (!isTouch || HD()) && perf.level === 0;
-  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage(); buildLower(); buildParis(); buildLondon(); buildNY();
+  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage(); buildLower();   // the world cities are built on demand: cityUse()
   contBuild();
 
   // one material per batch: a few draw calls for the whole city
@@ -3012,6 +3070,7 @@ function buildWorld() {
   const alarm = meshB(B.bankA, new THREE.MeshBasicMaterial({ vertexColors: true }), false, true); alarm.visible = false; KIT.bankAlarm = alarm;
   buildAtmosphere(); finishCityScale();
   makeEnvironment();
+  for (const k in B) B[k] = batch();   // the source arrays are on the GPU now: let go of them (hundreds of MB of plain JS arrays on a phone)
 }
 
 function buildPark() {
@@ -7298,7 +7357,7 @@ function startGen(ep, i, withIntro) {
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
   };
-  AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village'; LOW.on = (c.zone || E.zone) === 'lower' || (c.zone || E.zone) === 'city' && !!E.season3; CITY = CITIES[c.zone || E.zone] || null;
+  AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village'; LOW.on = (c.zone || E.zone) === 'lower' || (c.zone || E.zone) === 'city' && !!E.season3; CITY = CITIES[c.zone || E.zone] || null; cityUse(CITY);
   resetJet(c.jetAt);
   MIS = GEN[c.type](c, title, done, E);
   if (c.carStyle || E.carStyle) MIS.carStyle = c.carStyle || E.carStyle; if (c.chaseMsg || E.chaseMsg) MIS.chaseMsg = c.chaseMsg || E.chaseMsg;
@@ -11278,7 +11337,7 @@ function s3VikBack() { if (S3.prevIdx === null) return; curIdx = S3.prevIdx; S3.
 // ---------------- World cities: mission types of their own (no other city or episode uses them) ----------------
 const CT = { tmp: [] };   // meshes a city mission adds; removed when the mission ends
 function ctAdd(o) { scene.add(o); CT.tmp.push(o); return o; }
-function ctClear() { for (const o of CT.tmp) { if (typeof o === 'function') o(); else if (o.parent) o.parent.remove(o); } CT.tmp.length = 0; }   // meshes, or undo steps (walls, the bus body)
+function ctClear() { for (const o of CT.tmp) { if (typeof o === 'function') o(); else { if (o.parent) o.parent.remove(o); if (typeof freeGeoms === 'function') freeGeoms(o); } } CT.tmp.length = 0; }   // meshes, or undo steps (walls, the bus body)
 const cityLook = () => LOOKS[pick(['leva', 'sonya', 'ded', 'host', 'mark'])] || LOOKS.leva;
 Object.assign(GEN, {
   // PARIS · «Попутчики»: several passengers at once, three seats; each has a destination and runs out of patience
