@@ -720,7 +720,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v63'; window.__errs = [];
+window.APP_VER = 'v64'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -789,6 +789,11 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 $('stage').appendChild(renderer.domElement);
 // the static geometry keeps no JS copy (see dropArray): after a lost and restored WebGL context the page simply starts again
+// leaving for a login or payment page: free the 3D first, so Safari on iPhone does not hold two heavy pages at once;
+// coming back from the browser's page cache with the 3D gone — start afresh
+let nfLeft = false;
+function leaveTo(url) { if (isTouch) { nfLeft = true; try { renderer.forceContextLoss(); } catch (e) { /* no context */ } } location.href = url; }
+window.addEventListener('pageshow', (e) => { if (e.persisted && nfLeft) location.reload(); });
 renderer.domElement.addEventListener('webglcontextrestored', () => { try { localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } location.reload(); });
 
 const scene = new THREE.Scene();
@@ -8206,7 +8211,7 @@ async function payBuy(id) {
   PAY.busy = true; profMsg = 'Открываю оплату…'; renderProfile();
   try {
     const tok = await payTok(); const r = tok ? await payFn({ action: 'create', access_token: tok, pack: id }) : { error: 'bad_session' };
-    if (r.url) { cloudSave(); location.href = r.url; return; }
+    if (r.url) { cloudSave(); leaveTo(r.url); return; }
     profMsg = r.error === 'not_configured' ? 'Оплата скоро появится.' : r.error === 'bad_session' ? 'Войди в профиль ещё раз.' : 'Не удалось открыть оплату. Попробуй позже.';
   } catch (e) { profMsg = 'Нет связи с сервером.'; }
   PAY.busy = false; renderProfile();
@@ -8992,7 +8997,7 @@ async function tgSiteLogin() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.bot_id) return j.error === 'not_configured' ? 'Вход через Telegram ещё не настроен.' : 'Не удалось связаться с Telegram.';
     const back = location.href.split('#')[0].split('?')[0];
-    location.href = 'https://oauth.telegram.org/auth?bot_id=' + encodeURIComponent(j.bot_id) + '&origin=' + encodeURIComponent(location.origin) + '&request_access=write&return_to=' + encodeURIComponent(back);
+    leaveTo('https://oauth.telegram.org/auth?bot_id=' + encodeURIComponent(j.bot_id) + '&origin=' + encodeURIComponent(location.origin) + '&request_access=write&return_to=' + encodeURIComponent(back));
     return '';
   } catch (e) { return NO_SERVER; }
 }
@@ -9013,13 +9018,13 @@ function vkidInit(V, ver, st) { V.Config.init({ app: VKID_APP, redirectUrl: loca
 // step 1: off to VK in this same tab (popups get lost on phones)
 async function vkSiteLogin() {
   if (!cloudInit()) return noServer();
-  let V;
-  try { V = await vkidLoad(); } catch (e) { vkidErr('sdk load'); return 'Не удалось загрузить вход ВКонтакте. Проверь интернет и попробуй ещё раз.'; }
   try {
     const ver = rndStr(64), st = rndStr(32);
+    const dg = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ver)));
+    const ch = btoa(String.fromCharCode.apply(null, dg)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     store.set('nf-vkid', { ver, st, t: Date.now() });
-    vkidInit(V, ver, st);
-    await V.Auth.login();
+    // a plain redirect: no VK ID script in the page (on iPhone every megabyte counts before Safari opens the next page)
+    leaveTo('https://id.vk.com/authorize?' + new URLSearchParams({ response_type: 'code', client_id: String(VKID_APP), app_id: String(VKID_APP), redirect_uri: location.origin + '/', state: st, code_challenge: ch, code_challenge_method: 's256' }).toString());
     return '';
   } catch (e) { vkidErr(String((e && (e.message || e.error)) || e)); return 'Не удалось открыть вход ВКонтакте. Попробуй ещё раз.'; }
 }
@@ -9037,9 +9042,13 @@ async function vkidFinish(a) {
   if (!cloudInit()) return noServer();
   let token = '';
   try {
-    const V = await vkidLoad(); vkidInit(V, saved.ver, saved.st);
-    const t = await V.Auth.exchangeCode(a.code, a.device_id, saved.ver);
-    token = t && t.access_token;
+    // straight to VK ID (no script in the page); if that fails, the same through the VK ID script
+    try {
+      const r = await fetch('https://id.vk.com/oauth2/auth?' + new URLSearchParams({ grant_type: 'authorization_code', redirect_uri: location.origin + '/', client_id: String(VKID_APP), code_verifier: saved.ver, state: saved.st, device_id: a.device_id }).toString(), { method: 'POST', body: new URLSearchParams({ code: a.code }) });
+      const j = await r.json(); token = (j && j.access_token) || '';
+      if (!token) vkidErr('direct ' + r.status + ' ' + ((j && (j.error_description || j.error)) || ''));
+    } catch (e) { vkidErr('direct ' + String((e && e.message) || e)); }
+    if (!token) { const V = await vkidLoad(); vkidInit(V, saved.ver, saved.st); const t = await V.Auth.exchangeCode(a.code, a.device_id, saved.ver); token = t && t.access_token; }
   } catch (e) { vkidErr('exchange ' + String((e && (e.message || e.error_description || e.error)) || e)); return 'ВКонтакте не подтвердил вход. Попробуй ещё раз.'; }
   if (!token) return 'ВКонтакте не подтвердил вход. Попробуй ещё раз.';
   if (linkIntent('vk')) return await linkFinish({ vkid_token: token }, 'ВКонтакте');
