@@ -608,9 +608,9 @@ window.nfHardReload = function (tag) {
   Promise.all(jobs).then(go, go); setTimeout(go, 3000);
 };
 setTimeout(function () {
-  var l = document.getElementById('loading'); if (!l || l.hidden) return;
+  var l = document.getElementById('loading'); if (!l || l.hidden || window.__nfMsg) return;
   var st = ''; try { st = localStorage.getItem('nf-crumb') || ''; } catch (e) { /* storage unavailable */ }
-  try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER || 'pre', platform: 'stuck', browser: navigator.userAgent.slice(0, 200), msg: ('stuck 30s: «' + l.textContent + '» three=' + !!window.THREE + ' sb=' + !!window.supabase + ' ' + st).slice(0, 300), place: 'boot' }]) }).catch(function () {}); } catch (e) { /* offline */ }
+  try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER || 'pre', platform: 'stuck', browser: navigator.userAgent.slice(0, 200), msg: ('stuck 30s: «' + l.textContent + '» three=' + !!window.THREE + ' sb=' + !!window.supabase + ' err=' + ((window.__errs || []).map(function (e) { return e.m + ' @' + e.p; }).join(' | ').slice(0, 160) || '-') + ' ' + st).slice(0, 300), place: 'boot' }]) }).catch(function () {}); } catch (e) { /* offline */ }
   l.innerHTML = 'Загрузка затянулась.<br><button type="button" style="margin-top:14px;padding:12px 22px;font:700 15px sans-serif;border-radius:8px;border:0;background:#ffc43d;color:#111" onclick="nfHardReload()">Перезапустить игру</button>';
 }, 30000);
 </script>
@@ -737,7 +737,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v68'; window.__errs = [];
+window.APP_VER = 'v69'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -781,7 +781,18 @@ if (isTouch) document.documentElement.classList.add('tch');   // not 'touch': th
 
 // ---------------- renderer / scene ----------------
 THREE.ColorManagement.legacyMode = false;
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+// Safari may refuse WebGL to a page after a run of crashes: try once more with plain settings, then say so plainly
+const renderer = (() => {
+  try { return new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); } catch (e1) {
+    try { return new THREE.WebGLRenderer({ antialias: false }); } catch (e2) {
+      const msg = String((e2 && e2.message) || e2).slice(0, 160);
+      try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER, platform: 'stuck', browser: navigator.userAgent.slice(0, 200), msg: 'webgl refused: ' + msg, place: 'boot' }]) }).catch(() => {}); } catch (e) { /* offline */ }
+      const l = document.getElementById('loading'); window.__nfMsg = true;
+      if (l) l.innerHTML = 'Браузер не дал игре видеокарту (так бывает после нескольких сбоев подряд).<br>Закрой игру полностью (смахни её), подожди полминуты и открой снова. Не помогло — перезагрузи телефон.<br><button type="button" style="margin-top:14px;padding:12px 22px;font:700 15px sans-serif;border-radius:8px;border:0;background:#ffc43d;color:#111" onclick="nfHardReload()">Попробовать ещё раз</button>';
+      throw e2;
+    }
+  }
+})();
 // graphics quality: «auto» adapts to the device (and climbs to HD when there is headroom); «hd» keeps the full screen resolution,
 // hardware anti-aliasing, sharper shadows and the detailed models on phones too
 // a tab the browser killed (iOS: «на странице повторно возникла проблема» — out of memory) leaves nf-run behind: the next start goes lighter
