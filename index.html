@@ -737,7 +737,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v71'; window.__errs = [];
+window.APP_VER = 'v72'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -801,6 +801,7 @@ const crumbStage = (st) => { try { const o = JSON.parse(localStorage.getItem('nf
 function crashReport(msg) {   // straight to the error table, right now (the page that sends it may itself die a few seconds later)
   try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER, platform: 'boot', browser: navigator.userAgent.slice(0, 200), msg: String(msg).slice(0, 300), place: 'crash' }]) }).catch(() => {}); } catch (e) { /* no fetch */ }
 }
+try { localStorage.setItem('nf-crumb-prev', localStorage.getItem('nf-crumb') || ''); } catch (e) { /* storage unavailable */ }
 const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') || 0; if (localStorage.getItem('nf-run') === '1') { CRASH_CRUMB = localStorage.getItem('nf-crumb'); n++; crashReport('crash x' + n + ': ' + (CRASH_CRUMB || 'no note')); localStorage.setItem('nf-crash', String(n)); } localStorage.setItem('nf-run', '1'); } catch (e) { /* storage unavailable */ } crumbStage('boot'); return n; })();
 { const mark = (on) => { try { if (on) localStorage.setItem('nf-run', '1'); else localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } };
   addEventListener('pagehide', () => mark(false)); addEventListener('pageshow', () => mark(true)); document.addEventListener('visibilitychange', () => mark(!document.hidden));
@@ -2157,6 +2158,152 @@ function drawCityMap(C) {
   C.mm = cv;
 }
 
+// ---------- the facade kit of the world cities: painted facades instead of plain boxes ----------
+// A facade picture (512 px) holds 4 bays x 4 floors; its night twin (emissive) has the lit windows and a faint glow of the
+// stone, so a house reads at night. The pictures are made when a city is built and dropped with it (phones keep little memory).
+// fBox fits a whole number of bays on every side, so a window is never cut at a corner.
+const FK_PX = 512, FK_C = 128;
+function fkCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function fkTex(c, emi) { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; }
+function fkNoise(g, w, h, n, a) { for (let i = 0; i < n; i++) { g.fillStyle = Math.random() < 0.5 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * 1.4})`; const s = 1 + Math.random() * 2; g.fillRect(Math.random() * w, Math.random() * h, s, s); } }
+// a lit room behind a window: a warm gradient with curtains at the sides (or a cold TV glow)
+function fkLit(g, x, y, w, h, cold) {
+  const gr = g.createLinearGradient(x, y, x, y + h), c = cold ? ['#b8d0ff', '#6f8fd8'] : pick([['#ffd79a', '#e8963e'], ['#ffe6bc', '#f0a858'], ['#ffc884', '#c87030']]);
+  gr.addColorStop(0, c[0]); gr.addColorStop(1, c[1]); g.fillStyle = gr; g.fillRect(x, y, w, h);
+  if (!cold && Math.random() < 0.7) { g.fillStyle = 'rgba(120,40,20,.55)'; g.fillRect(x, y, w * 0.22, h); g.fillRect(x + w * 0.78, y, w * 0.22, h); }
+  if (Math.random() < 0.3) { g.fillStyle = 'rgba(30,15,10,.6)'; g.fillRect(x + w * (0.3 + Math.random() * 0.3), y + h * 0.45, w * 0.18, h * 0.55); }   // someone at the window
+}
+// style: the drawing of one cell; lit share; returns { map, emi }
+function fkFacade(style) {
+  const M = fkCanvas(FK_PX, FK_PX), E = fkCanvas(FK_PX, FK_PX), g = M.getContext('2d'), e = E.getContext('2d');
+  style.base(g, e);
+  for (let fy = 0; fy < 4; fy++) for (let bx = 0; bx < 4; bx++) style.cell(g, e, bx * FK_C, fy * FK_C, Math.random() < style.lit, fy);
+  return { map: fkTex(M), emi: fkTex(E) };
+}
+const FK_STYLE = {
+  // Paris: limestone with fine joints, tall French windows, a carved lintel, a wrought-iron guard on every window
+  paris: { lit: 0.42,
+    base(g, e) { g.fillStyle = '#d6c9ab'; g.fillRect(0, 0, FK_PX, FK_PX); fkNoise(g, FK_PX, FK_PX, 9000, 0.05); g.fillStyle = 'rgba(90,70,40,.18)'; for (let y = 0; y < FK_PX; y += 32) g.fillRect(0, y, FK_PX, 2); for (let y = 0; y < FK_PX; y += 32) for (let x = (y / 32) % 2 ? 0 : 48; x < FK_PX; x += 96) g.fillRect(x, y, 2, 32);
+      g.fillStyle = 'rgba(255,250,235,.5)'; for (let y = 0; y < FK_PX; y += FK_C) g.fillRect(0, y + FK_C - 8, FK_PX, 4); g.fillStyle = 'rgba(70,55,35,.35)'; for (let y = 0; y < FK_PX; y += FK_C) g.fillRect(0, y + FK_C - 4, FK_PX, 3);
+      e.fillStyle = 'rgb(30,25,19)'; e.fillRect(0, 0, FK_PX, FK_PX); },
+    cell(g, e, x, y, lit) { const wx = x + 38, wy = y + 22, ww = 52, wh = 88;
+      g.fillStyle = '#efe4c8'; g.fillRect(wx - 6, wy - 12, ww + 12, 10); g.fillStyle = 'rgba(80,60,30,.35)'; g.fillRect(wx - 6, wy - 3, ww + 12, 2);   // lintel
+      g.fillStyle = '#e6dbc0'; g.fillRect(wx - 4, wy - 2, ww + 8, wh + 6);
+      const gr = g.createLinearGradient(wx, wy, wx + ww, wy + wh); gr.addColorStop(0, '#46566a'); gr.addColorStop(1, '#1c242e'); g.fillStyle = lit ? '#c8a878' : gr; g.fillRect(wx, wy, ww, wh);
+      g.fillStyle = '#e8dcc0'; g.fillRect(wx + ww / 2 - 2, wy, 4, wh); for (const k of [0.33, 0.66]) g.fillRect(wx, wy + wh * k - 1.5, ww, 3);
+      e.fillStyle = '#050608'; e.fillRect(wx, wy, ww, wh); if (lit) fkLit(e, wx, wy, ww, wh, Math.random() < 0.08); e.fillStyle = 'rgb(30,25,19)'; e.fillRect(wx + ww / 2 - 2, wy, 4, wh); for (const k of [0.33, 0.66]) e.fillRect(wx, wy + wh * k - 1.5, ww, 3);
+      for (const q of [g, e]) { q.fillStyle = q === g ? '#15161a' : '#000'; q.fillRect(wx - 6, wy + wh - 22, ww + 12, 3); q.fillRect(wx - 6, wy + wh - 2, ww + 12, 3); for (let k = 0; k <= 10; k++) q.fillRect(wx - 6 + k * (ww + 10) / 10, wy + wh - 22, 2, 22); q.beginPath(); for (let k = 0; k < 5; k++) { q.moveTo(wx + k * ww / 4 + 6, wy + wh - 12); q.arc(wx + k * ww / 4, wy + wh - 12, 6, 0, Math.PI * 2); } q.strokeStyle = q.fillStyle; q.lineWidth = 1.5; q.stroke(); } } },
+  // London: brick terrace, white stucco surrounds, sash windows with glazing bars, a stone sill
+  london: { lit: 0.38,
+    base(g, e) { g.fillStyle = '#7a3e2c'; g.fillRect(0, 0, FK_PX, FK_PX); for (let y = 0; y < FK_PX; y += 8) for (let x = (y / 8) % 2 ? -12 : 0; x < FK_PX; x += 24) { const v = 0.75 + Math.random() * 0.4; g.fillStyle = `rgb(${Math.round(128 * v)},${Math.round(62 * v)},${Math.round(44 * v)})`; g.fillRect(x + 1, y + 1, 22, 6); }
+      fkNoise(g, FK_PX, FK_PX, 5000, 0.05); g.fillStyle = '#e8e2d4'; for (let y = 0; y < FK_PX; y += FK_C) g.fillRect(0, y + FK_C - 6, FK_PX, 6);
+      e.fillStyle = 'rgb(24,13,10)'; e.fillRect(0, 0, FK_PX, FK_PX); e.fillStyle = 'rgb(40,36,30)'; for (let y = 0; y < FK_PX; y += FK_C) e.fillRect(0, y + FK_C - 6, FK_PX, 6); },
+    cell(g, e, x, y, lit) { const wx = x + 40, wy = y + 20, ww = 48, wh = 86;
+      g.fillStyle = '#f0ece2'; g.fillRect(wx - 9, wy - 9, ww + 18, wh + 16); e.fillStyle = 'rgb(44,40,34)'; e.fillRect(wx - 9, wy - 9, ww + 18, wh + 16);
+      g.fillStyle = lit ? '#b89868' : '#232a34'; g.fillRect(wx, wy, ww, wh); e.fillStyle = '#050608'; e.fillRect(wx, wy, ww, wh); if (lit) fkLit(e, wx, wy, ww, wh, Math.random() < 0.12);
+      for (const [q, c] of [[g, '#f4f1ea'], [e, 'rgb(46,42,36)']]) { q.fillStyle = c; q.fillRect(wx, wy + wh / 2 - 2, ww, 5); q.fillRect(wx + ww / 3 - 1, wy, 3, wh); q.fillRect(wx + 2 * ww / 3 - 1, wy, 3, wh); q.fillRect(wx, wy + wh / 4 - 1, ww, 2); q.fillRect(wx, wy + 3 * wh / 4 - 1, ww, 2); q.fillRect(wx - 12, wy + wh + 4, ww + 24, 6); } } },
+  // New York: darker brick, two-over-two windows with brick lintels, a window air conditioner here and there
+  ny: { lit: 0.5,
+    base(g, e) { g.fillStyle = '#5e3328'; g.fillRect(0, 0, FK_PX, FK_PX); for (let y = 0; y < FK_PX; y += 8) for (let x = (y / 8) % 2 ? -12 : 0; x < FK_PX; x += 24) { const v = 0.7 + Math.random() * 0.45; g.fillStyle = `rgb(${Math.round(104 * v)},${Math.round(54 * v)},${Math.round(42 * v)})`; g.fillRect(x + 1, y + 1, 22, 6); }
+      fkNoise(g, FK_PX, FK_PX, 6000, 0.06); e.fillStyle = 'rgb(18,10,8)'; e.fillRect(0, 0, FK_PX, FK_PX); },
+    cell(g, e, x, y, lit) { const wx = x + 36, wy = y + 26, ww = 56, wh = 78;
+      g.fillStyle = '#8a7a6a'; g.fillRect(wx - 6, wy - 10, ww + 12, 9); g.fillRect(wx - 4, wy + wh, ww + 8, 6);
+      g.fillStyle = lit ? '#a89070' : '#1e242c'; g.fillRect(wx, wy, ww, wh); e.fillStyle = '#040506'; e.fillRect(wx, wy, ww, wh); if (lit) fkLit(e, wx, wy, ww, wh, Math.random() < 0.3);
+      for (const [q, c] of [[g, '#2a2420'], [e, 'rgb(14,10,8)']]) { q.fillStyle = c; q.fillRect(wx, wy + wh / 2 - 2, ww, 4); q.fillRect(wx + ww / 2 - 1.5, wy, 3, wh); }
+      if (Math.random() < 0.25) { g.fillStyle = '#b8b8b0'; g.fillRect(wx + 8, wy + wh - 22, 30, 20); g.fillStyle = '#6a6a66'; for (let k = 0; k < 6; k++) g.fillRect(wx + 10 + k * 5, wy + wh - 18, 2, 14); e.fillStyle = '#0c0c0c'; e.fillRect(wx + 8, wy + wh - 22, 30, 20); } } },
+};
+// shopfronts: 4 shops in a 512 x 256 strip (one shop = 6 m, the strip = 4.4 m high)
+const FK_SHOPS = {
+  paris: [['CAFÉ', '#1f3a2e', '#e8c878'], ['BOULANGERIE', '#3a2418', '#f0d8a0'], ['TABAC', '#2a1a3a', '#ff8a5a'], ['FLEURS', '#1a2e3a', '#a8e0b8']],
+  london: [['THE CROWN', '#123020', '#d8b858'], ['BOOKS', '#2a1e3a', '#e8dcc0'], ['', '#3a1414', '#e8dcc0'], ['NEWS', '#1a2a44', '#f0f0f0']],
+  ny: [['DELI 24H', '#141414', '#ff3d6a'], ['PIZZA', '#1a1010', '#ffd23a'], ['LAUNDRY', '#101820', '#3de8ff'], ['BODEGA', '#141a10', '#7cff6a']],
+};
+function fkShops(city) {
+  const M = fkCanvas(FK_PX, 256), E = fkCanvas(FK_PX, 256), g = M.getContext('2d'), e = E.getContext('2d');
+  g.fillStyle = city === 'london' ? '#e8e2d4' : city === 'ny' ? '#3a3632' : '#cdbf9e'; g.fillRect(0, 0, FK_PX, 256); e.fillStyle = 'rgb(20,18,15)'; e.fillRect(0, 0, FK_PX, 256);
+  FK_SHOPS[city].forEach(([name, frame, ink], i) => {
+    const x = i * 128;
+    g.fillStyle = frame; g.fillRect(x + 6, 40, 116, 216); e.fillStyle = '#000'; e.fillRect(x + 6, 40, 116, 216);
+    if (!name) {   // a house door: black, a fanlight above, black railings
+      g.fillStyle = '#121214'; g.fillRect(x + 44, 96, 40, 160); e.fillStyle = '#000'; e.fillRect(x + 44, 96, 40, 160);
+      g.fillStyle = '#c8a050'; g.beginPath(); g.arc(x + 64, 96, 20, Math.PI, 0); g.fill(); fkLit(e, x + 44, 76, 40, 20); g.fillStyle = '#e8e2d4'; g.fillRect(x + 6, 40, 116, 52);
+      for (let k = 0; k < 14; k++) { g.fillStyle = '#101012'; g.fillRect(x + 8 + k * 8, 190, 2, 66); } g.fillRect(x + 6, 190, 116, 3); return;
+    }
+    // the sign board
+    g.fillStyle = frame; g.fillRect(x + 6, 40, 116, 40); g.font = `900 ${name.length > 8 ? 15 : 22}px Arial, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = ink; g.fillText(name, x + 64, 61, 108); e.fillStyle = ink; e.shadowColor = ink; e.shadowBlur = city === 'ny' ? 10 : 4; e.font = g.font; e.textAlign = 'center'; e.textBaseline = 'middle'; e.fillText(name, x + 64, 61, 108); e.shadowBlur = 0;
+    // the shop window, lit from inside, with a door at one side
+    const gr = g.createLinearGradient(0, 90, 0, 250); gr.addColorStop(0, '#d8b880'); gr.addColorStop(1, '#8a6a40'); g.fillStyle = gr; g.fillRect(x + 14, 90, 70, 150);
+    fkLit(e, x + 14, 90, 70, 150); e.fillStyle = 'rgba(0,0,0,.35)'; for (let k = 0; k < 4; k++) e.fillRect(x + 20 + k * 16, 170 + (k % 2) * 20, 10, 70 - (k % 2) * 20);   // shelves, tables
+    g.fillStyle = '#0e0f12'; g.fillRect(x + 90, 100, 26, 156); fkLit(e, x + 94, 106, 18, 70); e.fillStyle = '#000'; e.fillRect(x + 94, 180, 18, 76);
+    g.fillStyle = frame; g.fillRect(x + 14, 160, 70, 4); e.fillStyle = '#000'; e.fillRect(x + 14, 160, 70, 4);
+  });
+  return { map: fkTex(M), emi: fkTex(E) };
+}
+// roofs: Paris zinc mansard with dormers (4 per strip, one per 4 m), London and New York plain slate / tar
+function fkRoof(kind) {
+  const M = fkCanvas(FK_PX, 256), E = fkCanvas(FK_PX, 256), g = M.getContext('2d'), e = E.getContext('2d');
+  g.fillStyle = kind === 'mans' ? '#5c6672' : '#3a3e46'; g.fillRect(0, 0, FK_PX, 256);
+  for (let y = 0; y < 256; y += 10) for (let x = (y / 10) % 2 ? -8 : 0; x < FK_PX; x += 16) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '0,0,0'},${0.04 + Math.random() * 0.08})`; g.fillRect(x + 1, y + 1, 14, 8); }
+  e.fillStyle = 'rgb(10,11,13)'; e.fillRect(0, 0, FK_PX, 256);
+  if (kind === 'mans') for (let i = 0; i < 4; i++) {
+    const x = i * 128 + 40, y = 70, w = 48, h = 110, lit = Math.random() < 0.4;
+    g.fillStyle = '#e8dcc0'; g.fillRect(x - 8, y - 14, w + 16, h + 18); g.beginPath(); g.moveTo(x - 12, y - 14); g.lineTo(x + w / 2, y - 40); g.lineTo(x + w + 12, y - 14); g.fill();
+    g.fillStyle = lit ? '#c8a878' : '#26303c'; g.fillRect(x, y, w, h); e.fillStyle = '#050608'; e.fillRect(x, y, w, h); if (lit) fkLit(e, x, y, w, h);
+    for (const [q, c] of [[g, '#e8dcc0'], [e, 'rgb(28,24,18)']]) { q.fillStyle = c; q.fillRect(x + w / 2 - 2, y, 4, h); q.fillRect(x, y + h / 2 - 2, w, 4); }
+  }
+  return { map: fkTex(M), emi: fkTex(E) };
+}
+// the city's facade materials (made when the city is built, dropped with it)
+function fkMats(C) {
+  const S = (t, k) => new THREE.MeshStandardMaterial({ vertexColors: true, map: t.map, emissiveMap: t.emi, emissive: new THREE.Color(k || 1, k || 1, k || 1), roughness: 0.88, envMapIntensity: 0.35 });
+  const id = C.id, F = fkFacade(FK_STYLE[id]), Sh = fkShops(id), R = fkRoof(id === 'paris' ? 'mans' : 'slate');
+  C.mats = { fac: [S(F), true], shop: [S(Sh, 1.15), false], roofT: [S(R), false] };
+}
+function fkDispose(C) { if (!C.mats) return; for (const k in C.mats) { const m = C.mats[k][0]; if (m.map) m.map.dispose(); if (m.emissiveMap) m.emissiveMap.dispose(); m.dispose(); } C.mats = null; }
+// a textured box: whole bays on every side; y0 sets where the floors start (cell rows line up with the floors)
+function fBox(b, x0, y0, z0, x1, y1, z1, bay, fh, colr, rows) {
+  const h = y1 - y0, vs = 1 / ((rows || 4) * fh), c = colr || WHITE;
+  const side = (L) => Math.max(1, Math.round(L / bay)) / 4 / L;
+  face(b, [x0, y0, z1], [1, 0, 0], x1 - x0, [0, 1, 0], h, [0, 0, 1], side(x1 - x0), vs, 0, 0, c);
+  face(b, [x1, y0, z0], [-1, 0, 0], x1 - x0, [0, 1, 0], h, [0, 0, -1], side(x1 - x0), vs, 0, 0, c);
+  face(b, [x1, y0, z1], [0, 0, -1], z1 - z0, [0, 1, 0], h, [1, 0, 0], side(z1 - z0), vs, 0, 0, c);
+  face(b, [x0, y0, z0], [0, 0, 1], z1 - z0, [0, 1, 0], h, [-1, 0, 0], side(z1 - z0), vs, 0, 0, c);
+}
+// any four points as two triangles (a sloping roof side); uv: [u0,v0,u1,v1]
+function quadB(b, A, Bp, Cp, D, uv, colr) {
+  const c = colr || WHITE, ux = [Bp[0] - A[0], Bp[1] - A[1], Bp[2] - A[2]], vx = [D[0] - A[0], D[1] - A[1], D[2] - A[2]];
+  let nx = ux[1] * vx[2] - ux[2] * vx[1], ny = ux[2] * vx[0] - ux[0] * vx[2], nz = ux[0] * vx[1] - ux[1] * vx[0]; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+  const [u0, v0, u1, v1] = uv, P = [[A, u0, v0], [Bp, u1, v0], [Cp, u1, v1], [A, u0, v0], [Cp, u1, v1], [D, u0, v1]];
+  for (const [p, u, v] of P) { b.p.push(p[0], p[1], p[2]); b.n.push(nx, ny, nz); b.uv.push(u, v); b.c.push(c.r, c.g, c.b); }
+}
+// a hipped roof over a rectangle: four sloping sides up to an inset top (a mansard when steep), textured along each side
+function hipRoof(b, x0, z0, x1, z1, y, h, inset, per, colr, flatCol) {
+  const a = [x0, y, z0], bq = [x1, y, z0], c = [x1, y, z1], d = [x0, y, z1], t = y + h;
+  const A = [x0 + inset, t, z0 + inset], Bq = [x1 - inset, t, z0 + inset], Cq = [x1 - inset, t, z1 - inset], D = [x0 + inset, t, z1 - inset];
+  const U = (L) => Math.max(1, Math.round(L / per)) / 4;
+  quadB(b, d, c, Cq, D, [0, 0, U(x1 - x0), 1], colr);   // +z side
+  quadB(b, bq, a, A, Bq, [0, 0, U(x1 - x0), 1], colr);  // -z side
+  quadB(b, c, bq, Bq, Cq, [0, 0, U(z1 - z0), 1], colr); // +x side
+  quadB(b, a, d, D, A, [0, 0, U(z1 - z0), 1], colr);    // -x side
+  if (x1 - inset > x0 + inset && z1 - inset > z0 + inset) boxB(B.roof, x0 + inset, t - 0.05, z0 + inset, x1 - inset, t, z1 - inset, { col: flatCol || col(0x2a2c30), sides: false });
+}
+// a street tree: a trunk and a crown of three overlapping balls
+function cTree(x, z, s, tint) {
+  const k = s || 1, c = tint || col(0x2c4e2c);
+  putB(B.wood, G.cyl6, x, 1.7 * k, z, 0.32 * k, 3.4 * k, 0.32 * k, 0, col(0x3a2a1c));
+  putB(B.leaf, G.sph, x, 4.6 * k, z, 2.2 * k, 1.9 * k, 2.2 * k, 0, c);
+  putB(B.leaf, G.sph, x + 1.1 * k, 5.4 * k, z + 0.5 * k, 1.6 * k, 1.5 * k, 1.6 * k, 0, c);
+  putB(B.leaf, G.sph, x - 0.9 * k, 5.6 * k, z - 0.6 * k, 1.5 * k, 1.4 * k, 1.5 * k, 0, c);
+}
+// zebra crossings on every side of a crossing
+function zebras(cx, cz, hw) {
+  for (const s of [-1, 1]) for (let k = -5; k <= 5; k++) {
+    boxB(B.mark, cx + k * 1.1 - 0.35, 0.03, cz + s * (hw + 1.2) - 1.6, cx + k * 1.1 + 0.35, 0.035, cz + s * (hw + 1.2) + 1.6, { sides: false, col: col(0xd8d8d8) });
+    boxB(B.mark, cx + s * (hw + 1.2) - 1.6, 0.03, cz + k * 1.1 - 0.35, cx + s * (hw + 1.2) + 1.6, 0.035, cz + k * 1.1 + 0.35, { sides: false, col: col(0xd8d8d8) });
+  }
+}
+
 // ---------- PARIS ----------
 const PARIS = mkCity('paris', {
   name: 'Париж', x0: 2400, x1: 3400, z0: 0, z1: 800,
@@ -2181,21 +2328,25 @@ function buildParis() {
       else putB(lit ? B.bankL : B.trim, G.box, face === 'e' ? x1 + 0.04 : x0 - 0.04, y, z0 + u * L, 0.06, 1.7, 1.1, 0, cc);
     }
   };
-  // a Haussmann house: cream stone, iron balconies on the 2nd and 5th floors, a zinc mansard with dormers, a café below
+  // a Haussmann house: a shop floor, five floors of painted limestone with iron balconies on the 2nd and 5th,
+  // a cornice and a zinc mansard with dormers; a café awning on some street sides
   const house = (x0, z0, x1, z1, faces) => {
-    const fl = 6, fh = 3.2, h = 1.2 + fl * fh;
-    boxB(B.trim, x0, 0, z0, x1, h, z1, { col: cream }); solid(x0, z0, x1, z1, h + 6);
-    boxB(B.roof, x0 + 0.8, h, z0 + 0.8, x1 - 0.8, h + 4.2, z1 - 0.8, { col: zinc });
+    const gf = 4.4, fh = 3.2, h = gf + 5 * fh, tint = col(pick([0xffffff, 0xf6efe0, 0xfff4e4, 0xe9e2d2, 0xf2e8d6]));
+    fBox(B.shop, x0, 0, z0, x1, gf, z1, 6, gf, tint, 1);
+    fBox(B.fac, x0, gf, z0, x1, h, z1, 3.2, fh, tint);
+    boxB(B.trim, x0 - 0.15, gf - 0.2, z0 - 0.15, x1 + 0.15, gf + 0.25, z1 + 0.15, { col: cream });   // the band over the shops
+    boxB(B.trim, x0 - 0.45, h - 0.1, z0 - 0.45, x1 + 0.45, h + 0.55, z1 + 0.45, { col: cream });     // the cornice
+    hipRoof(B.roofT, x0 - 0.2, z0 - 0.2, x1 + 0.2, z1 + 0.2, h + 0.55, 4.4, 1.5, 4, WHITE, col(0x3a4048));
+    solid(x0, z0, x1, z1, h + 6);
+    for (const [cx, cz] of [[x0 + 2.5, (z0 + z1) / 2], [x1 - 2.5, (z0 + z1) / 2]]) boxB(B.trim, cx - 0.6, h + 3, cz - 1.6, cx + 0.6, h + 6.2, cz + 1.6, { col: col(0xb8a888) });   // chimney stacks
     for (const f of faces) {
-      winGrid(x0, z0, x1, z1, fl, fh, f, 0.45);
-      for (const fy of [2, 5]) { const y = 1.2 + fy * fh; if (f === 'n' || f === 's') boxB(B.metal, x0, y, f === 'n' ? z1 : z0 - 0.7, x1, y + 0.9, f === 'n' ? z1 + 0.7 : z0, { col: dark }); else boxB(B.metal, f === 'e' ? x1 : x0 - 0.7, y, z0, f === 'e' ? x1 + 0.7 : x0, y + 0.9, z1, { col: dark }); }
-      // dormers on the mansard
+      for (const fy of [1, 4]) { const y = gf + fy * fh + 0.05; if (f === 'n' || f === 's') { const z = f === 'n' ? z1 : z0 - 0.75; boxB(B.metal, x0, y, z, x1, y + 0.12, z + 0.75, { col: dark }); boxB(B.metal, x0, y + 0.95, f === 'n' ? z1 + 0.68 : z0 - 0.75, x1, y + 1.05, f === 'n' ? z1 + 0.75 : z0 - 0.68, { col: dark }); }
+        else { const x = f === 'e' ? x1 : x0 - 0.75; boxB(B.metal, x, y, z0, x + 0.75, y + 0.12, z1, { col: dark }); boxB(B.metal, f === 'e' ? x1 + 0.68 : x0 - 0.75, y + 0.95, z0, f === 'e' ? x1 + 0.75 : x0 - 0.68, y + 1.05, z1, { col: dark }); } }
       const along = f === 'n' || f === 's', L = along ? x1 - x0 : z1 - z0;
-      for (let k = 1; k < L / 5; k++) { const u = (along ? x0 : z0) + k * 5; if (along) putB(B.roof, G.box, u, h + 2.2, f === 'n' ? z1 - 1.2 : z0 + 1.2, 1.4, 1.8, 1, 0, zinc); else putB(B.roof, G.box, f === 'e' ? x1 - 1.2 : x0 + 1.2, h + 2.2, u, 1, 1.8, 1.4, 0, zinc); }
-      if (Math.random() < 0.55) {   // a café: awning, warm window, two tables
+      if (Math.random() < 0.5) {   // a café: an awning and two tables under it
         const aw = col(pick([0xb8323a, 0x2f6a4a, 0x2a4f8a])), w = Math.min(10, L - 2), m = (along ? (x0 + x1) : (z0 + z1)) / 2;
-        if (along) { const z = f === 'n' ? z1 : z0; boxB(B.awning, m - w / 2, 2.8, f === 'n' ? z : z - 2.2, m + w / 2, 3.1, f === 'n' ? z + 2.2 : z, { col: aw }); putB(B.bankL, G.box, m, 1.5, f === 'n' ? z + 0.05 : z - 0.05, w - 1, 2.2, 0.06, 0, HDR(0xffc890, 1.6)); }
-        else { const x = f === 'e' ? x1 : x0; boxB(B.awning, f === 'e' ? x : x - 2.2, 2.8, m - w / 2, f === 'e' ? x + 2.2 : x, 3.1, m + w / 2, { col: aw }); putB(B.bankL, G.box, f === 'e' ? x + 0.05 : x - 0.05, 1.5, m, 0.06, 2.2, w - 1, 0, HDR(0xffc890, 1.6)); }
+        if (along) { const z = f === 'n' ? z1 : z0, s2 = f === 'n' ? 1 : -1; boxB(B.awning, m - w / 2, 3.2, Math.min(z, z + s2 * 2.4), m + w / 2, 3.45, Math.max(z, z + s2 * 2.4), { col: aw }); for (const dx of [-2.5, 2.5]) { putB(B.metal, G.cyl6, m + dx, 0.55, z + s2 * 1.6, 0.9, 0.06, 0.9, 0, dark); putB(B.metal, G.cyl6, m + dx, 0.28, z + s2 * 1.6, 0.08, 0.56, 0.08, 0, dark); } }
+        else { const x = f === 'e' ? x1 : x0, s2 = f === 'e' ? 1 : -1; boxB(B.awning, Math.min(x, x + s2 * 2.4), 3.2, m - w / 2, Math.max(x, x + s2 * 2.4), 3.45, m + w / 2, { col: aw }); }
       }
     }
   };
@@ -2207,12 +2358,13 @@ function buildParis() {
     else { asph(x - 7, ST[0] - 7, x + 7, R.qN + 7); asph(x - 7, R.qS - 7, x + 7, ST[ST.length - 1] + 7); }
   }
   for (const z of ST) asph(AV[0] - 7, z - 7, AV[AV.length - 1] + 7, z + 7);
+  for (const x of AV) for (const z of ST) zebras(x, z, 7);   // zebra crossings at every crossing
   boxB(B.water, C.x0, -1.6, R.z0, 3200, -1.5, R.z1, { sides: false, col: col(0x0e2a3e) });
   for (const [z0, z1] of [[R.z0 - 8, R.z0], [R.z1, R.z1 + 8]]) {   // stone quays with a parapet; you drive along them, not into the Seine
     boxB(B.stone, C.x0, -1.6, z0, 3200, 0.02, z1, { col: stone });
     const pz = z0 === R.z0 - 8 ? R.z0 - 0.6 : R.z1, x0b = C.x0;
     let xs = x0b; for (const bx of R.bridges.concat([3200])) { const xe = bx === 3200 ? 3200 : bx - 7; if (xe > xs) { boxB(B.stone, xs, 0, pz, xe, 1.1, pz + 0.6, { col: stone }); solid(xs, pz, xe, pz + 0.6, 0.9); } xs = bx + 7; }
-    for (let x = C.x0 + 10; x < 3200; x += 24) if (!R.bridges.some((b) => Math.abs(b - x) < 10)) { lamp(x, z0 === R.z0 - 8 ? R.z0 - 3 : R.z1 + 3); putB(B.leaf, G.sph, x + 12, 5.5, z0 === R.z0 - 8 ? R.z0 - 4 : R.z1 + 4, 2.6, 3.2, 2.6, 0, col(0x2a5a32)); putB(B.wood, G.cyl6, x + 12, 1.6, z0 === R.z0 - 8 ? R.z0 - 4 : R.z1 + 4, 0.35, 3.2, 0.35, 0, col(0x4a3426)); }
+    for (let x = C.x0 + 10; x < 3200; x += 24) if (!R.bridges.some((b) => Math.abs(b - x) < 10)) { lamp(x, z0 === R.z0 - 8 ? R.z0 - 3 : R.z1 + 3); cTree(x + 12, z0 === R.z0 - 8 ? R.z0 - 4 : R.z1 + 4, 1.15); }
   }
   { let xs = C.x0; for (const bx of R.bridges.concat([3206])) { const xe = bx === 3206 ? 3206 : bx - 9; if (xe > xs) solid(xs, R.z0, xe, R.z1, 0.9); xs = bx + 9; } }   // the water itself: only the bridges cross it (boats are scripted and do not collide)
   for (const bx of R.bridges) {   // stone bridges with arches and lamps
@@ -2327,16 +2479,17 @@ function cityUse(C) {
   for (const k in CITIES) if (CITIES[k] !== C && CITIES[k].group) cityUnload(CITIES[k]);
   if (!C || C.group) return;
   const saved = {}; for (const k in B) { saved[k] = B[k]; B[k] = batch(); }
+  fkMats(C); for (const k in C.mats) { saved[k] = undefined; B[k] = batch(); }   // the facade kit: its batches and materials live with the city
   const before = new Set(scene.children);
   C.cols.length = 0; C.lamps.length = 0; C.leaves = null; C.ferry = null; C.wheelG = null;
   try { ({ paris: buildParis, london: buildLondon, ny: buildNY })[C.id](); } finally {
     const M = cityMats();
     for (const k in B) {
       if (!B[k].p.length) continue;
-      const mm = M[k]; if (!mm) continue;
+      const mm = M[k] || C.mats[k]; if (!mm) continue;
       const o = meshB(B[k], mm[0], mm[1]); if (o) o.traverse((q) => { if (q.isMesh) q.userData.own = true; });
     }
-    for (const k in saved) B[k] = saved[k];
+    for (const k in saved) { if (saved[k] === undefined) delete B[k]; else B[k] = saved[k]; }
   }
   const grp = new THREE.Group(); grp.name = 'city-' + C.id;
   for (const o of scene.children.slice()) if (!before.has(o)) grp.add(o);   // add() takes it out of the scene
@@ -2351,6 +2504,7 @@ function freeGeoms(root) {
 function cityUnload(C) {
   C.group.traverse((o) => { if (o.isMesh && o.userData.ownMat) { if (o.userData.ownMap && o.material.map) o.material.map.dispose(); o.material.dispose(); } });
   freeGeoms(C.group);
+  fkDispose(C);
   scene.remove(C.group); C.group = null; C.cols.length = 0; C.lamps.length = 0;
 }
 
@@ -2384,30 +2538,21 @@ function buildLondon() {
   const asph = (x0, z0, x1, z1) => boxB(B.asph, x0, 0.01, z0, x1, 0.022, z1, { topWorld: 1 / 10, sides: false });
   const lamp = (x, z) => { C.lamps.push([x, z]); putB(B.metal, G.cyl6, x, 2.2, z, 0.14, 4.4, 0.14, 0, dark); putB(B.metal, G.box, x, 4.6, z, 0.6, 0.7, 0.6, 0, dark); putB(B.neon, G.box, x, 4.55, z, 0.45, 0.5, 0.45, 0, HDR(0xfff0c8, 2.6)); };
   const booth = (x, z, ry) => { putB(B.trim, G.box, x, 1.3, z, 1, 2.6, 1, ry, col(0xc0161c)); putB(B.bankL, G.box, x, 1.5, z, 1.04, 1.4, 0.7, ry, HDR(0xfff0c0, 1.1)); putB(B.trim, G.box, x, 2.75, z, 1.1, 0.3, 1.1, ry, col(0xa01016)); };
-  // a terraced house: brick, white sash windows, a slate roof, chimney stacks with pots; some have a lit shop below
+  // a terraced house: a ground floor of shops, pubs or front doors; painted brick with white sash windows above,
+  // a white cornice, a slate roof and chimney stacks with pots
   const house = (x0, z0, x1, z1, face, tint) => {
-    const fl = 3 + (Math.random() < 0.4 ? 1 : 0), fh = 3.3, h = 1 + fl * fh, along = face === 'n' || face === 's', L = along ? x1 - x0 : z1 - z0;
-    boxB(B.brick, x0, 0, z0, x1, h, z1, { col: tint, us: 1 / 6, vs: 1 / 6 }); solid(x0, z0, x1, z1, h + 4);
-    boxB(B.roof, x0 + 0.3, h, z0 + 0.3, x1 - 0.3, h + 2.6, z1 - 0.3, { col: slate });
-    boxB(B.trim, x0, h - 0.4, z0, x1, h, z1, { col: white, top: false });   // a white cornice
-    const n = Math.max(2, Math.floor(L / 3.4)), fz = face === 'n' ? z1 : z0, fx = face === 'e' ? x1 : x0, sg = face === 'n' || face === 'e' ? 1 : -1;
-    for (let f = 1; f < fl; f++) for (let k = 0; k < n; k++) {
-      const u = (along ? x0 : z0) + (k + 0.5) * L / n, y = 1 + f * fh + 1.2, lit = Math.random() < 0.4, cc = lit ? HDR(pick([0xffd090, 0xffe0b0, 0xfff0d0]), 1 + Math.random() * 0.5) : col(0x1c2028);
-      if (along) { putB(B.trim, G.box, u, y, fz + sg * 0.03, 1.5, 2.1, 0.06, 0, white); putB(lit ? B.bankL : B.trim, G.box, u, y, fz + sg * 0.07, 1.2, 1.8, 0.04, 0, cc); }
-      else { putB(B.trim, G.box, fx + sg * 0.03, y, u, 0.06, 2.1, 1.5, 0, white); putB(lit ? B.bankL : B.trim, G.box, fx + sg * 0.07, y, u, 0.04, 1.8, 1.2, 0, cc); }
-    }
-    // the ground floor: a black door with a fanlight, or a shopfront
-    const m = along ? (x0 + x1) / 2 : (z0 + z1) / 2;
-    if (Math.random() < 0.45) {
-      const sc = col(pick([0x1f3a2a, 0x2a2440, 0x5a1a1a, 0x1a2a44, 0x3a2a1a])), w = Math.min(L - 1, 8);
-      if (along) { boxB(B.trim, m - w / 2, 0, face === 'n' ? fz : fz - 0.3, m + w / 2, 3.2, face === 'n' ? fz + 0.3 : fz, { col: sc }); putB(B.bankL, G.box, m, 1.4, fz + sg * 0.33, w - 1.2, 2, 0.05, 0, HDR(0xffcf90, 1.5)); }
-      else { boxB(B.trim, face === 'e' ? fx : fx - 0.3, 0, m - w / 2, face === 'e' ? fx + 0.3 : fx, 3.2, m + w / 2, { col: sc }); putB(B.bankL, G.box, fx + sg * 0.33, 1.4, m, 0.05, 2, w - 1.2, 0, HDR(0xffcf90, 1.5)); }
-    } else if (along) { putB(B.trim, G.box, m, 1.2, fz + sg * 0.05, 1.2, 2.4, 0.08, 0, dark); putB(B.bankL, G.box, m, 2.7, fz + sg * 0.05, 1.2, 0.4, 0.08, 0, HDR(0xffd8a0, 1.4)); }
-    else { putB(B.trim, G.box, fx + sg * 0.05, 1.2, m, 0.08, 2.4, 1.2, 0, dark); putB(B.bankL, G.box, fx + sg * 0.05, 2.7, m, 0.08, 0.4, 1.2, 0, HDR(0xffd8a0, 1.4)); }
+    const fl = 2 + (Math.random() < 0.45 ? 1 : 0), fh = 3.3, gf = 3.6, h = gf + fl * fh, tt = col(pick([0xffffff, 0xf0e4dc, 0xffece0, 0xe4d8d0]));
+    fBox(B.shop, x0, 0, z0, x1, gf, z1, 6, gf, WHITE, 1);
+    fBox(B.fac, x0, gf, z0, x1, h, z1, 3.4, fh, tt);
+    boxB(B.trim, x0 - 0.1, gf - 0.15, z0 - 0.1, x1 + 0.1, gf + 0.15, z1 + 0.1, { col: white });
+    boxB(B.trim, x0 - 0.35, h - 0.1, z0 - 0.35, x1 + 0.35, h + 0.5, z1 + 0.35, { col: white });   // a white cornice
+    const dep = Math.min(x1 - x0, z1 - z0); hipRoof(B.roofT, x0 - 0.2, z0 - 0.2, x1 + 0.2, z1 + 0.2, h + 0.5, 3.2, Math.min(dep / 2 - 0.4, 4), 6, WHITE, slate);
+    solid(x0, z0, x1, z1, h + 4);
     // chimney stacks with pots
+    const along = face === 'n' || face === 's', m = along ? (x0 + x1) / 2 : (z0 + z1) / 2;
     const cx = along ? m : (face === 'e' ? x0 + 2 : x1 - 2), cz = along ? (face === 'n' ? z0 + 2 : z1 - 2) : m;
-    boxB(B.brick, cx - 1.4, h, cz - 0.6, cx + 1.4, h + 4.2, cz + 0.6, { col: tint, us: 1 / 3, vs: 1 / 3 });
-    for (const d of [-0.8, 0, 0.8]) putB(B.trim, G.cyl6, cx + d, h + 4.6, cz, 0.36, 0.8, 0.36, 0, col(0xa0522d));
+    boxB(B.brick, cx - 1.4, h, cz - 0.6, cx + 1.4, h + 4.6, cz + 0.6, { col: tint, us: 1 / 3, vs: 1 / 3 });
+    for (const d of [-0.8, 0, 0.8]) putB(B.trim, G.cyl6, cx + d, h + 5, cz, 0.36, 0.8, 0.36, 0, col(0xa0522d));
   };
   // ground, streets
   boxB(B.walk, C.x0, -0.07, C.z0, C.x1, -0.05, C.z1, { topWorld: 1 / 6, sides: false, col: col(0x5c5a58) });
@@ -2416,6 +2561,7 @@ function buildLondon() {
     else { asph(x - 7, ST[0] - 7, x + 7, R.qN + 7); asph(x - 7, R.qS - 7, x + 7, ST[ST.length - 1] + 7); }
   }
   for (const z of ST) asph(AV[0] - 7, z - 7, AV[AV.length - 1] + 7, z + 7);
+  for (const x of AV) for (const z of ST) zebras(x, z, 7);
   // white zebra stripes and «LOOK RIGHT» style arrows are left out; a dashed centre line keeps the left-hand traffic readable
   for (const x of AV) for (let z = ST[0] + 10; z < ST[ST.length - 1]; z += 8) if (!(z > R.qN + 8 && z < R.qS - 8) || R.bridges.includes(x)) boxB(B.mark, x - 0.12, 0.03, z, x + 0.12, 0.035, z + 3.5, { sides: false, col: col(0xe8e4d0) });
   for (const z of ST) for (let x = AV[0] + 10; x < AV[AV.length - 1]; x += 8) boxB(B.mark, x, 0.03, z - 0.12, x + 3.5, 0.035, z + 0.12, { sides: false, col: col(0xe8e4d0) });
@@ -2425,7 +2571,7 @@ function buildLondon() {
     boxB(B.stone, C.x0, -1.6, z0, WALL, 0.02, z1, { col: col(0x8a8478) });
     const pz = z0 === R.z0 - 8 ? R.z0 - 0.7 : R.z1; let xs = C.x0;
     for (const bx of R.bridges.concat([WALL])) { const xe = bx === WALL ? WALL : bx - 7; if (xe > xs) { boxB(B.stone, xs, 0, pz, xe, 1.2, pz + 0.7, { col: col(0x9a9488) }); solid(xs, pz, xe, pz + 0.7, 0.9); } xs = bx + 7; }
-    for (let x = C.x0 + 14; x < WALL; x += 22) if (!R.bridges.some((b) => Math.abs(b - x) < 12)) { const lz = z0 === R.z0 - 8 ? R.z0 - 3 : R.z1 + 3; lamp(x, lz); if ((x / 22 | 0) % 2) { putB(B.leaf, G.sph, x + 11, 6, lz + (lz < R.z0 ? -1 : 1), 3, 3.6, 3, 0, col(0x2a4a2a)); putB(B.wood, G.cyl6, x + 11, 1.8, lz + (lz < R.z0 ? -1 : 1), 0.4, 3.6, 0.4, 0, col(0x5a4a3a)); } }
+    for (let x = C.x0 + 14; x < WALL; x += 22) if (!R.bridges.some((b) => Math.abs(b - x) < 12)) { const lz = z0 === R.z0 - 8 ? R.z0 - 3 : R.z1 + 3; lamp(x, lz); if ((x / 22 | 0) % 2) { cTree(x + 11, lz + (lz < R.z0 ? -1 : 1), 1.3); } }
   }
   { let xs = C.x0; for (const bx of R.bridges.concat([WALL + 6])) { const xe = bx === WALL + 6 ? WALL + 6 : bx - 9; if (xe > xs) solid(xs, R.z0, xe, R.z1, 0.9); xs = bx + 9; } }
   // two plain bridges: iron-grey girders and lamps
@@ -2528,7 +2674,7 @@ function buildLondon() {
     signC('ВОКЗАЛ', 14, 2.4, sx, 16, sz + 30.1, 0, '#ffe8b0', '#2a1210'); }
   // the park: lawns, plane trees, a hedge round it
   { const [a, b, c2, d] = C.parks[0]; boxB(B.grass, a, 0, b, c2, 0.1, d, { topWorld: 1 / 8, sides: false });
-    for (let k = 0; k < 26; k++) { const x = rand(a + 6, c2 - 6), z = rand(b + 6, d - 6); putB(B.leaf, G.sph, x, 6.5, z, 4, 4.6, 4, 0, col(0x2a4a2a)); putB(B.wood, G.cyl6, x, 2, z, 0.5, 4, 0.5, 0, col(0x5a4a3a)); solid(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 3); }
+    for (let k = 0; k < 26; k++) { const x = rand(a + 6, c2 - 6), z = rand(b + 6, d - 6); cTree(x, z, 1.5); solid(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 3); }
     for (const [x0, z0, x1, z1] of [[a, b, c2, b + 1.2], [a, d - 1.2, c2, d]]) boxB(B.leaf, x0, 0, z0, x1, 1.6, z1, { col: col(0x1f3a22) }); }
   signC('ПАБ «СТАРЫЙ ФОНАРЬ»', 9, 1.4, 3880 - 12, 4.2, 179.4, 0, '#ffd890', '#1a2a1a');
   // the wall to the rooms on the east edge
@@ -2563,29 +2709,25 @@ function buildNY() {
       putB(B.metal, G.cyl6, (x0 + x1) / 2, h * 1.18 + 6, (z0 + z1) / 2, 0.3, 12, 0.3, 0, steel); putB(B.neon, G.sph, (x0 + x1) / 2, h * 1.18 + 12.5, (z0 + z1) / 2, 0.5, 0.5, 0.5, 0, HDR(0xff3030, 6));
       boxB(B.trim, x0 - 0.2, 0, z0 - 0.2, x1 + 0.2, 4.5, z1 + 0.2, { col: col(0x1a1c22) });
     } else {
-      const t = col(pick([0x8a4a3a, 0x7a5a48, 0x9a6a50, 0x6a4038, 0xb08a6a])), fl = Math.floor((h - 4) / 3.4);
-      boxB(B.brick, x0, 0, z0, x1, h, z1, { col: t, us: 1 / 6, vs: 1 / 6 }); solid(x0, z0, x1, z1, h);
-      boxB(B.trim, x0 - 0.3, h, z0 - 0.3, x1 + 0.3, h + 0.6, z1 + 0.3, { col: col(0x5a5048) });
-      for (const f of ['n', 's', 'e', 'w']) {
-        const along = f === 'n' || f === 's', L = along ? w : d, n = Math.max(2, Math.floor(L / 3.2));
-        for (let k = 1; k < fl; k++) for (let q = 0; q < n; q++) {
-          if (Math.random() < 0.35) continue;
-          const u = (along ? x0 : z0) + (q + 0.5) * L / n, y = 4 + k * 3.4, lit = Math.random() < 0.5, cc = lit ? HDR(pick([0xffd090, 0xfff0d0, 0xa8d0ff]), 1 + Math.random() * 0.5) : col(0x1c2028);
-          if (along) putB(lit ? B.bankL : B.trim, G.box, u, y, f === 'n' ? z1 + 0.04 : z0 - 0.04, 1.2, 1.8, 0.06, 0, cc);
-          else putB(lit ? B.bankL : B.trim, G.box, f === 'e' ? x1 + 0.04 : x0 - 0.04, y, u, 0.06, 1.8, 1.2, 0, cc);
-        }
-      }
+      const t = col(pick([0xffffff, 0xf0d8c8, 0xe0c8b8, 0xfff0e0, 0xd8c0b0])), fl = Math.floor((h - 4.5) / 3.4);
+      fBox(B.shop, x0, 0, z0, x1, 4.5, z1, 6, 4.5, WHITE, 1);
+      fBox(B.fac, x0, 4.5, z0, x1, h, z1, 3.2, 3.4, t); solid(x0, z0, x1, z1, h);
+      boxB(B.trim, x0 - 0.2, 4.3, z0 - 0.2, x1 + 0.2, 4.7, z1 + 0.2, { col: col(0x2a2622) });
+      boxB(B.trim, x0 - 0.4, h, z0 - 0.4, x1 + 0.4, h + 0.9, z1 + 0.4, { col: col(0x6a5a4c) });   // the cornice
+      boxB(B.roof, x0, h, z0, x1, h + 0.3, z1, { col: col(0x2a2a2e), sides: false });
+      for (let k = 0; k < 3; k++) putB(B.metal, G.box, rand(x0 + 3, x1 - 3), h + 0.9, rand(z0 + 3, z1 - 3), 2.2, 1.2, 1.6, 0, col(0x8a8c90));   // rooftop units
       // fire escapes zig-zagging down the street front
       if (Math.random() < 0.7) { const fz = z0 - 0.9, fx = x0 + w * 0.3; for (let k = 1; k < fl; k++) { const y = 3 + k * 3.4; boxB(B.metal, fx - 2.5, y, fz - 0.4, fx + 2.5, y + 0.12, fz + 0.9, { col: dark }); boxB(B.metal, fx - 2.5, y + 1, fz - 0.42, fx + 2.5, y + 1.06, fz - 0.36, { col: dark }); putB(B.metal, G.box, fx + (k % 2 ? 1.2 : -1.2), y - 1.7, fz + 0.2, 0.5, 3.6, 0.08, 0, dark, k % 2 ? 0.75 : -0.75); } }
       if (Math.random() < 0.6) wtower(x0 + w * 0.7, h + 0.6, z0 + d * 0.6);
       // shopfronts with neon
-      if (Math.random() < 0.6) { const nc = HDR(pick(NEON), 2.2); putB(B.bankL, G.box, (x0 + x1) / 2, 1.8, z0 - 0.06, w - 3, 2.6, 0.06, 0, HDR(0xffd8a0, 1.4)); putB(B.neon, G.box, (x0 + x1) / 2, 3.9, z0 - 0.12, Math.min(8, w - 4), 0.5, 0.06, 0, nc); }
+      if (Math.random() < 0.6) { const nc = HDR(pick(NEON), 2.2); putB(B.neon, G.box, (x0 + x1) / 2, 4.95, z0 - 0.12, Math.min(8, w - 4), 0.5, 0.06, 0, nc); }
     }
   };
   // ground, streets, yellow lines
   boxB(B.walk, C.x0, -0.07, C.z0, C.x1, -0.05, H.z0, { topWorld: 1 / 6, sides: false, col: col(0x6a6a6e) });
   for (const x of AV) asph(x - 8, ST[0] - 8, x + 8, ST[ST.length - 1] + 8);
   for (const z of ST) asph(AV[0] - 8, z - 7, AV[AV.length - 1] + 8, z + 7);
+  for (const x of AV) for (const z of ST) zebras(x, z, 7.5);
   for (const x of AV) for (let z = ST[0] + 9; z < ST[ST.length - 1] - 4; z += 6) boxB(B.mark, x - 0.3, 0.03, z, x - 0.12, 0.035, z + 4, { sides: false, col: col(0xe8c020) });
   // steam from the manholes is drawn by the missions; here: the grates
   for (const x of AV) for (const z of ST) putB(B.metal, G.cyl, x + 3, 0.03, z + 3, 1.2, 0.02, 1.2, 0, col(0x2a2a2e));
@@ -2608,7 +2750,7 @@ function buildNY() {
   // the park: lawns, a lake, paths, trees, a low stone wall
   { const [a, b, c2, d] = C.parks[0]; boxB(B.grass, a, 0, b, c2, 0.005, d, { topWorld: 1 / 8, sides: false });
     const lk = [a + 128, b + 14, a + 212, b + 76]; boxB(B.water, lk[0], 0.03, lk[1], lk[2], 0.05, lk[3], { sides: false, col: col(0x1a3a4a) }); solid(lk[0], lk[1], lk[2], lk[3], 1);
-    for (let k = 0; k < 70; k++) { const x = rand(a + 5, c2 - 5), z = rand(b + 5, d - 5); if ((x > lk[0] - 5 && x < lk[2] + 5 && z > lk[1] - 5 && z < lk[3] + 5) || AV.some((q) => Math.abs(x - q) < 11) || ST.some((q) => Math.abs(z - q) < 10)) continue; putB(B.leaf, G.sph, x, 6, z, 3.6, 4.2, 3.6, 0, col(pick([0x2a4a2a, 0x3a5a2a, 0x2a3a22]))); putB(B.wood, G.cyl6, x, 2, z, 0.5, 4, 0.5, 0, col(0x4a3a2a)); solid(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 3); }
+    for (let k = 0; k < 70; k++) { const x = rand(a + 5, c2 - 5), z = rand(b + 5, d - 5); if ((x > lk[0] - 5 && x < lk[2] + 5 && z > lk[1] - 5 && z < lk[3] + 5) || AV.some((q) => Math.abs(x - q) < 11) || ST.some((q) => Math.abs(z - q) < 10)) continue; cTree(x, z, 1.4, col(pick([0x2a4a2a, 0x3a5a2a, 0x2a3a22]))); solid(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 3); }
     for (let x = a + 10; x < c2; x += 20) { lamp(x, b + 4); lamp(x, d - 4); } }
   // the neon square: billboards stacked on the corners, a red staircase, lights everywhere
   { const [sx, sz] = C.P.square; boxB(B.walk, sx - 52, 0, sz - 43, sx + 52, 0.14, sz + 43, { topWorld: 1 / 3, col: col(0x5a5a62) });
@@ -2642,7 +2784,7 @@ function buildNY() {
     // the island: a lawn and a lighthouse; the ferry lands at its pier
     const [ix, iz] = C.P.island; boxB(B.grass, ix - 60, -1.6, iz - 30, ix + 60, 0.03, iz + 50, { topWorld: 1 / 8, col: col(0x2a4a2a) }); solid(ix + 27, iz + 17, ix + 33, iz + 23, 28);
     putB(B.stone, G.cyl, ix + 30, 14, iz + 20, 6, 28, 6, 0, col(0xe8e4dc)); putB(B.neon, G.cyl, ix + 30, 29.5, iz + 20, 4, 3, 4, 0, HDR(0xfff0c0, 4)); putB(B.roof, G.cone, ix + 30, 32.5, iz + 20, 5, 3, 5, 0, col(0xa02020));
-    for (let k = 0; k < 12; k++) putB(B.leaf, G.sph, ix + rand(-50, 20), 4.5, iz + rand(-20, 40), 3, 3.4, 3, 0, col(0x2a4a2a));
+    for (let k = 0; k < 12; k++) cTree(ix + rand(-50, 20), iz + rand(-20, 40), 1.1);
     // the ferry: a real mesh so «Паром» can sail it
     const fg = new THREE.Group(), hull = new THREE.Mesh(box1, std(0xe8a020, { roughness: 0.5 })); hull.scale.set(18, 2.4, 30); hull.position.y = -1; fg.add(hull);
     const deck = new THREE.Mesh(box1, std(0x3a3c44, { roughness: 0.8 })); deck.scale.set(16, 0.2, 28); deck.position.y = 0.25; fg.add(deck);
@@ -9366,6 +9508,8 @@ let gateStep = 'install', gateMode = 'register', gateMsg = '', gateForm = false,
 function helloAfterLogin() { let w = ''; try { w = localStorage.getItem('nf-hello') || ''; localStorage.removeItem('nf-hello'); } catch (e) { /* storage unavailable */ } if (!w) return; trace('hello after reload ' + w + ' login=' + !!PROF.login); let n = 0; const t = setInterval(() => { n++; if (PROF.login) { clearInterval(t); trace('hello ok after ' + n * 0.5 + 's'); updateProfChip(); toast(`Вход через ${w}: привет, ${PROF.name}!`, 3.5); } else if (n > 20) { clearInterval(t); trace('hello: no login after 10s'); toast(`Вход через ${w} не сохранился. Попробуй ещё раз.`, 3.5); } }, 500); }
 function startGate() {
   helloAfterLogin();
+  // journal: the page started again while the last note says a mission was running (iOS reloads a page it froze in the background)
+  try { const L = JSON.parse(localStorage.getItem('nf-crumb-prev') || 'null'); if (L && ['drive', 'foot', 'dialog', 'paused', 'cine'].includes(L.m) && Date.now() - (L.at || 0) < 15 * 60e3) { const nt = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0] || {}).type || '?'; trace('boot after mission ' + L.m + ' ep' + L.ep + ':' + L.ch + ' ' + Math.round((Date.now() - L.at) / 1000) + 's ago nav=' + nt + ' crash=' + CRASH); } } catch (e) { /* no note */ }
   if (VK_AUTH) { finishGate(); toast('Вход через ВКонтакте…', 2); vkidFinish(VK_AUTH).then((err) => { if (!PROF.login) return gateAgain(err || 'Не удалось войти через ВКонтакте.'); toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return; }
   if (!inMiniApp && store.get('nf-tgb') && Date.now() - store.get('nf-tgb').t < 10 * 60e3) {   // the page reloaded while waiting for the Telegram bot
     trace('boot: resume tg wait');
@@ -12686,6 +12830,8 @@ function updateSelect(dt) {
   poseHuman(showFig, { idle: true, t: state.t });
 }
 function showSelect() {
+  // journal: who sends a player to the garage in the middle of a mission
+  if (['drive', 'foot', 'dialog', 'paused', 'cine', 'end'].includes(state.mode)) trace('to garage from ' + state.mode + ' ep' + state.ep + ':' + state.ch + ' modal=' + !$('modal').hidden + ' | ' + String((new Error().stack || '')).split('\n').slice(2, 5).map((l) => l.trim().replace(/^at /, '').replace(/\(?https?:[^)]*:(\d+):\d+\)?/, ':$1')).join(' < '));
   s3VikBack(); S3.kitW = null;
   if (ONL.on) leaveRoom();
   initAudio();
