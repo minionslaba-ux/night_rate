@@ -461,6 +461,10 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .pv-tag { color: #d6d5dc; font: 400 clamp(14px, 1.5vw, 17px)/1.55 var(--font-body); }
 /* driver select */
 .sel-title { font: 800 26px/1 var(--font-display); text-transform: uppercase; letter-spacing: -.01em; }
+.ep-season { flex-basis: 100%; margin: 8px 0 2px; color: #ffd23a; font: 700 10.5px/1.2 var(--font-body); letter-spacing: .14em; text-transform: uppercase; }
+.chip.s3 { border-color: rgba(255,210,58,.55); color: #ffd23a; }
+.btn.s3new { margin-left: 10px; border: 1px solid #ffd23a; color: #ffd23a; background: rgba(0,0,0,.35); }
+@media (max-width: 560px) { .btn.s3new { margin: 10px 0 0; } }
 .chip { border: 1px solid var(--hair-2); background: transparent; color: var(--muted); border-radius: 2px; font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; }
 .chip.active { background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); }
 .hud-chip { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -478,6 +482,25 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .prof-coins, .pstats b, .pitem em { font-family: var(--font-mono); }
 @media (max-width: 560px) { .dlg-text { font-size: 15px; } .portrait { width: 50px; height: 60px; font-size: 22px; } .speedo b { font-size: 36px; } }
 @media (prefers-reduced-motion: reduce) { .toast, .pv-logo, .obj b::before, .bar-fill.low { animation: none; } }
+
+/* compact top HUD: one status line, no long supplies row, objective in two lines, radio below the panels */
+.hud .boosts { display: none; }
+.stat-line { white-space: nowrap; }
+.stat-line .wpn-stat { color: var(--text); }
+.hud-tl { max-width: min(38vw, 340px); }
+.obj span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.toast { top: 30%; font-size: clamp(14px, 1.9vw, 18px) !important; padding: 8px 14px 8px 10px !important; }
+.bars { max-width: min(30vw, 340px); }
+.hint { transition: opacity .6s; }
+body.hint-off .hint { opacity: 0; pointer-events: none; }
+body.online:not(.task) .stat-line .sep { display: none; }
+.hud-btns .cam-chip { font-size: 0 !important; padding-left: 9px; padding-right: 9px; } .hud-btns .cam-chip svg { margin: 0 !important; }
+@media (max-height: 460px) {
+  .obj { padding: 7px 10px 8px; font-size: 13px; }
+  .hud-tl > .bar { padding: 6px 10px 7px; }
+  .stats { padding: 4px 8px; }
+  .hud-tr { gap: 4px; }
+}
 </style>
 </head>
 <body>
@@ -497,8 +520,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
   </div>
   <div class="hud-tr">
     <canvas id="minimap" width="300" height="300"></canvas>
-    <div class="stats"><span id="onlStat" class="onl-stat" hidden></span><b id="coins">0</b> монет<span class="kills-w"> · <b id="kills">0</b> сбито</span></div>
-    <div id="wpnStat" class="stats wpn-stat"></div>
+    <div class="stats stat-line"><span id="onlStat" class="onl-stat" hidden></span><b id="coins">0</b> <span class="coin-l">монет</span><span class="kills-w" hidden> · <b id="kills">0</b> сбито</span><span class="sep"> · </span><span id="wpnStat" class="wpn-stat"></span></div>
     <div id="boosts" class="stats boosts"></div>
     <button id="btnAmmo" class="ammo-buy" type="button" hidden></button>
     <div id="godBadge" class="stats god" hidden>ТЕСТ · бессмертие</div>
@@ -535,7 +557,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
     <div class="kicker pv-k">Порт-Северный · 02:47</div>
     <h1 class="logo pv-logo">Ночной тариф<span>Эпизод 1. Кейс</span></h1>
     <p class="pv-tag">Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».</p>
-    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button></div>
+    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button></div>
   </div>
   <p class="site-legal"><a href="tseny.html" target="_blank" rel="noopener">Цены</a> · <a href="oferta.html" target="_blank" rel="noopener">Оферта</a> · <a href="politika.html" target="_blank" rel="noopener">Персональные данные</a> · <a href="pravila.html" target="_blank" rel="noopener">Правила</a> · <a href="kontakty.html" target="_blank" rel="noopener">Контакты</a><br>Моисеенко Константин Иванович · ИНН 470313493504 · 12+</p>
 </div>
@@ -5654,7 +5676,7 @@ function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else st
 const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол', 12: 'Похищение мэра', 13: 'Последний рейс', 14: 'Северный экспресс', 15: 'Северное кольцо', 16: 'Сосновый Бор' };
 function renderChapters() {
   const eb = $('epChips');
-  eb.innerHTML = Object.keys(EP_NAMES).map((k) => `<button class="chip${selEp === +k ? ' active' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
+  eb.innerHTML = Object.keys(EP_NAMES).map((k) => (+k === 17 ? '<span class="ep-season">Новый сезон · «Охота по тарифу»</span>' : '') + `<button class="chip${selEp === +k ? ' active' : ''}${+k >= 17 ? ' s3' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
   eb.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { selEp = +b.dataset.ep; ep2Pick = selEp >= 2 ? epMax(selEp) : 1; renderChapters(); }));
   const box = $('chapters'), max = selEp >= 2 ? epMax(selEp) : 1; box.hidden = selEp < 2;
   if (ep2Pick > max) ep2Pick = max;
@@ -7304,7 +7326,10 @@ function updateHud(dt) {
   if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
   if (HELI && !HELI.crash && !HELI.invuln && (state.mode === 'drive' || state.mode === 'foot')) bars = bars.concat([{ label: HELI.name, frac: HELI.hp / HELI.max, color: '#c0ff6a' }]);
   renderBars(bars, timer, tbad);
-  $('hint').textContent = state.act === 1 ? 'W A S D — газ и руль · Shift — занос · пробел — огонь · N — нитро · B — щит' : (footView === 'top' ? 'W A S D — бег · мышь — прицел · клик — огонь' : 'W A S D — бег · мышь — обзор · клик — огонь') + ' · E — удар (серия: левой, правой, ногой) · правая кнопка — прицел · V — камера · B — щит · Esc — пауза';
+  { const I = PROF.inv, ht = state.act === 1 ? `WASD — руль · Shift — занос · пробел — огонь · N — нитро ×${I.nitro} · B — щит ×${I.shield}` : `WASD — бег · ${footView === 'top' ? 'мышь — прицел' : 'мышь — обзор'} · клик — огонь · E — удар · V — камера · B — щит ×${I.shield}`;
+    if ($('hint').textContent !== ht) $('hint').textContent = ht;
+    // the key hint shows for 10 s after a mission starts or you leave/enter the car, then gets out of the way
+    const hk = state.ep + ':' + state.ch + ':' + state.act; if (HINT.k !== hk) { HINT.k = hk; HINT.t = state.t; } document.body.classList.toggle('hint-off', state.t - HINT.t > 10); }
   updateBoostsHud();
   updateSight(dt); updateThreats(dt);
   { const fl = isS3() && state.mode === 'foot' && S3.flash > 0; document.body.classList.toggle('s3flash', fl); if (fl) $('flashN').textContent = S3.flash; }
@@ -7854,13 +7879,14 @@ function buyAmmo() {
 }
 function updateAmmoHud() {
   const n = WPN.rel > 0 ? '⟳' : PROF.god ? '∞' : PROF.inv.ammo || 0, el = $('ammoN'); if (!el) return;
-  const w = curW(), ws = `${w.name} · ${WPN.rel > 0 ? 'перезарядка' : (WPN.id === w.id ? WPN.left : w.mag) + '/' + w.mag} · патроны ${PROF.god ? '∞' : PROF.inv.ammo || 0}`;
+  const w = curW(), ws = `${w.name} ${WPN.rel > 0 ? '⟳' : (WPN.id === w.id ? WPN.left : w.mag) + '/' + w.mag} · ${PROF.god ? '∞' : PROF.inv.ammo || 0}`;
   if (ws !== WPN.shown) { WPN.shown = ws; $('wpnStat').textContent = ws; }
   if (n !== AMMO.shown) { AMMO.shown = n; el.textContent = n; el.classList.toggle('low', n !== '∞' && n < 60); }
   const low = !PROF.god && (PROF.inv.ammo || 0) < 60, b = $('btnAmmo');
   if (b.hidden !== !low) b.hidden = !low;
   if (low) { const txt = canPay(ITEMS.ammo.price) ? `Патроны ${PROF.inv.ammo || 0} · купить ${ITEMS.ammo.pack} за ${ITEMS.ammo.price} монет` : `Патроны ${PROF.inv.ammo || 0} · комплект за рекламу`; if (b.textContent !== txt) b.textContent = txt; b.classList.toggle('empty', !(PROF.inv.ammo > 0)); }
 }
+const HINT = { k: '', t: 0 };
 function updateBoostsHud() {
   const I = PROF.inv, txt = `Нитро ×${I.nitro} (N) · Щит ×${I.shield} (B) · Рем ×${I.repair} · Аптечки ×${I.medkit}`;
   if (txt !== boostsShown) { boostsShown = txt; $('boosts').textContent = txt; $('nitroN').textContent = I.nitro; $('shieldN').textContent = I.shield; }
@@ -10837,6 +10863,7 @@ function showEnd() {
 }
 
 $('btnPlay').addEventListener('click', showSelect);
+$('btnS3').addEventListener('click', () => { showSelect(); selEp = 17; ep2Pick = 1; renderChapters(); });
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
 $('btnOnline').addEventListener('click', startOnline);
