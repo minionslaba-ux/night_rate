@@ -8465,7 +8465,13 @@ const needRegister = () => !PROF.login && inMiniApp;   // on the website a guest
 function gateAgain(msg) { if (typeof closeProfile === 'function' && !$('prof').hidden) $('prof').hidden = true; gateStep = inMiniApp ? 'platform' : 'register'; gateMsg = msg || ''; gateForm = false; $('gate').hidden = false; renderGate(); }
 function gateNext() { if (gateStep === 'install') { gateStep = 'register'; gateMsg = ''; if (!needRegister()) return finishGate(); renderGate(); } else finishGate(); }
 // a guest on the website: once, after the second mission, offer to sign in so the progress is kept on every device (with «Играть без входа»)
-function loginNudge() { if (inMiniApp || PROF.login || store.get('nf-login-nudge') || !$('gate').hidden || state.mode === 'drive' || state.mode === 'foot') return; store.set('nf-login-nudge', 1); gateStep = 'register'; gateMsg = ''; $('gate').hidden = false; renderGate(); }
+function loginNudge(tries) {
+  if (inMiniApp || PROF.login || store.get('nf-login-nudge')) return;
+  // only at a calm moment — the mission summary, the menu or the driver choice — and not over another window; otherwise look again a bit later
+  const calm = $('gate').hidden && $('prof').hidden && (state.mode === 'end' || ((state.mode === 'select' || state.mode === 'preview') && $('modal').hidden));   // the mission summary is itself a window: the offer may come on top of it
+  if (!calm) { if ((tries || 0) < 60) setTimeout(() => loginNudge((tries || 0) + 1), 5000); return; }
+  store.set('nf-login-nudge', 1); gateStep = 'register'; gateMsg = ''; $('gate').hidden = false; renderGate();
+}
 function finishGate() { $('gate').hidden = true; updateProfChip(); }
 function renderGate() {
   const c = $('gateCard');
