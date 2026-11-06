@@ -716,7 +716,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v59'; window.__errs = [];
+window.APP_VER = 'v60'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -843,13 +843,23 @@ setupPost();
 const coverOpen = () => !$('prof').hidden || !$('gate').hidden || !$('modal').hidden;
 let coverDrawn = 0;
 function render() {
-  if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else coverDrawn = 0;
+  if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else { coverDrawn = 0; if (RS.pending) resize(); }
   if (composer) composer.render(); else renderer.render(scene, camera);
+}
+// iPhone Safari fires resize events on every scroll (the toolbar folds in and out); rebuilding the full-screen GPU buffers
+// on each one ran the tab out of memory — so: only on a real change, at most every ~120 ms, and not while a window covers the game
+const RS = { w: 0, h: 0, pr: 0, t: 0, pending: false };
+function resizeSoon() {
+  if (isTouch && typeof coverOpen === 'function' && coverOpen()) { RS.pending = true; return; }
+  clearTimeout(RS.t); RS.t = setTimeout(resize, 120);
 }
 function resize() {
   // the stage box is the real visible size (iOS Safari reports stale innerHeight right after rotation)
   const st = document.getElementById('stage'), r = st ? st.getBoundingClientRect() : null;
   const w = Math.max(1, Math.round((r && r.width) || window.innerWidth)), h = Math.max(1, Math.round((r && r.height) || window.innerHeight));
+  const pr = renderer.getPixelRatio();
+  if (w === RS.w && h === RS.h && pr === RS.pr) return;   // nothing changed: keep the GPU buffers
+  RS.w = w; RS.h = h; RS.pr = pr; RS.pending = false;
   renderer.setSize(w, h, false);
   if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); }
   if (fxaaPass) { const pr = renderer.getPixelRatio(); fxaaPass.material.uniforms.resolution.value.set(1 / (w * pr), 1 / (h * pr)); }
@@ -857,14 +867,15 @@ function resize() {
   camera.fov = w < h ? 72 : 60;
   camera.updateProjectionMatrix();
 }
-window.addEventListener('resize', resize);
+window.addEventListener('resize', resizeSoon);
 window.addEventListener('orientationchange', () => { resize(); setTimeout(resize, 250); setTimeout(resize, 700); });
-if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeSoon);
 resize();
 // adaptive quality: first the bloom, then the resolution; the colour grade and the anti-aliasing stay unless the device really cannot cope
 const perf = { t: 0, frames: 0, level: 0, done: false, slow: 0 };
 function checkPerf(dt) {
   if (perf.done) return;
+  if (isTouch && coverOpen()) { perf.t = 0; perf.frames = 0; return; }   // a window covers the game: no frames drawn, nothing to measure
   perf.t += dt; perf.frames++;
   if (perf.t < 2.5) return;
   const fps = perf.frames / perf.t; perf.t = 0; perf.frames = 0;
@@ -876,7 +887,7 @@ function checkPerf(dt) {
     return;
   }
   // auto: plenty of headroom — climb to HD resolution once; if that costs too much, step back down
-  if (fps >= 55 && !perf.up && perf.level === 0 && PR_HD > renderer.getPixelRatio() + 0.1) { perf.up = true; renderer.setPixelRatio(PR_HD); resize(); return; }
+  if (fps >= 55 && !perf.up && perf.level === 0 && !/iPhone|iPod/.test(navigator.userAgent) && PR_HD > renderer.getPixelRatio() + 0.1) { perf.up = true; renderer.setPixelRatio(PR_HD); resize(); return; }
   if (perf.up && fps < 32 && renderer.getPixelRatio() > PR_BASE) { renderer.setPixelRatio(PR_BASE); resize(); perf.done = true; return; }
   if (fps >= 32) { perf.done = true; return; }
   perf.level++;
