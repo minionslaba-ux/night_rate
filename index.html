@@ -216,8 +216,8 @@ body.online #objective { pointer-events: auto; cursor: pointer; } body.online .h
 @keyframes nfFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 /* phones: every blurred or animated card picture became its own GPU layer at 3× scale — dozens of them in the profile ran
    iPhone Safari out of memory while scrolling. Still pictures and a plain gradient glow there. */
-.touch .pimg img, .ios .pimg img { animation: none; }
-.touch .pimg .pglow, .ios .pimg .pglow { filter: none; opacity: .22; }
+.tch .pimg img, .ios .pimg img { animation: none; }
+.tch .pimg .pglow, .ios .pimg .pglow { filter: none; opacity: .22; }
 @media (hover: hover) and (pointer: fine) { .pitem.shop, .pitem.car, .pitem.wpn { transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s; } .pitem.shop:hover, .pitem.car:hover, .pitem.wpn:hover { transform: perspective(900px) rotateX(3deg) rotateY(-4deg) translateY(-3px); box-shadow: 0 22px 50px rgba(0,0,0,.5); } }
 @media (prefers-reduced-motion: reduce) { .pimg img { animation: none; } } .pitem.car .cimg { height: 110px; display: grid; place-items: center; border-radius: 8px; background: radial-gradient(ellipse at center, rgba(255,255,255,.07), transparent 70%); } .pitem.car .cimg img { max-width: 100%; max-height: 110px; object-fit: contain; } .wperk { color: var(--taxi); } .wlock { color: var(--muted); } .wpn-stat { font-size: 11.5px; }
 .care-txt { font-size: 11px; color: var(--muted); background: var(--panel); padding: 4px 10px; border-radius: 6px; } .care-txt.bad { color: #ffb08a; } .hud-chip.tow { color: #ffb08a; border-color: rgba(255,154,61,.6); } .ptitle { display: flex; justify-content: space-between; align-items: center; } .pbody { overflow-y: auto; display: grid; gap: 8px; align-content: start; font-size: 14px; }
@@ -720,7 +720,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v64'; window.__errs = [];
+window.APP_VER = 'v65'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -758,7 +758,7 @@ const pick = (arr) => arr[Math.floor(srand() * arr.length)];
 
 const isTouch = window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
 if (/iPhone|iPod/.test(navigator.userAgent)) document.documentElement.classList.add('ios');
-if (isTouch) document.documentElement.classList.add('touch');
+if (isTouch) document.documentElement.classList.add('tch');   // not 'touch': that is the class of the on-screen controls
 
 // ---------------- renderer / scene ----------------
 THREE.ColorManagement.legacyMode = false;
