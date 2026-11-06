@@ -19,6 +19,9 @@
 //   потом — обычный вход MAX (тот же max_id, что в мини-приложении). Метка живёт 10 минут и срабатывает один раз.
 //   Подписка вебхука: GET …/nf-login?max_setup=1.
 // action 'tg_config' — номер бота для кнопки «Войти через Telegram» (публичная часть токена до двоеточия, не секрет).
+// • Telegram на сайте через бота (телефоны: страница oauth.telegram.org роняла Safari на iPhone): action 'tg_start' выдаёт метку
+//   и ссылку t.me/night_fare_bot?start=login_<метка>; бот (nf-bot) по «Старт» записывает в nf_tg_auth tg_id; сайт опрашивает
+//   { tg_nonce } так же, как MAX. Метка живёт 10 минут и срабатывает один раз; аккаунт тот же, что в мини-приложении Telegram.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -137,6 +140,15 @@ async function maxNonceUser(db: any, nonce: string) {
   return took?.length ? { user: { id: Number(data.max_id), first_name: data.name } } : { gone: true };
 }
 
+// сайт: метка подтверждена ботом Telegram → пользователь Telegram (один раз)
+async function tgNonceUser(db: any, nonce: string) {
+  const { data } = await db.from('nf_tg_auth').select('tg_id, name, username, used_at, created_at').eq('nonce', nonce).maybeSingle();
+  if (!data || data.used_at || Date.now() - Date.parse(data.created_at) > 600e3) return { gone: true };
+  if (!data.tg_id) return { pending: true };
+  const { data: took } = await db.from('nf_tg_auth').update({ used_at: new Date().toISOString() }).eq('nonce', nonce).is('used_at', null).select('nonce');
+  return took?.length ? { user: { id: Number(data.tg_id), first_name: data.name, username: data.username || '' } } : { gone: true };
+}
+
 const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((x) => CODE_ABC[x % CODE_ABC.length]).join('');
 const URL0 = Deno.env.get('SUPABASE_URL')!, OPTS = { auth: { persistSession: false, autoRefreshToken: false } };
@@ -211,6 +223,12 @@ Deno.serve(async (req) => {
       const has = async (t: string) => ((await db.from(t).select('user_id', { count: 'exact', head: true }).eq('user_id', cur.id)).count || 0) > 0;
       return json({ tg: await has('tg_accounts'), vk: await has('vk_accounts'), max: await has('max_accounts') });
     }
+    if (body.action === 'tg_start') {
+      if (!(Deno.env.get('TELEGRAM_BOT_TOKEN') || '').trim()) return json({ error: 'not_configured' }, 503);
+      const nonce = newNonce();
+      const { error } = await db.from('nf_tg_auth').insert({ nonce });
+      return error ? json({ error: 'start_failed' }, 500) : json({ nonce, url: `https://t.me/night_fare_bot?start=login_${nonce}`, expires_in: 600 });
+    }
     if (body.action === 'max_start') {
       if (!maxToken()) return json({ error: 'not_configured' }, 503);
       const nonce = newNonce(), since = new Date(Date.now() - 600e3).toISOString();
@@ -228,14 +246,16 @@ Deno.serve(async (req) => {
     const widget = body.tg_widget && typeof body.tg_widget === 'object';
     const vkid = typeof body.vkid_token === 'string' && body.vkid_token;
     const maxNonce = typeof body.max_nonce === 'string' && NONCE_RE.test(body.max_nonce) ? body.max_nonce : '';
-    const plat = (typeof body.max_init === 'string' && body.max_init) || maxNonce ? 'max' : body.vk_launch || vkid ? 'vk' : (typeof body.initData === 'string' && body.initData) || widget ? 'tg' : '';
+    const tgNonce = typeof body.tg_nonce === 'string' && NONCE_RE.test(body.tg_nonce) ? body.tg_nonce : '';
+    const plat = (typeof body.max_init === 'string' && body.max_init) || maxNonce ? 'max' : body.vk_launch || vkid ? 'vk' : (typeof body.initData === 'string' && body.initData) || widget || tgNonce ? 'tg' : '';
     if (code && !plat) { const target = await useCode(db, code); return target ? await sessionFor(db, target, '') : json({ error: 'bad_code' }, 403); }
     if (!plat) return json({ error: 'no_proof' }, 400);
 
     let u: any = null;
     if (plat === 'tg') {
       const t = (Deno.env.get('TELEGRAM_BOT_TOKEN') || '').trim(); if (!t) return json({ error: 'not_configured' }, 503);
-      u = widget ? await widgetUser(t, body.tg_widget) : await initDataUser(t, body.initData);
+      if (tgNonce) { const r: any = await tgNonceUser(db, tgNonce); if (r.pending) return json({ pending: true }); if (r.gone) return json({ error: 'expired' }, 410); u = r.user; }
+      else u = widget ? await widgetUser(t, body.tg_widget) : await initDataUser(t, body.initData);
     }
     else if (plat === 'max') {
       const t = maxToken(); if (!t) return json({ error: 'not_configured' }, 503);

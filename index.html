@@ -716,7 +716,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v60'; window.__errs = [];
+window.APP_VER = 'v61'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -8754,7 +8754,7 @@ function profLinksHtml() {
   const L = CLOUD.links || {}, row = (on, name, btn) => `<div class="prow"><span>${name}: ${on ? '<b class="ok">привязан ✓</b>' : 'не привязан'}</span>${on ? '' : btn}</div>`;
   if (!CLOUD.links || L.err) return `<div class="plabel">Способы входа</div><div class="prow"><small>${L.err ? 'Не удалось проверить — открой профиль ещё раз.' : 'Загружаю…'}</small></div>`;
   return `<div class="plabel">Способы входа</div>
-    ${row(L.tg, 'Telegram', inMiniApp ? '' : '<button class="btn sm tg" data-act="linktg" type="button">Привязать</button>')}
+    ${row(L.tg, 'Telegram', inMiniApp ? '' : tgViaBot() ? tgLinkHtml('btn sm tg', 'Привязать', 'data-tggo="link"') : '<button class="btn sm tg" data-act="linktg" type="button">Привязать</button>')}
     ${row(L.vk, 'ВКонтакте', inMiniApp ? '' : '<button class="btn sm vk" data-act="linkvk" type="button">Привязать</button>')}
     ${row(L.max, 'MAX', inMiniApp ? '<small>получи код на сайте и введи его здесь</small>' : maxLinkHtml('btn sm max', 'Привязать', 'data-maxgo="link"'))}`;
 }
@@ -8788,7 +8788,7 @@ function renderProfile() {
     <div class="plabel">Вход <small class="pver">версия ${APP_VER}</small></div>
     ${PROF.cloud ? `<div class="prow"><span>Профиль <b>${esc(PROF.login)}</b> на сервере.</span>${inMiniApp ? '' : '<button class="btn sm" data-act="logout" type="button">Выйти</button>'}</div>` : ''}
     ${inMiniApp ? (PROF.cloud ? '' : `<div class="prow"><span>Вход через ${PLATFORM === 'vk' ? 'ВКонтакте' : PLATFORM === 'tg' ? 'Telegram' : 'MAX'}.</span><button class="btn sm primary" data-act="pflogin" type="button">Войти</button></div>`)
-      : `${PROF.cloud ? '' : '<div class="prow"><button class="btn sm tg" data-act="tglogin" type="button">' + viaLabel('tg', 'Telegram') + '</button><button class="btn sm vk" data-act="vklogin" type="button">' + viaLabel('vk', 'ВКонтакте') + '</button>' + maxLinkHtml('btn sm max', viaLabel('max', 'MAX'), 'data-maxgo="login"') + '</div>'}<div class="prow"><small>Игра есть и в Telegram: <a href="https://t.me/night_fare_bot" target="_blank" rel="noopener">@night_fare_bot</a></small></div>`}
+      : `${PROF.cloud ? '' : '<div class="prow">' + (tgViaBot() ? tgLinkHtml('btn sm tg', viaLabel('tg', 'Telegram'), 'data-tggo="login"') : '<button class="btn sm tg" data-act="tglogin" type="button">' + viaLabel('tg', 'Telegram') + '</button>') + '<button class="btn sm vk" data-act="vklogin" type="button">' + viaLabel('vk', 'ВКонтакте') + '</button>' + maxLinkHtml('btn sm max', viaLabel('max', 'MAX'), 'data-maxgo="login"') + '</div>'}<div class="prow"><small>Игра есть и в Telegram: <a href="https://t.me/night_fare_bot" target="_blank" rel="noopener">@night_fare_bot</a></small></div>`}
     ${PROF.cloud ? profLinksHtml() : ''}
     ${joinList().length ? `<div class="plabel">Наши сообщества</div><div class="prow"><span>Новости и новые миссии первыми</span>${joinButtons('data-join')}</div>` : ''}
     <div class="plabel">Один аккаунт на всех устройствах</div>
@@ -9089,6 +9089,44 @@ async function maxSiteWait() {
     await new Promise((r) => setTimeout(r, 2000));
   }
 }
+// Telegram on a phone goes through the game's bot, the same way as MAX: the page oauth.telegram.org brought Safari down on iPhone.
+// The link t.me/night_fare_bot?start=login_<mark> is fetched in advance and opened right on the tap; the player taps «Старт»
+// in the bot, comes back, and the page (which keeps asking) signs in. The mark survives a reload of the page (localStorage).
+const tgViaBot = () => isTouch && !inMiniApp;
+let tgPre = null, tgPollRun = 0;
+function tgPrefetch(done) {
+  if (tgPre && (tgPre.busy || (tgPre.url && Date.now() - tgPre.t < 8 * 60e3) || (tgPre.err && Date.now() - tgPre.t < 60e3))) return;
+  if (!cloudInit()) { tgPre = { err: noServer(), t: Date.now() }; return; }
+  tgPre = { busy: true };
+  nfPublic({ action: 'tg_start' }).then((j) => {
+    tgPre = j.url ? { nonce: j.nonce, url: j.url, t: Date.now() } : { err: j.error === 'not_configured' ? 'Вход через Telegram ещё не настроен.' : j.error === 'network' ? NO_SERVER : 'Не удалось подготовить вход через Telegram.', t: Date.now() };
+    if (done) done();
+  });
+}
+const tgReady = () => !!(tgPre && tgPre.url && Date.now() - tgPre.t < 9 * 60e3);
+function tgGo(link) { if (!tgReady()) return false; store.set('nf-tgb', { nonce: tgPre.nonce, link: !!link, t: tgPre.t }); tgPre = null; return true; }
+const tgHint = () => 'Нажми «Старт» в боте игры в Telegram и вернись сюда — вход подтвердится сам.';
+const tgLinkHtml = (cls, label, attrs) => ((tgReady() || tgPrefetch(maxRedraw), tgReady()) ? `<a class="${cls}" href="${esc(tgPre.url)}" target="_blank" rel="noopener" ${attrs}>${label}</a>` : `<button class="${cls}" type="button" disabled>${tgPre && tgPre.err ? esc(tgPre.err) : label}</button>`);
+async function tgBotWait() {
+  const run = ++tgPollRun, clear = () => { try { localStorage.removeItem('nf-tgb'); } catch (e) { /* storage unavailable */ } };
+  for (;;) {
+    if (run !== tgPollRun) return null;
+    const S = store.get('nf-tgb');
+    if (!S) return null;
+    if (Date.now() - S.t > 10 * 60e3) { clear(); return 'Вход через Telegram не подтверждён за 10 минут. Попробуй ещё раз.'; }
+    if (!document.hidden) {
+      const j = S.link ? await nfCall({ action: 'link', tg_nonce: S.nonce }) : await nfPublic({ tg_nonce: S.nonce });
+      if (!j.pending && j.error !== 'network') {
+        clear();
+        if (S.link) { CLOUD.links = null; return j.linked ? (j.already ? 'Telegram уже привязан к этому профилю.' : 'Готово: Telegram привязан. Теперь можно входить и так.') : (LINK_ERR[j.error] || 'Не удалось привязать Telegram.'); }
+        if (!j.access_token) return j.error === 'expired' ? 'Вход через Telegram устарел. Попробуй ещё раз.' : 'Не удалось войти через Telegram. Попробуй ещё раз.';
+        const { data, error } = await CLOUD.sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
+        return error || !data.user ? 'Не удалось войти через Telegram.' : await cloudLoadProfile(data.user);
+      }
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
 // linking: a signed-in player adds Telegram or VK to the same profile. The intent survives the trip to Telegram/VK in localStorage.
 async function nfCall(body) {
   const { data } = await CLOUD.sb.auth.getSession(); const tok = data && data.session && data.session.access_token;
@@ -9221,6 +9259,10 @@ function platformHint() {
 let gateStep = 'install', gateMode = 'register', gateMsg = '', gateForm = false, gateMaxUrl = '';   // gateMode/gateForm: left from the login-and-password form, no longer shown
 function startGate() {
   if (VK_AUTH) { finishGate(); toast('Вход через ВКонтакте…', 2); vkidFinish(VK_AUTH).then((err) => { if (!PROF.login) return gateAgain(err || 'Не удалось войти через ВКонтакте.'); toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return; }
+  if (!inMiniApp && store.get('nf-tgb') && Date.now() - store.get('nf-tgb').t < 10 * 60e3) {   // the page reloaded while waiting for the Telegram bot
+    gateStep = 'register'; gateMsg = tgHint(); $('gate').hidden = false; renderGate();
+    tgBotWait().then((err) => { if (!PROF.login) return gateAgain(err || ''); finishGate(); if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); }); return;
+  }
   if (!inMiniApp && store.get('nf-max') && Date.now() - store.get('nf-max').t < 10 * 60e3) {   // the page reloaded while waiting for MAX
     gateStep = 'register'; gateMsg = maxHint(); $('gate').hidden = false; renderGate();
     maxSiteWait().then((err) => { if (!PROF.login) return gateAgain(err || ''); finishGate(); if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); }); return;
@@ -9280,7 +9322,7 @@ function renderGate() {
   } else {
     c.innerHTML = `<div class="kicker">${store.get('nf-installed') || isStandalone() ? 'Последний шаг' : 'Шаг 2 из 2'}</div><h2 class="gate-title">Начать <span>игру</span></h2>
       <p class="lead">Войди через Telegram, ВКонтакте или MAX — профиль создастся сам. Монеты, машины и пройденные миссии будут с тобой на любом устройстве.</p>
-      <button id="gTg" class="btn tg big" type="button">${viaLabel('tg', 'Telegram')}</button><button id="gVk" class="btn vk big" type="button">${viaLabel('vk', 'ВКонтакте')}</button>${gateMaxUrl ? `<a id="gMaxGo" class="btn max big" href="${esc(gateMaxUrl)}" target="_blank" rel="noopener"><i class="bico">${BRAND_ICO.max}</i> Открыть бота в MAX ещё раз</a>` : maxLinkHtml('btn max big', viaLabel('max', 'MAX'), 'id="gMax"')}
+      ${tgViaBot() ? tgLinkHtml('btn tg big', viaLabel('tg', 'Telegram'), 'id="gTg"') : `<button id="gTg" class="btn tg big" type="button">${viaLabel('tg', 'Telegram')}</button>`}<button id="gVk" class="btn vk big" type="button">${viaLabel('vk', 'ВКонтакте')}</button>${gateMaxUrl ? `<a id="gMaxGo" class="btn max big" href="${esc(gateMaxUrl)}" target="_blank" rel="noopener"><i class="bico">${BRAND_ICO.max}</i> Открыть бота в MAX ещё раз</a>` : maxLinkHtml('btn max big', viaLabel('max', 'MAX'), 'id="gMax"')}
       <p class="note gate-nopass">Пароль не нужен: подтверди вход в Telegram, ВКонтакте или MAX — и всё.</p>
       ${inMiniApp ? '' : '<button id="gGuest" class="btn linkish" type="button">Играть без входа — прогресс останется на этом устройстве</button>'}
       <div class="pmsg">${esc(gateMsg)}</div>
@@ -9306,7 +9348,18 @@ function renderGate() {
         });
       }, 0);
     };
-    $('gTg').onclick = () => { if (CLOUD.busy) return; $('gTg').disabled = true; $('gTg').textContent = 'Открываю Telegram…'; tgSiteLogin().then((err) => { if (err) { gateMsg = err; renderGate(); } }); };
+    if ($('gTg') && $('gTg').tagName === 'A') $('gTg').onclick = (e) => {
+      if (!tgGo(false)) { e.preventDefault(); return; }
+      setTimeout(() => {   // after the link has opened Telegram
+        gateMsg = tgHint(); renderGate();
+        tgBotWait().then((err) => {
+          if (err === null) return;
+          if (err) { gateMsg = err; renderGate(); return; }
+          finishGate(); toast(PROF.god ? 'Тестовый профиль' : `Привет, ${PROF.name}!`, 2); updateProfChip();
+        });
+      }, 0);
+    };
+    else if ($('gTg')) $('gTg').onclick = () => { if (CLOUD.busy) return; $('gTg').disabled = true; $('gTg').textContent = 'Открываю Telegram…'; tgSiteLogin().then((err) => { if (err) { gateMsg = err; renderGate(); } }); };
   }
 }
 // installable web app: the service worker caches the game for fast start (only on http(s) with a manifest next to the page)
@@ -12720,6 +12773,12 @@ $('profClose').addEventListener('click', closeProfile);
 $('prof').addEventListener('click', (e) => { if (e.target.id === 'prof') closeProfile(); });
 $('profTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { profTab = b.dataset.tab; profMsg = ''; renderProfile(); } });
 $('profBody').addEventListener('click', (e) => {
+  const tgl = e.target.closest('[data-tggo]');
+  if (tgl) {   // let the link open Telegram; redraw only after the tap is handled
+    if (!tgGo(tgl.dataset.tggo === 'link')) { e.preventDefault(); return; }
+    setTimeout(() => { profMsg = tgHint(); renderProfile(); tgBotWait().then((err) => { if (err === null) return; profMsg = err || 'Готово: профиль загружен.'; renderProfile(); updateProfChip(); }); }, 0);
+    return;
+  }
   const mg = e.target.closest('[data-maxgo]');
   if (mg) {   // let the link open MAX; redraw only after the tap is handled
     if (!maxGo(mg.dataset.maxgo === 'link')) { e.preventDefault(); return; }

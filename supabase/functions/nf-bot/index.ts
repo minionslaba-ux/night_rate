@@ -443,6 +443,15 @@ async function onMessage(msg: any) {
   const chat = msg.chat; if (chat?.type !== 'private') return;  // в группах бот пока молчит
   const m = String(msg.text || '').match(/^\/(\w+)(?:@\w+)?/); if (!m) return;
   const cmd = m[1].toLowerCase(), rest = String(msg.text || '').replace(/^\/\w+(@\w+)?\s*/, ''), from = msg.from || {};
+  // вход на сайте через бота: t.me/night_fare_bot?start=login_<метка> (метку выдаёт nf-login, action 'tg_start')
+  const lm = cmd === 'start' && /^login_([A-Za-z0-9]{32})$/.exec(rest.trim());
+  if (lm) {
+    const name = [from.first_name, from.last_name].filter(Boolean).join(' ').slice(0, 24) || from.username || 'Telegram';
+    const { data } = await db.from('nf_tg_auth').update({ tg_id: from.id, name, username: String(from.username || '').slice(0, 64), done_at: new Date().toISOString() })
+      .eq('nonce', lm[1]).is('tg_id', null).gt('created_at', new Date(Date.now() - 600e3).toISOString()).select('nonce');
+    await api('sendMessage', { chat_id: chat.id, text: data?.length ? '✅ Вход в «Ночной тариф» подтверждён.\n\nВернитесь в браузер, на вкладку с игрой — она войдёт сама.' : 'Ссылка для входа устарела. Нажмите «Войти через Telegram» на сайте ещё раз.' });
+    return;
+  }
   if (cmd === 'start' || cmd === 'play') {
     await db.from('nf_bot_users').upsert({ tg_id: from.id, name: [from.first_name, from.last_name].filter(Boolean).join(' ').slice(0, 64), username: from.username || null, blocked: false }, { onConflict: 'tg_id' });
     await api('sendMessage', { chat_id: chat.id, parse_mode: 'HTML', reply_markup: playBtn,
