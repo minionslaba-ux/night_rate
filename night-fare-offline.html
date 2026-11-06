@@ -21,6 +21,49 @@
 <meta property="og:image" content="https://nightfaregame.com/icons/icon-512.png">
 <meta property="og:locale" content="ru_RU">
 <meta name="twitter:card" content="summary">
+<script>
+/* MAX keeps a mini app in portrait and its bridge cannot rotate the screen. On a phone held in portrait inside MAX
+   the game is loaded into a frame turned by 90°: the player turns the phone sideways and gets the landscape game
+   (the frame has its own landscape viewport, so the layout and the touch coordinates are right). The pause menu
+   can switch back to portrait; the motion sensor flips the frame when the phone is turned the other way. */
+(function () {
+  try {
+    var q = location.search, h = location.hash, ss = '';
+    try { ss = sessionStorage.getItem('nf-platform') || ''; } catch (e) {}
+    var isMax = /WebAppData=/.test(h) || /[?&]src=max\b/.test(q) || ss === 'max';
+    var noRot = ''; try { noRot = sessionStorage.getItem('nf-norot') || ''; } catch (e) {}
+    if (!isMax || noRot || /[?&]rot=1\b/.test(q) || window.top !== window) return;
+    var pref = ''; try { pref = localStorage.getItem('nf-screen') || ''; } catch (e) {}
+    var touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+    if (!touch || pref === 'port' || window.innerWidth > window.innerHeight) return;
+    try { sessionStorage.setItem('nf-platform', 'max'); sessionStorage.setItem('nf-launch', JSON.stringify({ q: q, h: h })); } catch (e) {}
+    window.stop();
+    var de = document.documentElement, body = document.body || de.appendChild(document.createElement('body'));
+    var st = document.createElement('style');
+    st.textContent = 'html,body{margin:0;height:100%;overflow:hidden;background:#08090d}' +
+      '#rotf{position:fixed;top:0;left:0;width:100vh;height:100vw;border:0;transform-origin:0 0;transform:translateX(100vw) rotate(90deg)}' +
+      '#rotf.ccw{transform:translateY(100vh) rotate(-90deg)}';
+    (document.head || de).appendChild(st);
+    var f = document.createElement('iframe'); f.id = 'rotf';
+    f.setAttribute('allow', 'autoplay; fullscreen; gamepad'); f.setAttribute('allowfullscreen', '');
+    f.src = location.pathname + (q ? q + '&' : '?') + 'rot=1' + h;
+    body.appendChild(f);
+    // the MAX bridge lives in this (top) window; the game inside the frame borrows it
+    var sc = document.createElement('script'); sc.src = 'https://st.max.ru/js/max-web-app.js';
+    sc.onload = function () { try { window.WebApp.ready(); } catch (e) {} }; (document.head || de).appendChild(sc);
+    // which way is the phone turned: flip the frame so the picture is never upside down
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent), side = 0;
+    window.addEventListener('devicemotion', function (ev) {
+      var g = ev.accelerationIncludingGravity; if (!g || g.x == null) return;
+      var x = ios ? -g.x : g.x, s = x > 6 ? 1 : x < -6 ? -1 : 0;
+      if (s && s !== side) { side = s; f.className = s < 0 ? 'ccw' : ''; }
+    });
+    // safety net: if the game in the frame has not started in 40 s, reload the plain (portrait) way for this session
+    var okT = setTimeout(function () { try { sessionStorage.setItem('nf-norot', '1'); } catch (e) {} location.reload(); }, 40000);
+    window.__nfRot = { ok: function () { clearTimeout(okT); }, flip: function () { f.className = f.className ? '' : 'ccw'; }, portrait: function () { try { localStorage.setItem('nf-screen', 'port'); } catch (e) {} location.reload(); } };
+  } catch (e) { /* stay as is */ }
+})();
+</script>
 <title>Ночной тариф</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -136,7 +179,7 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 .touch.on-foot .tbtn.aim { display: grid; } .touch.on-foot .tbtn.drift { display: none; }
 .tbtn.melee { display: none; --c: #ff8a3a; right: calc(128px + var(--sar)); bottom: calc(122px + var(--sab)); width: 62px; height: 62px; }
 .touch.on-foot .tbtn.melee { display: grid; }
-.tbtn.prof { --c: #c9c8cf; right: calc(208px + var(--sar)); bottom: calc(48px + var(--sab)); width: 56px; height: 56px; } body.online .tbtn.prof { bottom: calc(124px + var(--sab)); } .tbtn.prof span { font-size: 9px; }
+.tbtn.tprof { --c: #c9c8cf; right: calc(208px + var(--sar)); bottom: calc(48px + var(--sab)); width: 56px; height: 56px; } body.online .tbtn.tprof { bottom: calc(124px + var(--sab)); } .tbtn.tprof span { font-size: 9px; }
 .tbtn.horn { display: none; --c: #ffd23a; right: calc(194px + var(--sar)); bottom: calc(40px + var(--sab)); width: 62px; height: 62px; }
 body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, body.online:not(.task) .tbtn.shield, body.online:not(.task) .tbtn.fire, body.online:not(.job):not(.task) #nav, body.online:not(.task) .boosts { display: none; }
 .chat { position: fixed; left: calc(12px + var(--sal)); top: calc(110px + var(--sat)); width: min(380px, calc(100% - 24px - var(--sal) - var(--sar))); max-height: calc(100% - 260px - var(--sat) - var(--sab)); min-height: 160px; display: grid; grid-template-rows: 1fr auto auto; gap: 6px; background: rgba(8,10,24,.88); border: 1px solid var(--line); border-radius: 10px; padding: 10px; z-index: 30; }
@@ -246,7 +289,7 @@ body:has(#dialog:not([hidden])) .touch, body:has(#modal:not([hidden])) .touch { 
   .tbtn.melee { right: calc(24px + var(--sar)); bottom: calc(108px + var(--sab)); width: 58px; height: 58px; }
   .tbtn.nitro { right: calc(118px + var(--sar)); bottom: calc(92px + var(--sab)); width: 56px; height: 56px; }
   .tbtn.shield { right: calc(194px + var(--sar)); bottom: calc(18px + var(--sab)); width: 56px; height: 56px; }
-  .tbtn.prof, body.online .tbtn.prof { right: calc(188px + var(--sar)); bottom: calc(92px + var(--sab)); width: 50px; height: 50px; }
+  .tbtn.tprof, body.online .tbtn.tprof { right: calc(188px + var(--sar)); bottom: calc(92px + var(--sab)); width: 50px; height: 50px; }
   .joy { width: 116px; height: 116px; bottom: calc(16px + var(--sab)); }
 }
 @media (orientation: landscape) and (max-height: 480px) { .touch-on .speedo { right: 50%; transform: translateX(50%); bottom: calc(8px + var(--sab)); text-align: center; } .touch-on .speedo b { font-size: 34px; } }
@@ -496,6 +539,13 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .hint { transition: opacity .6s; }
 body.hint-off .hint { opacity: 0; pointer-events: none; }
 body.online:not(.task) .stat-line .sep { display: none; }
+/* a narrow portrait screen: the navigator goes under the task on the left, the timer/bars under the buttons — nothing stacks on the top row */
+@media (orientation: portrait) and (max-width: 600px) {
+  .hud-tl { max-width: 54vw; }
+  #nav.nav { top: calc(var(--sat) + 136px); left: calc(12px + var(--sal)); right: auto; transform: none; max-width: 48vw; }
+  .touch-on .tbtn.tprof { left: calc(22px + var(--sal)); right: auto; bottom: calc(176px + var(--sab)); width: 50px; height: 50px; }   /* above the stick, not on it */
+  #bars.bars { top: calc(var(--sat) + 214px); left: auto; right: calc(12px + var(--sar)); transform: none; width: min(56vw, 300px); max-width: none; }
+}
 .hud-btns .cam-chip { font-size: 0 !important; padding-left: 9px; padding-right: 9px; } .hud-btns .cam-chip svg { margin: 0 !important; }
 @media (max-height: 460px) {
   .obj { padding: 7px 10px 8px; font-size: 13px; }
@@ -540,7 +590,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
   <div id="joyZone" class="joy-zone"></div>
   <div id="joy" class="joy"><div id="knob" class="knob"></div></div>
   <button id="btnFire" class="tbtn fire" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/><circle cx="12" cy="12" r="1.4"/></svg><span>Огонь</span><b class="cnt ammo" id="ammoN">0</b></button>
-  <button id="btnProf" class="tbtn prof" type="button" aria-label="Профиль"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>Профиль</span></button>
+  <button id="btnProf" class="tbtn tprof" type="button" aria-label="Профиль"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>Профиль</span></button>
   <button id="btnFlash" class="tbtn flash" type="button" aria-label="Граната"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="6"/><path d="M12 8V4M9 4h6M16 10l3-3"/></svg><span>Граната</span><b class="cnt" id="flashN">0</b></button>
   <button id="btnDrift" class="tbtn drift" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c4 0 5-10 10-10h6"/><path d="m17 4 3 3-3 3"/><path d="M4 21h6"/></svg><span>Занос</span></button>
   <button id="btnMelee" class="tbtn melee" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v3M11 10V6a2 2 0 0 1 4 0v4M15 10V8a2 2 0 0 1 4 0v6a7 7 0 0 1-7 7h-1a6 6 0 0 1-6-6v-2a2 2 0 0 1 4 0"/></svg><span>Удар</span></button>
@@ -671,7 +721,12 @@ const isTouch = window.matchMedia('(pointer: coarse)').matches || ('ontouchstart
 // ---------------- renderer / scene ----------------
 THREE.ColorManagement.legacyMode = false;
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 1.75));
+// graphics quality: «auto» adapts to the device (and climbs to HD when there is headroom); «hd» keeps the full screen resolution,
+// hardware anti-aliasing, sharper shadows and the detailed models on phones too
+const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); } catch (e) { /* storage unavailable */ } return { pref: v === 'auto' ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' }; })();   // HD by default; «chosen» = the player picked it in the pause menu
+const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, isTouch ? 1.5 : 1.75), PR_HD = Math.min(DPR, isTouch ? 2.25 : 2);
+const HD = () => GFX.pref === 'hd';
+renderer.setPixelRatio(HD() ? PR_HD : PR_BASE);
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -720,14 +775,14 @@ function setupPost() {
   if (!THREE.EffectComposer || !THREE.UnrealBloomPass || !THREE.ShaderPass) return;
   try {
     const gl2 = renderer.capabilities.isWebGL2;
-    const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: gl2 && !isTouch ? 4 : 0 });
+    const msaa = gl2 && (!isTouch || HD()); const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: msaa ? 4 : 0 });
     composer = new THREE.EffectComposer(renderer, rt);
     composer.addPass(new THREE.RenderPass(scene, camera));
     bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.55, 0.95);
     composer.addPass(bloomPass);
     finalPass = new THREE.ShaderPass(FinalShader); composer.addPass(finalPass);
     // smooth edges: phones render without MSAA, so FXAA runs last on the graded image
-    if (THREE.FXAAShader && !(gl2 && !isTouch)) { fxaaPass = new THREE.ShaderPass(THREE.FXAAShader); composer.addPass(fxaaPass); }
+    if (THREE.FXAAShader && !msaa) { fxaaPass = new THREE.ShaderPass(THREE.FXAAShader); composer.addPass(fxaaPass); }
   } catch (e) { composer = null; }
 }
 setupPost();
@@ -748,12 +803,22 @@ window.addEventListener('orientationchange', () => { resize(); setTimeout(resize
 if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 resize();
 // adaptive quality: first the bloom, then the resolution; the colour grade and the anti-aliasing stay unless the device really cannot cope
-const perf = { t: 0, frames: 0, level: 0, done: false };
+const perf = { t: 0, frames: 0, level: 0, done: false, slow: 0 };
 function checkPerf(dt) {
   if (perf.done) return;
   perf.t += dt; perf.frames++;
   if (perf.t < 2.5) return;
   const fps = perf.frames / perf.t; perf.t = 0; perf.frames = 0;
+  if (HD()) {
+    if (fps >= 24) { perf.slow = 0; perf.done = true; return; }
+    // HD by default but the device cannot keep up: quietly fall back to the adaptive mode (a player who picked HD keeps it)
+    if (!GFX.chosen && ++perf.slow >= 2) { GFX.pref = 'auto'; renderer.setPixelRatio(PR_BASE); resize(); moon.shadow.mapSize.setScalar(isTouch ? 1024 : 2048); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } perf.slow = 0; return; }
+    if (GFX.chosen && fps < 20 && !perf.warned) { perf.warned = true; toast('Графика HD тяжела для этого устройства — в паузе можно включить «Авто»', 4); perf.done = true; }
+    return;
+  }
+  // auto: plenty of headroom — climb to HD resolution once; if that costs too much, step back down
+  if (fps >= 55 && !perf.up && perf.level === 0 && PR_HD > renderer.getPixelRatio() + 0.1) { perf.up = true; renderer.setPixelRatio(PR_HD); resize(); return; }
+  if (perf.up && fps < 32 && renderer.getPixelRatio() > PR_BASE) { renderer.setPixelRatio(PR_BASE); resize(); perf.done = true; return; }
   if (fps >= 32) { perf.done = true; return; }
   perf.level++;
   if (perf.level === 1) { if (bloomPass) bloomPass.enabled = false; moon.shadow.mapSize.set(1024, 1024); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } }
@@ -783,7 +848,7 @@ const hemi = new THREE.HemisphereLight(0x8090ff, 0x3a2a30, 0.7);
 scene.add(hemi);
 const moon = new THREE.DirectionalLight(0xa8b8ff, 0.7);
 moon.castShadow = true;
-moon.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
+moon.shadow.mapSize.setScalar(HD() ? (isTouch ? 2048 : 4096) : isTouch ? 1024 : 2048);
 Object.assign(moon.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 260 });
 moon.shadow.bias = -0.0004; moon.shadow.normalBias = 0.02;
 scene.add(moon, moon.target);
@@ -2408,7 +2473,7 @@ function buildWorld() {
   kitInstances('streetlight', lamps, KIT.prop, true);
   buildSignals(tlights); buildRoadSigns();
 
-  CONTS.glb = !isTouch && perf.level === 0;
+  CONTS.glb = (!isTouch || HD()) && perf.level === 0;
   buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage(); buildLower();
   contBuild();
 
@@ -3108,6 +3173,7 @@ function updateHeli(dt) {
   const tgt = heliTarget(); const T = tgt ? tgt.pos : H.pos;
   // falling after being shot down: spin, smoke, then a fireball
   if (H.crash) {
+    if (H.gone) return;   // already down: one fireball, not one every frame (that kept the screen shaking)
     H.crash += dt; H.vel.y -= 14 * dt; H.pos.addScaledVector(H.vel, dt); H.g.rotation.y += dt * (3 + H.crash * 3);
     if (Math.random() < 0.9) spawnP(H.pos.clone(), { color: pick([0x2a2a30, 0x3a3a40, 0xff7a2a]), size: 1.4, vel: new V3(rand(-1, 1), 3, rand(-1, 1)), life: 1.6, grow: 2.5, opacity: 0.8 });
     if (H.pos.y <= 1) { explode(new V3(H.pos.x, 0.5, H.pos.z), 2.4); addWreck(new V3(H.pos.x, 0, H.pos.z), H.g.rotation.y); shake = Math.min(1.4, shake + 0.8); H.gone = true; scene.remove(H.g); scene.remove(H.beamM); scene.remove(H.spotDisc); H.spot.intensity = 0; }
@@ -3787,7 +3853,7 @@ function makeCar(color, kind, forceModel) {
   const name = forceModel || (player ? PLAYER_CAR.model : wreck ? 'car_sedan' : pol ? 'car_police' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon', 'nine']));
   // the realistic sports car for the taxi, the gangs, traffic and wrecks; the police, vans and garage cars keep their own
   // detailed model: the player's taxi always; the gang cars on computers (on phones they would cost too much speed); traffic and wrecks stay light
-  const real = NR.ready && !!NR.G.car && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' && !(PLAYER_CAR.glb && GLBC[PLAYER_CAR.glb] && GLBC[PLAYER_CAR.glb].scene) : kind === false && !isTouch && perf.level === 0);
+  const real = NR.ready && !!NR.G.car && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' && !(PLAYER_CAR.glb && GLBC[PLAYER_CAR.glb] && GLBC[PLAYER_CAR.glb].scene) : kind === false && (!isTouch || HD()) && perf.level === 0);
   // the gangs on computers: the pack's cars in dark paint (light enough: 17–20k triangles); phones keep the kit cars
   const gang = null;   // the gangs keep the realistic sports car (the «real» path below)
   const gkey = forceModel && forceModel.indexOf('glb:') === 0 ? forceModel.slice(4) : player ? PLAYER_CAR.glb : pol && !forceModel ? 'police' : gang;
@@ -8050,7 +8116,9 @@ function loadScript(src) { return new Promise((ok) => { const s = document.creat
 // Telegram and MAX bridges: ready/expand; the signed launch data also comes in the address (#tgWebAppData / #WebAppData)
 const hashParam = (k) => { try { return new URLSearchParams(LAUNCH.h.slice(1)).get(k) || ''; } catch (e) { return ''; } };
 if (PLATFORM === 'tg') loadScript('https://telegram.org/js/telegram-web-app.js').then(() => { try { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } catch (e) { /* no bridge */ } });
-if (PLATFORM === 'max') loadScript('https://st.max.ru/js/max-web-app.js').then(() => { try { window.WebApp.ready(); window.WebApp.expand(); } catch (e) { /* no bridge */ } });
+const ROTF = (() => { try { return window.parent !== window && window.parent.__nfRot ? window.parent.__nfRot : null; } catch (e) { return null; } })();   // running inside the turned frame (MAX)
+if (PLATFORM === 'max' && ROTF) { try { Object.defineProperty(window, 'WebApp', { configurable: true, get: () => window.parent.WebApp }); } catch (e) { /* no bridge */ } }   // the bridge may load a moment later up there
+else if (PLATFORM === 'max') loadScript('https://st.max.ru/js/max-web-app.js').then(() => { try { window.WebApp.ready(); window.WebApp.expand(); } catch (e) { /* no bridge */ } });
 function platformProof() {
   if (PLATFORM === 'tg') { const d = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || hashParam('tgWebAppData'); return d ? { initData: d } : null; }
   if (PLATFORM === 'max') { const d = (window.WebApp && window.WebApp.initData) || hashParam('WebAppData'); return d ? { max_init: d } : null; }
@@ -10600,6 +10668,14 @@ function toggleTasks(v) { TASK.open = v === undefined ? !TASK.open : v; $('tasks
 
 // pause menu
 let pausedFrom = null;
+// switch the graphics: resolution and shadows change at once; anti-aliasing and the detailed cars follow on the next start
+function setGfx(v) {
+  GFX.pref = v; GFX.chosen = true; try { localStorage.setItem('nf-gfx', v); } catch (e) { /* storage unavailable */ }
+  perf.done = false; perf.up = false; perf.warned = false; perf.t = 0; perf.frames = 0; perf.level = 0; if (bloomPass) bloomPass.enabled = true;
+  renderer.setPixelRatio(HD() ? PR_HD : PR_BASE); resize();
+  moon.shadow.mapSize.setScalar(HD() ? (isTouch ? 2048 : 4096) : isTouch ? 1024 : 2048); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; }
+  toast(HD() ? 'Графика HD: полное разрешение и чёткие тени. Сглаживание и подробные машины — после перезапуска игры' : 'Графика: авто — игра сама подбирает качество под устройство', 3.2);
+}
 function pauseGame() {
   if (state.mode !== 'drive' && state.mode !== 'foot') return;
   pausedFrom = state.mode; state.mode = 'paused'; setEngine(0, false);
@@ -10607,10 +10683,13 @@ function pauseGame() {
   const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
   showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
     <p class="lead">Прогресс сохраняется по миссиям: выйдешь в меню — продолжишь с начала этой миссии.</p>
-    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button><button id="pProf" class="btn" type="button">Профиль: машина, магазин</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
+    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button>${PLATFORM === 'max' && isTouch ? `<button id="pScreen" class="btn" type="button">${ROTF ? 'Экран: вертикально' : 'Экран: горизонтально'}</button>${ROTF ? '<button id="pFlip" class="btn" type="button">Перевернуть на 180°</button>' : ''}` : ''}<button id="pGfx" class="btn" type="button">Графика: ${HD() ? 'HD' : 'Авто'}</button><button id="pProf" class="btn" type="button">Профиль: машина, магазин</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
     pResume: () => { hideModal(); state.mode = pausedFrom; state.fireLock = true; },
     pView: () => { cycleView(); $('pView').textContent = 'Камера: ' + VIEW_NAMES[footView]; },
     pSeason: () => { $('pSeason').textContent = wxCyclePref(); updateWeather(0.016, focus); toast(wxLabel(), 1.6); },
+    pScreen: () => { if (ROTF) ROTF.portrait(); else { try { localStorage.setItem('nf-screen', 'land'); } catch (e) { /* storage unavailable */ } location.reload(); } },
+    pFlip: () => { if (ROTF) ROTF.flip(); },
+    pGfx: () => { setGfx(HD() ? 'auto' : 'hd'); $('pGfx').textContent = 'Графика: ' + (HD() ? 'HD' : 'Авто'); },
     pProf: () => openProfile('garage'),
     pMenu: () => { hideModal(); showSelect(); },
   });
@@ -10992,6 +11071,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
+if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
 window.__nightFare = { get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
