@@ -720,7 +720,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v62'; window.__errs = [];
+window.APP_VER = 'v63'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -3165,6 +3165,7 @@ function contBuild() {
   if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') { boxes(); return; }
   const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
   loader.load('assets/models/container.glb', (gl) => {
+    texCap(gl.scene, gl);
     let mesh = null; gl.scene.updateMatrixWorld(true); gl.scene.traverse((m) => { if (m.isMesh && !mesh) mesh = m; });
     if (!mesh) { boxes(); return; }
     const geo = mesh.geometry.clone(); geo.applyMatrix4(mesh.matrixWorld); geo.computeBoundingBox();
@@ -3637,7 +3638,7 @@ function glbCarLoad(key, then) {
   GLBC[key] = { wait: then ? [then] : [] };
   const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
   loader.load(key === 'police' ? 'assets/models/police.glb' : 'assets/models/cars/' + key + '.glb', (gl) => {
-    const sc = gl.scene; sc.updateMatrixWorld(true);
+    const sc = gl.scene; texCap(sc, gl); sc.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(sc), sz = b.getSize(new V3()), s = (GLBC_LEN[key] || 4.6) / Math.max(sz.z, 0.1);
     // the roof: its highest part (the light bar of the patrol car)
     let top = -1e9; const v = new V3(), pts = [];
@@ -4643,11 +4644,20 @@ function nrPlaceGear(f) {
     if (it.flip) it.o.rotateY(PI); if (it.tiltX) it.o.rotateX(it.tiltX); if (it.scale) it.o.scale.copy(it.scale);
   }
 }
+// iPhone: Safari closes the tab when it runs out of memory («На странице повторно возникла проблема»); the people and car packs
+// bring ~60 textures of 1024 px (4 MB each in memory, more with mipmaps) — on iPhone they are scaled to 512 px when loaded
+const TEX_CAP = /iPhone|iPod/.test(navigator.userAgent) ? 512 : 0, texCapDone = new WeakSet();
+function texCap(root, gl) {
+  if (!TEX_CAP || !root) return;
+  if (gl) gl.parser = null;   // its cache keeps the full-size pictures alive
+  root.traverse((o) => { const ms = o.material ? [].concat(o.material) : []; for (const m of ms) for (const k in m) { const t = m[k]; if (!t || !t.isTexture || texCapDone.has(t)) continue; texCapDone.add(t); const im = t.image, w = im && im.width, h = im && im.height; if (!w || !h || Math.max(w, h) <= TEX_CAP) continue;
+    try { const f = TEX_CAP / Math.max(w, h), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * f)); c.height = Math.max(1, Math.round(h * f)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); if (im.close) im.close(); t.image = c; t.needsUpdate = true; } catch (e) { /* keep the original */ } } });
+}
 function nrLoad(onProgress) {
   if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') return Promise.resolve(false);
   const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
   let done = 0;
-  return Promise.all(NR_SRC.map((k) => new Promise((res, rej) => loader.load('assets/models/' + k + '.glb', (g) => { NR.G[k] = g; done++; if (onProgress) onProgress(done / NR_SRC.length); res(); }, undefined, rej))))
+  return Promise.all(NR_SRC.map((k) => new Promise((res, rej) => loader.load('assets/models/' + k + '.glb', (g) => { texCap(g.scene, g); NR.G[k] = g; done++; if (onProgress) onProgress(done / NR_SRC.length); res(); }, undefined, rej))))
     .then(() => {
       for (const c of NR.G.anims.animations) if (/Idle|Walk|Run/.test(c.name)) NR.clips[c.name.replace(/.*\|/, '')] = c;
       // the car keeps only positions in the file: rebuild its normals
