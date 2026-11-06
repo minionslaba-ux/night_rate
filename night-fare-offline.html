@@ -737,7 +737,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v70'; window.__errs = [];
+window.APP_VER = 'v71'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -9110,6 +9110,16 @@ async function reloadCheck() {
 setTimeout(reloadCheck, 3000); setInterval(() => { if (!document.hidden) reloadCheck(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) reloadCheck(); });
 try { if (/[?&]r=/.test(location.search)) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]r=[^&]*/, '').replace(/^&/, '?') + location.hash); } catch (e) { /* old browser */ }
+// the sign-in journal (table nf_trace): the steps of a sign-in through the Telegram/MAX bot, to see where a phone gets stuck
+const TRACE_SID = Math.random().toString(36).slice(2, 10); let traceN = 0;
+function trace(ev) {
+  if (traceN++ > 80) return;
+  try { fetch(SB_URL + '/rest/v1/nf_trace', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([{ sid: TRACE_SID, ver: window.APP_VER, ev: (String(ev) + ' | sa=' + !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)) + ' hid=' + document.hidden).slice(0, 300) }]) }).catch(() => {}); } catch (e) { /* offline */ }
+}
+const tracing = () => !!(store.get('nf-tgb') || store.get('nf-max'));
+document.addEventListener('visibilitychange', () => { if (tracing()) trace('vis ' + (document.hidden ? 'hidden' : 'visible')); });
+addEventListener('pageshow', (e) => { if (tracing()) trace('pageshow persisted=' + e.persisted); });
+addEventListener('pagehide', () => { if (tracing()) trace('pagehide'); });
 // a request that cannot hang: iOS freezes an app on the home screen while the player is in Telegram/MAX, and a request
 // caught in the middle may never answer — after 12 s it counts as a network error and the waiting loop asks again
 function fetchT(url, opt, ms) {
@@ -9146,29 +9156,33 @@ function maxPrefetch(done) {
 }
 const maxReady = () => !!(maxPre && maxPre.url && Date.now() - maxPre.t < 9 * 60e3);
 // the tap on the MAX link: remember the mark (the page may be reloaded while the player is in MAX) and use it once
-function maxGo(link) { if (!maxReady()) return false; store.set('nf-max', { nonce: maxPre.nonce, code: maxPre.code, link: !!link, t: maxPre.t }); maxPre = null; return true; }
+function maxGo(link) { if (!maxReady()) { trace('max go: link not ready'); return false; } trace('max go ' + maxPre.nonce.slice(0, 6) + ' link=' + !!link); store.set('nf-max', { nonce: maxPre.nonce, code: maxPre.code, link: !!link, t: maxPre.t }); maxPre = null; return true; }
 // what to do in MAX: tap «Начать»; if the bot stays silent (the chat was opened before), send it the 6 digits
 function maxHint() { const S = store.get('nf-max') || {}, c = S.code ? S.code.slice(0, 3) + ' ' + S.code.slice(3) : ''; return 'Нажми «Начать» в боте игры в MAX и вернись сюда — вход подтвердится сам.' + (c ? ` Если бот не ответил, отправь ему код ${c}.` : ''); }
 const maxRedraw = () => { if (!$('prof').hidden) renderProfile(); else if (!$('gate').hidden && !gateMaxUrl) renderGate(); };
 const maxLinkHtml = (cls, label, attrs) => (maxReady() || maxPrefetch(maxRedraw), maxReady()) ? `<a class="${cls}" href="${esc(maxPre.url)}" target="_blank" rel="noopener" ${attrs}>${label}</a>` : `<button class="${cls}" type="button" disabled>${maxPre && maxPre.err ? 'MAX недоступен' : `${BRAND_ICO.max.replace('<svg', '<svg class="bico-s"')} Готовлю вход…`}</button>`;
 // returns '' when signed in, a message otherwise, or null if a newer attempt took over
 async function maxSiteWait() {
+  let lastSt = null;
   const run = ++maxPollRun, clear = () => { try { localStorage.removeItem('nf-max'); } catch (e) { /* storage unavailable */ } };
+  trace('max wait start run=' + run + ' ' + ((store.get('nf-max') || {}).nonce || '').slice(0, 6));
   for (;;) {
     if (run !== maxPollRun) return null;
     const S = store.get('nf-max');
-    if (!S) return null;
+    if (!S) { trace('max wait: no mark (run ' + run + ')'); return null; }
     if (Date.now() - S.t > 10 * 60e3) { clear(); return 'Вход через MAX не подтверждён за 10 минут. Попробуй ещё раз.'; }
     if (!document.hidden) {
       const j = S.link ? await nfCall({ action: 'link', max_nonce: S.nonce }) : await nfPublic({ max_nonce: S.nonce });
+      if (j.pending !== lastSt || j.error) { trace('max poll ' + (j.pending ? 'pending' : j.access_token ? 'TOKEN' : 'err=' + (j.error || '?'))); lastSt = j.pending; }
       if (!j.pending && j.error !== 'network') {
         clear();
         if (S.link) { CLOUD.links = null; return j.linked ? (j.already ? 'MAX уже привязан к этому профилю.' : 'Готово: MAX привязан. Теперь можно входить и так.') : (LINK_ERR[j.error] || 'Не удалось привязать MAX. Попробуй ещё раз.'); }
         if (!j.access_token) return j.error === 'expired' ? 'Вход через MAX устарел. Попробуй ещё раз.' : 'Не удалось войти через MAX. Попробуй ещё раз.';
         const { data, error } = await CLOUD.sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
+        trace('MAX setSession ' + (error ? 'err ' + error.message : data.user ? 'ok' : 'no user'));
         if (error || !data.user) return 'Не удалось войти через MAX.';
         // on a phone, start afresh with the saved session: an app back from the background (iOS) did not always redraw the sign-in
-        if (isTouch) { try { localStorage.setItem('nf-hello', 'MAX'); } catch (e) { /* storage unavailable */ } setTimeout(() => location.reload(), 150); return null; }
+        if (isTouch) { trace('MAX reload'); try { localStorage.setItem('nf-hello', 'MAX'); } catch (e) { /* storage unavailable */ } setTimeout(() => location.reload(), 150); return null; }
         return await cloudLoadProfile(data.user);
       }
     }
@@ -9190,26 +9204,30 @@ function tgPrefetch(done) {
   });
 }
 const tgReady = () => !!(tgPre && tgPre.url && Date.now() - tgPre.t < 9 * 60e3);
-function tgGo(link) { if (!tgReady()) return false; store.set('nf-tgb', { nonce: tgPre.nonce, link: !!link, t: tgPre.t }); tgPre = null; return true; }
+function tgGo(link) { if (!tgReady()) { trace('tg go: link not ready'); return false; } trace('tg go ' + tgPre.nonce.slice(0, 6) + ' link=' + !!link); store.set('nf-tgb', { nonce: tgPre.nonce, link: !!link, t: tgPre.t }); tgPre = null; return true; }
 const tgHint = () => 'Нажми «Старт» в боте игры в Telegram и вернись сюда — вход подтвердится сам.';
 const tgLinkHtml = (cls, label, attrs) => ((tgReady() || tgPrefetch(maxRedraw), tgReady()) ? `<a class="${cls}" href="${esc(tgPre.url)}" target="_blank" rel="noopener" ${attrs}>${label}</a>` : `<button class="${cls}" type="button" disabled>${tgPre && tgPre.err ? esc(tgPre.err) : label}</button>`);
 async function tgBotWait() {
+  let lastSt = null;
   const run = ++tgPollRun, clear = () => { try { localStorage.removeItem('nf-tgb'); } catch (e) { /* storage unavailable */ } };
+  trace('tg wait start run=' + run + ' ' + ((store.get('nf-tgb') || {}).nonce || '').slice(0, 6));
   for (;;) {
     if (run !== tgPollRun) return null;
     const S = store.get('nf-tgb');
-    if (!S) return null;
+    if (!S) { trace('tg wait: no mark (run ' + run + ')'); return null; }
     if (Date.now() - S.t > 10 * 60e3) { clear(); return 'Вход через Telegram не подтверждён за 10 минут. Попробуй ещё раз.'; }
     if (!document.hidden) {
       const j = S.link ? await nfCall({ action: 'link', tg_nonce: S.nonce }) : await nfPublic({ tg_nonce: S.nonce });
+      if (j.pending !== lastSt || j.error) { trace('tg poll ' + (j.pending ? 'pending' : j.access_token ? 'TOKEN' : 'err=' + (j.error || '?'))); lastSt = j.pending; }
       if (!j.pending && j.error !== 'network') {
         clear();
         if (S.link) { CLOUD.links = null; return j.linked ? (j.already ? 'Telegram уже привязан к этому профилю.' : 'Готово: Telegram привязан. Теперь можно входить и так.') : (LINK_ERR[j.error] || 'Не удалось привязать Telegram.'); }
         if (!j.access_token) return j.error === 'expired' ? 'Вход через Telegram устарел. Попробуй ещё раз.' : 'Не удалось войти через Telegram. Попробуй ещё раз.';
         const { data, error } = await CLOUD.sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
+        trace('Telegram setSession ' + (error ? 'err ' + error.message : data.user ? 'ok' : 'no user'));
         if (error || !data.user) return 'Не удалось войти через Telegram.';
         // on a phone, start afresh with the saved session: an app back from the background (iOS) did not always redraw the sign-in
-        if (isTouch) { try { localStorage.setItem('nf-hello', 'Telegram'); } catch (e) { /* storage unavailable */ } setTimeout(() => location.reload(), 150); return null; }
+        if (isTouch) { trace('Telegram reload'); try { localStorage.setItem('nf-hello', 'Telegram'); } catch (e) { /* storage unavailable */ } setTimeout(() => location.reload(), 150); return null; }
         return await cloudLoadProfile(data.user);
       }
     }
@@ -9346,15 +9364,17 @@ function platformHint() {
   return 'На компьютере: нажмите значок установки в адресной строке Chrome, Edge или Яндекс Браузера, или выберите в меню «Установить приложение».';
 }
 let gateStep = 'install', gateMode = 'register', gateMsg = '', gateForm = false, gateMaxUrl = '';   // gateMode/gateForm: left from the login-and-password form, no longer shown
-function helloAfterLogin() { let w = ''; try { w = localStorage.getItem('nf-hello') || ''; localStorage.removeItem('nf-hello'); } catch (e) { /* storage unavailable */ } if (!w) return; let n = 0; const t = setInterval(() => { n++; if (PROF.login) { clearInterval(t); updateProfChip(); toast(`Вход через ${w}: привет, ${PROF.name}!`, 3.5); } else if (n > 20) { clearInterval(t); toast(`Вход через ${w} не сохранился. Попробуй ещё раз.`, 3.5); } }, 500); }
+function helloAfterLogin() { let w = ''; try { w = localStorage.getItem('nf-hello') || ''; localStorage.removeItem('nf-hello'); } catch (e) { /* storage unavailable */ } if (!w) return; trace('hello after reload ' + w + ' login=' + !!PROF.login); let n = 0; const t = setInterval(() => { n++; if (PROF.login) { clearInterval(t); trace('hello ok after ' + n * 0.5 + 's'); updateProfChip(); toast(`Вход через ${w}: привет, ${PROF.name}!`, 3.5); } else if (n > 20) { clearInterval(t); trace('hello: no login after 10s'); toast(`Вход через ${w} не сохранился. Попробуй ещё раз.`, 3.5); } }, 500); }
 function startGate() {
   helloAfterLogin();
   if (VK_AUTH) { finishGate(); toast('Вход через ВКонтакте…', 2); vkidFinish(VK_AUTH).then((err) => { if (!PROF.login) return gateAgain(err || 'Не удалось войти через ВКонтакте.'); toast(err || `Привет, ${PROF.name}!`, 3.5); updateProfChip(); }); return; }
   if (!inMiniApp && store.get('nf-tgb') && Date.now() - store.get('nf-tgb').t < 10 * 60e3) {   // the page reloaded while waiting for the Telegram bot
+    trace('boot: resume tg wait');
     gateStep = 'register'; gateMsg = tgHint(); $('gate').hidden = false; renderGate();
     tgBotWait().then((err) => { if (!PROF.login) return gateAgain(err || ''); finishGate(); if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); }); return;
   }
   if (!inMiniApp && store.get('nf-max') && Date.now() - store.get('nf-max').t < 10 * 60e3) {   // the page reloaded while waiting for MAX
+    trace('boot: resume max wait');
     gateStep = 'register'; gateMsg = maxHint(); $('gate').hidden = false; renderGate();
     maxSiteWait().then((err) => { if (!PROF.login) return gateAgain(err || ''); finishGate(); if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); }); return;
   }
