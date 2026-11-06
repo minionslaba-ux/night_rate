@@ -231,7 +231,7 @@ body.voice-on .tbtn.talk { display: grid; }
 .tbtn svg { width: 26px; height: 26px; fill: none; stroke: var(--c); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 4px var(--c)); }
 .tbtn.fire svg { width: 34px; height: 34px; }
 .tbtn:active, .tbtn.held { background: linear-gradient(160deg, #3a3d46, #1a1b20); box-shadow: inset 0 3px 8px rgba(0,0,0,.8), 0 0 0 3px #0e0f13, 0 0 0 5px var(--c), 0 0 20px var(--c); }
-.tbtn.fire { --c: #ff4a3a; } .tbtn.drift { --c: #ffc43d; } .tbtn.nitro { --c: #3dbbff; } .tbtn.shield { --c: #7ad68a; } .tbtn.aim { --c: #4dffa6; }
+.auto-chip.on { background: #1f7a44; border-color: #4dffa6; color: #fff; } .auto-chip.paused { background: #6a5a1a; color: #fff; } .tbtn.fire { --c: #ff4a3a; } .tbtn.drift { --c: #ffc43d; } .tbtn.nitro { --c: #3dbbff; } .tbtn.shield { --c: #7ad68a; } .tbtn.aim { --c: #4dffa6; }
 .tbtn.nitro, .tbtn.shield, .tbtn.aim, .tbtn.drift, .tbtn.fire { background: linear-gradient(160deg, #5a5e6a, #24262e 55%, #15161b); border: 0; font-size: 11px; }
 .tbtn .cnt { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; border-radius: 10px; background: #ffc43d; color: #1a1405; font: 800 12px var(--font-body); display: grid; place-items: center; box-shadow: 0 0 0 2px #0e0f13; text-shadow: none; }
 .joy { background: radial-gradient(circle, #2a2c34, #16171c); border: 0; box-shadow: inset 0 0 0 3px #0e0f13, inset 0 0 0 5px #4a4d58, 0 4px 12px rgba(0,0,0,.6); opacity: .92; }
@@ -631,7 +631,7 @@ setTimeout(function () {
     <div id="boosts" class="stats boosts"></div>
     <button id="btnAmmo" class="ammo-buy" type="button" hidden></button>
     <div id="godBadge" class="stats god" hidden></div>
-    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnJob" class="chip hud-chip" type="button" hidden>Отказаться от заказа</button><button id="btnTask" class="chip hud-chip" type="button" hidden>Задания</button><button id="btnTow" class="chip hud-chip tow" type="button" hidden>Эвакуатор</button><button id="mute" class="chip hud-chip snd-chip" type="button" aria-label="Звук" title="Звук"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="w" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="x" d="m16 9 6 6M22 9l-6 6"/></svg></button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
+    <div class="hud-btns"><button id="btnView" class="chip hud-chip cam-chip" type="button" aria-label="Камера">Камера</button><button id="btnAuto" class="chip hud-chip auto-chip" type="button" hidden>Автопилот</button><button id="btnChat" class="chip hud-chip" type="button" hidden>Чат</button><button id="btnParty" class="chip hud-chip" type="button" hidden>Группа</button><button id="btnJob" class="chip hud-chip" type="button" hidden>Отказаться от заказа</button><button id="btnTask" class="chip hud-chip" type="button" hidden>Задания</button><button id="btnTow" class="chip hud-chip tow" type="button" hidden>Эвакуатор</button><button id="mute" class="chip hud-chip snd-chip" type="button" aria-label="Звук" title="Звук"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="w" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="x" d="m16 9 6 6M22 9l-6 6"/></svg></button><button id="btnPause" class="chip hud-chip" type="button">Пауза</button></div>
   </div>
   <div id="bars" class="bars" hidden></div>
   <div id="nav" class="nav" hidden><svg id="navArrow" viewBox="-50 -50 100 100" aria-hidden="true"><path d="M0 -42 L32 0 L13 0 L13 40 L-13 40 L-13 0 L-32 0 Z" fill="#4dffa6" stroke="#0b0d1f" stroke-width="5" stroke-linejoin="round"/></svg><div><b id="navTurn">Прямо</b><span id="navDist"></span></div></div>
@@ -737,7 +737,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v72'; window.__errs = [];
+window.APP_VER = 'v73'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5326,6 +5326,7 @@ window.addEventListener('keydown', (e) => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (state.mode === 'dialog' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) advanceDialog();
   if (!e.repeat && e.code === 'KeyN') useBoost('nitro');
+  if (!e.repeat && e.code === 'KeyJ' && state.mode === 'drive') useBoost('auto');
   if (!e.repeat && e.code === 'KeyR' && (state.mode === 'drive' || state.mode === 'foot')) buyAmmo();
   if (!e.repeat && e.code === 'KeyB') useBoost('shield');
   if (!e.repeat && e.code === 'KeyV' && (state.mode === 'foot' || state.mode === 'drive')) cycleView();
@@ -5801,8 +5802,10 @@ function spawnEnemyCar() {
   if (!state.firstChase) { state.firstChase = true; toast(MIS && MIS.chaseMsg ? MIS.chaseMsg : 'Хвост! «Шакалы» на хвосте', 2); }
 }
 function updateDrive(dt) {
-  const steerKey = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
-  const thrKey = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  let steerKey = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  let thrKey = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  if (APL.on && (steerKey || thrKey || Math.hypot(joy.x, joy.y) > 0.3)) apStop('Руль у тебя. Автопилот выключен.');
+  apTick(); apHud();
   // the stick: point where to go — up is gas, the angle steers (soft curve, dead zone), down brakes and reverses
   let jt = 0, js = 0; const jl = Math.hypot(joy.x, joy.y);
   if (jl > 0.16) {
@@ -5810,6 +5813,7 @@ function updateDrive(dt) {
     if (Math.abs(a) < 2.2) { jt = mag; const k = clamp(a / 1.15, -1, 1); js = Math.sign(k) * Math.pow(Math.abs(k), 1.35); }
     else { jt = -mag * 0.85; js = clamp(joy.x * 1.2, -1, 1); }
   }
+  if (APL.on && !APL.paused) { const a = apControl(dt); steerKey = 0; thrKey = a.t; js = a.s; jt = 0; }
   pc.steerSm = (pc.steerSm || 0) + (clamp(steerKey + js, -1, 1) - (pc.steerSm || 0)) * Math.min(1, dt * (steerKey ? 14 : 9));
   const throttle = clamp(thrKey + jt, -1, 1), steer = pc.steerSm;
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
@@ -7595,6 +7599,7 @@ function startGen(ep, i, withIntro) {
   AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village'; LOW.on = (c.zone || E.zone) === 'lower' || (c.zone || E.zone) === 'city' && !!E.season3; CITY = CITIES[c.zone || E.zone] || null; cityUse(CITY);
   resetJet(c.jetAt);
   MIS = GEN[c.type](c, title, done, E);
+  MIS.apOk = AP_TYPES.includes(c.type) && !c.chase && !c.police; APL.on = false;
   if (c.carStyle || E.carStyle) MIS.carStyle = c.carStyle || E.carStyle; if (c.chaseMsg || E.chaseMsg) MIS.chaseMsg = c.chaseMsg || E.chaseMsg;
   if (c.police) { MIS.carStyle = 'police'; MIS.chaseMsg = c.chaseMsg || 'Полиция на хвосте! Стрелять по ней нельзя'; withPolice(MIS, c); }
   if (c.heli) spawnHeli(c.heli);
@@ -8480,6 +8485,7 @@ const ITEMS = {
   medkit: { name: 'Аптечка', price: 150, desc: 'Сама лечит героя, когда здоровье падает ниже 30%.' },
   revive: { name: 'Второй шанс', price: 400, desc: 'Продолжить с места гибели без рекламы.' },
   x2: { name: 'Двойные монеты', price: 600, desc: 'Все монеты ×2 в следующем эпизоде.' },
+  auto: { name: 'Автопилот', price: 90, desc: 'Сам довезёт до цели навигатора: заказы такси и доставки без погони. Клавиша J. Отмена — руль, газ или кнопка. Чаевых за поездку на автопилоте нет.' },
 };
 const PACKS = {
   starter: { name: 'Стартовый набор', rub: 99, desc: 'Хэтч «Шустрик», 3 нитро, 3 аптечки и 2000 монет', grant: (p) => { if (!p.cars.includes('hatch')) { p.cars.push('hatch'); p.paints.hatch = ['red']; p.paint.hatch = 'red'; } p.inv.nitro += 3; p.inv.medkit += 3; p.coins += 2000; } },
@@ -8509,7 +8515,7 @@ const ACH = [
 ];
 function profDefaults(name, login) {
   return { v: 1, name: name || 'Гость', login: login || null, coins: 300, cars: ['taxi'], car: 'taxi', paints: { taxi: ['yellow'] }, paint: { taxi: 'yellow' }, neons: [], neon: null, outfits: [], outfit: null, weapons: ['shmel'], weapon: 'shmel',
-    up: { engine: 0, body: 0, gun: 0, rate: 0, vest: 0 }, inv: { nitro: 2, shield: 1, repair: 1, medkit: 1, revive: 0, x2: 0, ammo: 800 }, ach: {},
+    up: { engine: 0, body: 0, gun: 0, rate: 0, vest: 0 }, inv: { nitro: 2, shield: 1, repair: 1, medkit: 1, revive: 0, x2: 0, ammo: 800, auto: 1 }, ach: {},
     st: { carKills: 0, footKills: 0, bosses: 0, chapters: 0, eps: [], earned: 0, nitro: 0, loot: 0, tunnel: 0, bridge: 0, style: 0, time: 0 }, noAds: false, pass: false };
 }
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } } };
@@ -8726,6 +8732,7 @@ function applyProfileMods() {
 // boosters during play
 let shieldMesh = null;
 function useBoost(id) {
+  if (id === 'auto') { if (APL.on) apStop('Автопилот выключен. Руль у тебя.'); else apStart(); return; }
   if (state.mode !== 'drive' && state.mode !== 'foot') return;
   if (id === 'nitro' && state.mode !== 'drive') return;
   if (id === 'nitro' && careNoNitro()) { toast('Бак пуст: нитро не поможет', 1.4); return; }
@@ -8735,6 +8742,50 @@ function useBoost(id) {
   if (id === 'nitro') { state.nitroT = 3; profStat('nitro'); toast('Нитро!', 1); }
   if (id === 'shield') { state.shieldT = 6; state.invuln = Math.max(state.invuln, 6); toast('Щит: 6 секунд', 1.2); }
   updateBoostsHud();
+}
+// ---------------- the autopilot: bought with coins, drives to the navigator's goal by itself ----------------
+// Only where the driving is not the test itself: taxi orders in the open city and deliveries without a chase. Any steering,
+// gas or the button again hands the wheel back; a live chase pauses it; at the goal it stops and switches off.
+const APL = { on: false, paused: false, used: false, slowT: 0, revT: 0, revS: 0, lp: new V3(), lpT: 0, hard: 0, hardT: 0 };
+const AP_TYPES = ['deliver', 'shuttle'];
+function apAllowed() { return state.mode === 'drive' && !!MIS && MIS.apOk === true && !TRK.on && !(pc && pc.locked); }
+function apChase() { return typeof enemyCars !== 'undefined' && enemyCars.some((e) => !e.dead && !e.script); }
+function apStart() {
+  if (!apAllowed()) { toast('Здесь автопилот нельзя: только заказы такси и доставки без погони', 2.2); return; }
+  if (!PROF.inv.auto && !PROF.god) { toast('Автопилот: нет в запасе. Купи в магазине (Расходники).', 2); return; }
+  if (!PROF.god) PROF.inv.auto--; saveProfile();
+  Object.assign(APL, { on: true, paused: false, used: true, slowT: 0, revT: 0, hard: 0, hardT: 0, lpT: 0 }); APL.lp.copy(pc.pos);
+  toast('Автопилот включён. Руль или газ — и он отдаст управление.', 2); apHud();
+}
+function apStop(msg, refund) { if (!APL.on) return; APL.on = false; APL.paused = false; if (refund && !PROF.god) { PROF.inv.auto++; saveProfile(); } if (msg) toast(msg, 2); apHud(); }
+function apHud() { const b = $('btnAuto'); if (!b) return; const show = apAllowed() || APL.on; if (b.hidden === show) b.hidden = !show; b.classList.toggle('on', APL.on && !APL.paused); b.classList.toggle('paused', APL.on && APL.paused); const t = APL.on ? (APL.paused ? 'Автопилот: погоня' : 'Автопилот ✓') : `Автопилот ×${PROF.god ? '∞' : PROF.inv.auto || 0}`; if (b.textContent !== t) b.textContent = t; }
+// steering and gas for this frame: follow the navigator's next point, slow down for turns and the goal, give way, back out when stuck
+function apControl(dt) {
+  const goal = MIS && MIS.navGoal ? MIS.navGoal() : null, P0 = NAV.pts[0];
+  if (!goal || !P0) return { t: 0, s: 0 };
+  const dGoal = Math.hypot(goal.x - pc.pos.x, goal.z - pc.pos.z), v = Math.hypot(pc.vel.x, pc.vel.z);
+  const tgt = dGoal < 35 ? goal : P0, diff = wrapA(Math.atan2(tgt.x - pc.pos.x, tgt.z - pc.pos.z) - pc.h);
+  let s = clamp(-diff * 2.2, -1, 1), want = P.maxSpeed * 0.75;
+  if (Math.abs(diff) > 1.1) want = 9; else if (Math.abs(diff) > 0.45) want = 16;
+  const P1 = NAV.pts[1];
+  if (P1 && dGoal > 35) { const a1 = Math.atan2(P0.x - pc.pos.x, P0.z - pc.pos.z), a2 = Math.atan2(P1.x - P0.x, P1.z - P0.z); if (Math.abs(wrapA(a2 - a1)) > 0.6 && Math.hypot(P0.x - pc.pos.x, P0.z - pc.pos.z) < 10 + v * 0.9) want = Math.min(want, 15); }
+  if (dGoal < 30) want = Math.min(want, 14); if (dGoal < 12) want = Math.min(want, 5); if (dGoal < 8) want = 0;
+  // give way: a car right ahead
+  const fx = Math.sin(pc.h), fz = Math.cos(pc.h), cars = (typeof LIFE !== 'undefined' && LIFE.cars ? LIFE.cars : []).concat(typeof LIFE !== 'undefined' && LIFE.buses ? LIFE.buses : []);
+  for (const c of cars) { const p = c.pos || (c.g && c.g.position); if (!p) continue; const dx = p.x - pc.pos.x, dz = p.z - pc.pos.z, ahead = dx * fx + dz * fz, side = Math.abs(dx * fz - dz * fx); if (ahead > 0 && ahead < 14 && side < 3) want = Math.min(want, ahead < 7 ? 0 : 6); }
+  // stuck: back out with the wheel turned the other way
+  if (APL.revT > 0) { APL.revT -= dt; return { t: -1, s: APL.revS }; }
+  if (want > 3 && v < 1.8) { APL.slowT += dt; if (APL.slowT > 1.3) { APL.slowT = 0; APL.revT = 1.1; APL.revS = -Math.sign(s || 1); APL.hard++; } } else APL.slowT = 0;
+  APL.hardT += dt; if (APL.hardT > 20) { APL.hardT = 0; APL.hard = 0; }
+  if (APL.hard >= 4) { apStop('Не проехать — рули сам. Автопилот вернулся в запас.', true); return { t: 0, s: 0 }; }
+  return { t: v < want ? 1 : v > want + 4 ? -1 : 0.2, s };
+}
+// the goal reached (the car stands at it): done, the wheel is the player's again
+function apTick() {
+  if (!APL.on) return;
+  if (!apAllowed()) { apStop(''); return; }
+  const chase = apChase(); if (chase !== APL.paused) { APL.paused = chase; if (chase) toast('Погоня — рули сам. Автопилот продолжит, когда оторвёшься.', 2.2); apHud(); }
+  const goal = MIS.navGoal && MIS.navGoal(); if (goal && Math.hypot(goal.x - pc.pos.x, goal.z - pc.pos.z) < 9 && Math.hypot(pc.vel.x, pc.vel.z) < 1.5) apStop('Автопилот: приехали.');
 }
 function updateBoosts(dt) {
   if (state.nitroT > 0) {
@@ -9786,7 +9837,8 @@ function startOnline() {
   if (hero) { scene.remove(hero.g); hero = null; }
   clearStage(); state.ep = 99; state.ch = 1; state.coins = 0; state.time = 0; state.reviveUsed = {}; state.nitroT = 0; state.shieldT = 0;
   const [x, z, h] = onlineSpawnPoint(); beginDrive(x, z, h); state.invuln = 1e9;
-  MIS = { title: 'Открытый город', online: true, noFire: true, noFireMsg: 'В открытом городе не стреляют', chase: { max: 0 }, get navName() { return JOBS.cur ? (JOBS.cur.ph === 'pick' ? 'Пассажир: ' + JOBS.cur.from[0] : JOBS.cur.to[0]) : ''; },
+  APL.on = false;
+  MIS = { title: 'Открытый город', apOk: true, online: true, noFire: true, noFireMsg: 'В открытом городе не стреляют', chase: { max: 0 }, get navName() { return JOBS.cur ? (JOBS.cur.ph === 'pick' ? 'Пассажир: ' + JOBS.cur.from[0] : JOBS.cur.to[0]) : ''; },
     navGoal: () => (JOBS.cur ? new V3(...(JOBS.cur.ph === 'pick' ? [JOBS.cur.from[1][0], 0, JOBS.cur.from[1][1]] : [JOBS.cur.to[1][0], 0, JOBS.cur.to[1][1]])) : pc.pos),
     update(dt) { jobsUpdate(dt); }, hud() { if (JOBS.cur && JOBS.cur.ph === 'ride') return { timer: `Заказ: ${fmt(JOBS.cur.left)} · ${JOBS.cur.reward} монет`, bad: JOBS.cur.left < 15 }; return {}; } };
   setObjective('Открытый город: катайся, бери заказы такси, сигналь (H) и общайся в чате. Машины других игроков — призраки.'); JOBS.cur = null; JOBS.wait = 8;
@@ -10388,6 +10440,7 @@ const JOB_PLACES = [['Мэрия', [40, 80]], ['Центральная площ�
 const JOB_HELLO = ['Добрый вечер! Только побыстрее, опаздываю.', 'Здравствуйте. Музыку можно потише?', 'Наконец-то! Полчаса жду машину.', 'Ой, а вы та самая жёлтая «Девятка»? Шучу.', 'Едем. Я заплачу сверху, если успеем.', 'Ночь такая длинная… Поехали.'];
 const JOB_BYE = ['Спасибо, лучший таксист в городе!', 'Успели! Держите на чай.', 'Мягко едете. Сохраню ваш номер.', 'Отлично, до встречи!'];
 function jobNew() {
+  APL.used = APL.on;
   const near = JOB_PLACES.filter(([, p]) => Math.hypot(p[0] - pc.pos.x, p[1] - pc.pos.z) > 40).sort(() => Math.random() - 0.5);
   const from = near[0], to = JOB_PLACES.filter((q) => q !== from && Math.hypot(q[1][0] - from[1][0], q[1][1] - from[1][1]) > 120).sort(() => Math.random() - 0.5)[0];
   const dist = Math.hypot(to[1][0] - from[1][0], to[1][1] - from[1][1]);
@@ -10407,7 +10460,7 @@ function jobsUpdate(dt) {
     J.left -= dt;
     if (J.left <= 0) return jobEnd('Пассажир не дождался и вышел. Без оплаты.');
     if (d < 11 && slow) {
-      const tip = J.left > J.total * 0.4 ? Math.round(J.reward * 0.5) : 0, look = careFareK(), pay0 = Math.round((J.reward + tip) * look);
+      const tip = J.left > J.total * 0.4 && !APL.used ? Math.round(J.reward * 0.5) : 0, look = careFareK(), pay0 = Math.round((J.reward + tip) * look);
       addCoins(pay0); profStat('fares'); JOBS.done++;
       return jobEnd('«' + JOB_BYE[Math.floor(Math.random() * JOB_BYE.length)] + '»' + (tip ? ` Чаевые: +${tip}` : '') + (look > 1 ? ' Чистая машина: +10%' : look < 1 ? ' Грязная машина: −10%' : ''));
     }
@@ -13043,6 +13096,7 @@ $('profBody').addEventListener('click', (e) => {
   }
   const j = e.target.closest('[data-join]'); if (j) { joinCommunity(j.dataset.join); return; } const b = e.target.closest('[data-act]'); if (b && !b.disabled) profAction(b.dataset.act, b.dataset.id); });
 for (const [id, k] of [['btnNitro', 'nitro'], ['btnShield', 'shield']]) $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); useBoost(k); });
+$('btnAuto').addEventListener('click', (e) => { e.preventDefault(); useBoost('auto'); });
 $('btnAmmo').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); buyAmmo(); });
 window.addEventListener('keydown', (e) => {
   if (!$('gate').hidden) return;
@@ -13117,7 +13171,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
