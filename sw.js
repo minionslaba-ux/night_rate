@@ -1,5 +1,5 @@
 // Service worker: keeps the game shell and models in the cache so the installed game starts fast and works offline after the first visit.
-const CACHE = 'night-fare-v4';
+const CACHE = 'night-fare-v5';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png',
   './assets/city.glb', './assets/anims.glb'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });

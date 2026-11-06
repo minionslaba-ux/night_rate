@@ -597,6 +597,23 @@ body.online:not(.task) .stat-line .sep { display: none; }
 
 <div id="stage"></div>
 <div id="loading" class="loading">Загрузка города…</div>
+<script>
+/* a watchdog that needs nothing else: if the game has not started in 30 s (a script hung on the network, the phone ran out of memory),
+   say so, report it and offer a clean restart (the game's cache and service worker are dropped) */
+window.nfHardReload = function (tag) {
+  var go = function () { var q = location.search.replace(/[?&]r=[^&]*/, '').replace(/^&/, '?'); location.replace(location.pathname + (q ? q + '&' : '?') + 'r=' + encodeURIComponent(tag || Date.now()) + location.hash); };   /* keeps the mini-app parameters */
+  var jobs = [];
+  try { if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })); } catch (e) { /* no service worker */ }
+  try { if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })); } catch (e) { /* no cache storage */ }
+  Promise.all(jobs).then(go, go); setTimeout(go, 3000);
+};
+setTimeout(function () {
+  var l = document.getElementById('loading'); if (!l || l.hidden) return;
+  var st = ''; try { st = localStorage.getItem('nf-crumb') || ''; } catch (e) { /* storage unavailable */ }
+  try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER || 'pre', platform: 'stuck', browser: navigator.userAgent.slice(0, 200), msg: ('stuck 30s: «' + l.textContent + '» three=' + !!window.THREE + ' sb=' + !!window.supabase + ' ' + st).slice(0, 300), place: 'boot' }]) }).catch(function () {}); } catch (e) { /* offline */ }
+  l.innerHTML = 'Загрузка затянулась.<br><button type="button" style="margin-top:14px;padding:12px 22px;font:700 15px sans-serif;border-radius:8px;border:0;background:#ffc43d;color:#111" onclick="nfHardReload()">Перезапустить игру</button>';
+}, 30000);
+</script>
 <div id="hurt" class="hurt"></div>
 <div id="crosshair" class="crosshair" hidden><i></i><i></i><i></i><i></i><b></b></div>
 <div id="hitmark" class="hitmark" hidden><i></i><i></i></div>
@@ -720,26 +737,28 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v67'; window.__errs = [];
+window.APP_VER = 'v68'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
   addEventListener('unhandledrejection', function (e) { var m = String((e.reason && e.reason.message) || e.reason || ''); if (/fetch|network|load|abort/i.test(m)) return; add('promise: ' + m, ''); });
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script>/* jsdelivr is sometimes unreachable: try a second CDN */ if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"><\/script>');</script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/FXAAShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/libs/meshopt_decoder.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/SkeletonUtils.js"></script>
+<script src="lib/three/build/three.min.js"></script>
+<script>/* the game's own copy first (a foreign server may hang); the CDN only if it failed */ if (!window.THREE) document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"><\/script>');</script>
+<script src="lib/supabase.js"></script>
+<script>/* the game's own copy first; the CDNs only if it failed */ if (!window.supabase) document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"><\/script>');</script>
+<script>if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"><\/script>');</script>
+<script src="lib/three/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="lib/three/examples/js/postprocessing/RenderPass.js"></script>
+<script src="lib/three/examples/js/shaders/CopyShader.js"></script>
+<script src="lib/three/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="lib/three/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="lib/three/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="lib/three/examples/js/shaders/FXAAShader.js"></script>
+<script src="lib/three/examples/js/loaders/GLTFLoader.js"></script>
+<script src="lib/three/examples/js/libs/meshopt_decoder.js"></script>
+<script src="lib/three/examples/js/utils/SkeletonUtils.js"></script>
 <script>
 (function () {
 'use strict';
@@ -9066,6 +9085,19 @@ async function vkidFinish(a) {
 // MAX on the site: the player taps «Начать» in the game's MAX bot (link max.ru/<bot>?start=<one-time mark>), the bot tells our
 // server, and the site, which keeps asking, gets the session. Same MAX account as in the MAX mini app. The mark lives 10 minutes.
 let maxPollRun = 0;
+// the owner's /reload in the bot: a new mark in nf_public → every open game drops its cache and loads afresh
+// (a game that never saw a mark only remembers it); asked at start, every minute and on coming back to the game
+async function reloadCheck() {
+  try {
+    const r = await fetchT(SB_URL + '/rest/v1/nf_public?k=eq.reload&select=v', { headers: { apikey: SB_KEY }, cache: 'no-store' }, 8000);
+    const j = await r.json(), v = j && j[0] && j[0].v; if (!v) return;
+    const seen = localStorage.getItem('nf-reload'); localStorage.setItem('nf-reload', v);
+    if (seen && seen !== v) window.nfHardReload(v);
+  } catch (e) { /* offline or no storage */ }
+}
+setTimeout(reloadCheck, 3000); setInterval(() => { if (!document.hidden) reloadCheck(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) reloadCheck(); });
+try { if (/[?&]r=/.test(location.search)) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]r=[^&]*/, '').replace(/^&/, '?') + location.hash); } catch (e) { /* old browser */ }
 // a request that cannot hang: iOS freezes an app on the home screen while the player is in Telegram/MAX, and a request
 // caught in the middle may never answer — after 12 s it counts as a network error and the waiting loop asks again
 function fetchT(url, opt, ms) {

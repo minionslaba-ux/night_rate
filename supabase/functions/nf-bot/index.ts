@@ -63,6 +63,7 @@ const kb = (rows: [string, string][][]) => ({ inline_keyboard: rows.map((r) => r
 const PUBLIC_COMMANDS = [{ command: 'start', description: 'Открыть игру' }, { command: 'play', description: 'Кнопка «Играть»' }];
 const ADMIN_COMMANDS = [
   { command: 'help', description: 'Все команды' },
+  { command: 'reload', description: 'Перезагрузить игру у всех (очистить кэш)' },
   { command: 'stats', description: 'Отчёт за сегодня' },
   { command: 'yesterday', description: 'Отчёт за вчера' },
   { command: 'week', description: 'Отчёт за 7 дней' },
@@ -92,6 +93,9 @@ const ADMIN_COMMANDS = [
   { command: 'ideas', description: 'Список идей и что с ними сделано' },
 ];
 const HELP = `🛠 <b>Команды владельца «Ночного тарифа»</b>
+
+🔄 /reload — перезагрузить игру у всех: очистить кэш и загрузить свежую версию
+🚨 О сбоях бот пишет сам (проверка раз в 2 минуты, не чаще раза в 5 минут) — с кнопкой перезагрузки
 
 📊 <b>Статистика</b>
 /stats — сегодня · /yesterday — вчера · /week — 7 дней
@@ -320,6 +324,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
       await say(rows.length ? `⚠️ <b>Ошибки за 7 дней: ${data!.length}</b>\n${rows.join('\n')}` : 'Ошибок за неделю нет. 👍');
       return true;
     }
+    case 'reload': await say(await reloadAll()); return true;
     case 'health': {
       const t0 = Date.now();
       const site = await fetch(SITE, { headers: { 'cache-control': 'no-cache' } }).then(async (r) => ({ ok: r.ok, code: r.status, body: await r.text() })).catch((e) => ({ ok: false, code: 0, body: String(e) }));
@@ -404,7 +409,43 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
   return false;
 }
 
+// перезагрузка игры у всех: новая метка в nf_public.reload (игра проверяет её при запуске, раз в минуту и при возврате)
+async function reloadAll() {
+  const { error } = await db.from('nf_public').upsert({ k: 'reload', v: String(Date.now()), updated_at: new Date().toISOString() });
+  return error ? `Не удалось: ${esc(error.message)}` : '🔄 Команда отправлена. Открытые игры в течение минуты очистят кэш и перезагрузятся (свёрнутые — когда их откроют). Игру посреди миссии это прервёт.';
+}
+const RELOAD_BTN = { inline_keyboard: [[{ text: '🔄 Перезагрузить игру у всех', callback_data: 'rl:go' }]] };
+
+// сообщения владельцу о сбоях: pg_cron раз в 2 минуты шлёт {alerts: cron_key}; новые записи client_errors после метки alert_seen
+// собираются в одно сообщение (не чаще раза в 5 минут), с кнопкой перезагрузки игры у всех
+async function alertsRun() {
+  const seen = (await setting('alert_seen')) || new Date(Date.now() - 600e3).toISOString();
+  const last = +((await setting('alert_last')) || 0);
+  if (Date.now() - last < 300e3) return { wait: true };
+  const { data } = await db.from('client_errors').select('ver, platform, browser, msg, created_at').gt('created_at', seen).order('created_at', { ascending: true }).limit(200);
+  if (!data?.length) return { none: true };
+  const crash = data.filter((e) => e.platform === 'boot'), stuck = data.filter((e) => e.platform === 'stuck'), other = data.filter((e) => e.platform !== 'boot' && e.platform !== 'stuck');
+  const dev = (b: string) => /iPhone|iPad/.test(b) ? 'iPhone' : /Android/.test(b) ? 'Android' : 'компьютер';
+  const stage = (m: string) => { const x = /"stage":"(\w+)".*?"m":"(\w+)"/.exec(m); return x ? `${x[1]}/${x[2]}` : ''; };
+  const lines: string[] = [];
+  if (stuck.length) lines.push(`⏳ <b>Игра не загрузилась за 30 с: ${stuck.length}</b>\n` + stuck.slice(-3).map((e) => `• ${esc(e.ver)} · ${dev(e.browser)} · ${msk(e.created_at)}\n  <code>${esc(String(e.msg).slice(0, 160))}</code>`).join('\n'));
+  if (crash.length) lines.push(`💥 <b>Вылеты (после перезапуска): ${crash.length}</b>\n` + crash.slice(-3).map((e) => `• ${esc(e.ver)} · ${dev(e.browser)} · ${msk(e.created_at)} · ${esc(stage(String(e.msg)))}`).join('\n'));
+  if (other.length) { const g = new Map<string, number>(); for (const e of other) { const k = String(e.msg).slice(0, 100); g.set(k, (g.get(k) || 0) + 1); }
+    lines.push(`⚠️ <b>Ошибки в игре: ${other.length}</b>\n` + [...g.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([m, k]) => `• ×${k} <code>${esc(m)}</code>`).join('\n')); }
+  const need = stuck.length > 0 || crash.length >= 2;
+  const text = `🚨 <b>Сбои в «Ночном тарифе»</b>\n\n${lines.join('\n\n')}\n\n${need ? '👉 Похоже, нужна перезагрузка игры у игроков — кнопка ниже (или /reload).' : 'Если игроки жалуются — кнопка ниже перезагрузит игру у всех.'}\nВсе ошибки за неделю — /errors`;
+  const { data: admins } = await db.from('nf_admins').select('tg_id');
+  for (const a of admins || []) await api('sendMessage', { chat_id: a.tg_id, text, parse_mode: 'HTML', reply_markup: RELOAD_BTN });
+  await setSetting('alert_seen', data[data.length - 1].created_at); await setSetting('alert_last', String(Date.now()));
+  return { sent: data.length };
+}
+
 async function onCallback(cq: any) {
+  if (cq.data === 'rl:go') {
+    if (!(await isAdmin(cq.from?.id))) return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Только для владельца' });
+    await api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Перезагружаю' });
+    return api('sendMessage', { chat_id: cq.message?.chat?.id, text: await reloadAll() });
+  }
   const m = String(cq.data || '').match(/^adm:(\d+):(\w+)$/); if (!m) return;
   const tg = cq.from?.id, chatId = cq.message?.chat?.id;
   if (!(await isAdmin(tg))) return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Только для владельца' });
@@ -485,6 +526,7 @@ Deno.serve(async (req) => {
     const b = await req.clone().json().catch(() => null);
     const key = await setting('cron_key');
     if (b && key && b.daily === key && b.max_test === true) return json({ max: await maxTest() });   // тот же ключ расписания: тестовый пост в MAX
+    if (b && key && b.alerts === key) return json(await alertsRun());   // раз в 2 минуты: сбои игры → владельцу
     if (b && key && b.daily === key) return json(await dailyRun());
     return json({ error: 'forbidden' }, 403);
   }
