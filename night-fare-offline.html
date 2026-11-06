@@ -508,6 +508,11 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .chip.s3 { border-color: rgba(255,210,58,.55); color: #ffd23a; }
 .btn.s3new { margin-left: 10px; border: 1px solid #ffd23a; color: #ffd23a; background: rgba(0,0,0,.35); }
 .btn.s3new.cities { border-color: #5ad1ff; color: #5ad1ff; }
+.btn.s3new.locked { opacity: .62; border-style: dashed; }
+.pv-path { margin: 10px 0 0; color: #cfd6e6; font-size: 13px; letter-spacing: .02em; opacity: .9; }
+.chip.locked { opacity: .42; }
+.chip.next { box-shadow: inset 0 0 0 1.5px #4dffa6; }
+.note.good { border-left-color: #4dffa6; background: rgba(77,255,166,.08); }
 @media (max-width: 560px) { .btn.s3new { margin: 10px 0 0; } }
 .card-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; cursor: pointer; }
 #modalCard { position: relative; }
@@ -633,6 +638,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
     <h1 class="logo pv-logo">Ночной тариф<span>Эпизод 1. Кейс</span></h1>
     <p class="pv-tag">Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».</p>
     <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
+    <p id="pvPath" class="pv-path"></p>
   </div>
   <p class="site-legal"><a href="ob-igre.html" target="_blank" rel="noopener">Об игре</a> · <a href="tseny.html" target="_blank" rel="noopener">Цены</a> · <a href="oferta.html" target="_blank" rel="noopener">Оферта</a> · <a href="politika.html" target="_blank" rel="noopener">Персональные данные</a> · <a href="pravila.html" target="_blank" rel="noopener">Правила</a> · <a href="kontakty.html" target="_blank" rel="noopener">Контакты</a><br>Моисеенко Константин Иванович · ИНН 470313493504 · 12+</p>
 </div>
@@ -5787,7 +5793,7 @@ const allies = [], pickups = [];
 const EP2_TITLES = ['Хвост', 'Накладные', 'Пассажир', 'Засада в парке', 'Фургон', 'Конечная'];
 let selEp = 1, ep2Pick = 1;
 function ep2Max() { if (typeof PROF !== 'undefined' && PROF && PROF.god) return 6; try { return clamp(parseInt(localStorage.getItem('nf-ep2-ch'), 10) || 1, 1, 6); } catch (e) { return 1; } }
-function ep2Save(n) { try { if (n > ep2Max()) { localStorage.setItem('nf-ep2-ch', String(Math.min(6, n))); cloudSaveSoon(); } } catch (e) { /* storage unavailable */ } }
+function ep2Save(n) { try { if (n > ep2Max()) { localStorage.setItem('nf-ep2-ch', String(Math.min(6, n))); cloudSaveSoon(); checkRank(); } } catch (e) { /* storage unavailable */ } }
 
 const LOOKS = {
   hook: { model: 'artem', skin: '#c89070', colors: { Main: '#c0632a', DarkGreen: '#3a2a20', Helmet: '#e0a020', Black: '#2a2a2a' }, face: { brow: '#2a1a10', iris: '#2a1a10', mouth: 'grim', angry: true, stubble: '#2a1a10' } },
@@ -6266,14 +6272,112 @@ function startEpisode(ep, ch) {
 }
 function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else startMission(); }
 const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол', 12: 'Похищение мэра', 13: 'Последний рейс', 14: 'Северный экспресс', 15: 'Северное кольцо', 16: 'Сосновый Бор' };
+// ---------------- the player's path: three story lines, what opens what, ranks, where to go next ----------------
+// Порт-Северный (1–16) is the spine. After episode 3 the season «Охота по тарифу» opens, after episode 6 — the world cities.
+// Inside a line an episode opens when the one before it is done; inside an episode a mission opens after the one before.
+// Whatever a player already started stays open (nobody loses access with this update); the test profile opens all.
+const LINES = [
+  { id: 'main', name: 'Порт-Северный', eps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] },
+  { id: 's3', name: 'Новый сезон · «Охота по тарифу»', short: 'Новый сезон: «Охота по тарифу»', eps: [17, 18, 19], after: 3 },
+  { id: 'world', name: 'Города мира', short: 'Города мира: Париж · Лондон · Нью-Йорк', eps: [20, 21, 22], after: 6 },
+];
+const lineOf = (ep) => LINES.find((L) => L.eps.indexOf(ep) >= 0) || LINES[0];
+const epLenAny = (ep) => (ep === 1 ? 1 : ep === 2 ? 6 : epLen(ep));
+const epMaxAny = (ep) => (ep === 1 ? 1 : ep === 2 ? ep2Max() : epMax(ep));
+const epDoneRaw = (ep) => !!(typeof PROF !== 'undefined' && PROF && PROF.st && PROF.st.eps && PROF.st.eps.indexOf(ep) >= 0);
+function epStarted(ep) { const L = loadLast(); return epMaxAny(ep) > 1 || epDoneRaw(ep) || !!(L && L.ep === ep && ep !== 1); }
+// done: marked done, or a later episode of its line is already under way (progress from before the marks existed)
+function epDone(ep) { if (epDoneRaw(ep)) return true; const E = lineOf(ep).eps; return E.slice(E.indexOf(ep) + 1).some((e) => epStarted(e)); }
+function epNeed(ep) { const L = lineOf(ep), i = L.eps.indexOf(ep); return i > 0 ? L.eps[i - 1] : L.after || 0; }
+function epOpen(ep) { if (typeof PROF !== 'undefined' && PROF && PROF.god) return true; const n = epNeed(ep); return !n || epDone(n) || epStarted(ep); }
+const lineOpen = (L) => epOpen(L.eps[0]);
+function lockText(ep) { const n = epNeed(ep); return `Откроется после эпизода ${n} «${EP_NAMES[n]}»`; }
+function missionsDone() { let n = 0; for (const k of Object.keys(EP_NAMES).map(Number)) n += epDone(k) ? epLenAny(k) : epMaxAny(k) - 1; return n; }
+const missionsTotal = () => Object.keys(EP_NAMES).map(Number).reduce((s, k) => s + epLenAny(k), 0);
+// the next step: the unfinished mission of the line being played, else the first open unfinished episode in story order
+function nextStep() {
+  const L = loadLast(), at = (ep) => (epOpen(ep) && !epDone(ep) ? { ep, ch: Math.max(1, epMaxAny(ep)) } : null);
+  if (L && EP_NAMES[L.ep]) { const r = at(L.ep); if (r) return r; for (const e of lineOf(L.ep).eps) { const q = at(e); if (q) return q; } }
+  for (const line of LINES) for (const e of line.eps) { const q = at(e); if (q) return q; }
+  return null;
+}
+// ranks: a title for the number of missions done, with a coin reward on each new one
+const RANKS = [[0, 'Стажёр'], [6, 'Таксист'], [20, 'Водитель 2-го класса'], [45, 'Водитель 1-го класса'], [75, 'Ас ночных смен'], [110, 'Легенда тарифа'], [150, 'Король ночи'], [185, 'Хозяин города']];
+const rankAt = (n) => { let r = 0; RANKS.forEach((q, i) => { if (n >= q[0]) r = i; }); return r; };
+function checkRank(quiet) {
+  if (typeof PROF === 'undefined' || !PROF || !PROF.st) return;
+  const r = rankAt(missionsDone());
+  if (PROF.st.rank === undefined || quiet) { if (PROF.st.rank === undefined || r < PROF.st.rank) { PROF.st.rank = r; saveProfile(); } return; }
+  if (r > PROF.st.rank) { const gift = 250 * r; PROF.st.rank = r; walletAdd(gift); saveProfile(); setTimeout(() => toast(`Новое звание: «${RANKS[r][1]}»! +${gift} монет`, 3), 1200); }
+}
+const PV_TEXT = { 1: 'Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».', 2: 'Вера просит о помощи: курьер, засада в парке и серый фургон, в котором держат Марка.' };
+// main screen: the next step on the big button, the rank and progress, the side lines open or locked
+function renderMenuPath() {
+  if (typeof PROF === 'undefined' || !PROF || !PROF.st) return;
+  checkRank(true);
+  const s = nextStep(), first = missionsDone() === 0, logo = document.querySelector('.pv-logo span'), tag = document.querySelector('.pv-tag');
+  if (s) { if (logo) logo.textContent = `Эпизод ${s.ep}. ${EP_NAMES[s.ep]}`; if (tag) tag.textContent = (EPS[s.ep] && EPS[s.ep].logline) || PV_TEXT[s.ep] || ''; }
+  else { if (logo) logo.textContent = 'Все эпизоды пройдены'; if (tag) tag.textContent = 'Любую миссию можно переиграть: выбери её в списке. А в «Открытом городе» тебя ждут задания с другими игроками.'; }
+  $('btnPlay').textContent = first ? 'Играть' : s ? (s.ch > 1 ? `Продолжить · ${s.ep}-${s.ch}` : `Дальше · эпизод ${s.ep}`) : 'Выбрать миссию';
+  for (const [id, L] of [['btnS3', LINES[1]], ['btnCities', LINES[2]]]) {
+    const b = $(id), open = lineOpen(L), done = L.eps.every((e) => epDone(e)), fresh = open && !L.eps.some((e) => epStarted(e));
+    b.classList.toggle('locked', !open);
+    b.textContent = open ? (fresh ? '★ ' : '') + L.short + (done ? ' ✓' : '') : `🔒 ${L.short} · после эпизода ${L.after}`;
+  }
+  const p = $('pvPath'); if (p) { const n = missionsDone(), r = rankAt(n), nx = RANKS[r + 1]; p.textContent = `Звание: ${RANKS[r][1]} · пройдено ${n} из ${missionsTotal()} миссий${nx ? ` · до «${nx[1]}» ещё ${nx[0] - n}` : ''}`; }
+}
+function goStep(s) { showSelect(); if (s) { selEp = s.ep; ep2Pick = s.ch; } renderChapters(); }
+function openLine(L) {
+  if (lineOpen(L)) { const e = L.eps.find((q) => !epDone(q) && epOpen(q)) || L.eps[0]; goStep({ ep: e, ch: epMaxAny(e) }); return; }
+  const s = nextStep();
+  showModal(`<div class="kicker">Пока закрыто</div><h2 class="h2">${L.short}</h2><p class="lead">${lockText(L.eps[0])}. Пройди основную историю до этого места — и линия откроется, а за каждое новое звание дадут монеты.</p>
+    <div class="btns">${s ? `<button id="lkGo" class="btn primary" type="button">Играть: эпизод ${s.ep}, миссия ${s.ch}</button>` : ''}<button id="lkClose" class="btn" type="button">Закрыть</button></div>`,
+  { lkGo: () => { hideModal(); goStep(s); }, lkClose: () => hideModal() });
+}
+// the end of an episode: where the line goes on, what just opened, a tip for the next step
+function endNext(ep) {
+  const line = lineOf(ep), i = line.eps.indexOf(ep), same = line.eps[i + 1] || 0;
+  const opened = LINES.filter((L) => L.after === ep).map((L) => L.eps[0]);
+  const other = !same ? nextStep() : null;
+  return { same, opened, other: other && other.ep !== same ? other : null };
+}
+const TIPS = { 1: 'Совет: у каждого водителя свой бонус — попробуй другого на выборе водителя.', 2: 'Совет: монеты тратятся в «Профиль и магазин»: машины, оружие, улучшения.', 4: 'Совет: в «Открытом городе» можно выполнять задания вместе с другими игроками.', 8: 'Совет: застрял на миссии? Сложность снижается сама после нескольких попыток.' };
+function endPathHtml(ep) {
+  const n = endNext(ep), rows = [];
+  for (const e of n.opened) rows.push(`<p class="note good">Открыто: <b>${lineOf(e).name}</b>! Можно играть прямо сейчас — или продолжить основную историю.</p>`);
+  if (TIPS[ep]) rows.push(`<p class="note">${TIPS[ep]}</p>`);
+  const r = rankAt(missionsDone()); rows.push(`<p class="note">Звание: <b>${RANKS[r][1]}</b> · пройдено ${missionsDone()} из ${missionsTotal()} миссий</p>`);
+  return rows.join('');
+}
+function endPathBtns(ep) {
+  const n = endNext(ep), b = [];
+  if (n.same) b.push(`<button id="pNext" class="btn primary" type="button">Эпизод ${n.same} →</button>`);
+  for (const e of n.opened) b.push(`<button id="pOpen${e}" class="btn primary" type="button">${lineOf(e).short} →</button>`);
+  if (!n.same && !n.opened.length && n.other) b.push(`<button id="pOther" class="btn primary" type="button">Дальше: эпизод ${n.other.ep} →</button>`);
+  return b.join('');
+}
+function endPathHandlers(ep) {
+  const n = endNext(ep), h = {};
+  if (n.same) h.pNext = () => { hideModal(); startEpisode(n.same, 1); };
+  for (const e of n.opened) h['pOpen' + e] = () => { hideModal(); startEpisode(e, 1); };
+  if (n.other) h.pOther = () => { hideModal(); if (n.other.ep === 1) startMission(); else startEpisode(n.other.ep, n.other.ch); };
+  return h;
+}
 function renderChapters() {
   const eb = $('epChips');
-  eb.innerHTML = Object.keys(EP_NAMES).map((k) => (+k === 17 ? '<span class="ep-season">Новый сезон · «Охота по тарифу»</span>' : +k === 20 ? '<span class="ep-season">Города мира</span>' : '') + `<button class="chip${selEp === +k ? ' active' : ''}${+k >= 17 ? ' s3' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
-  eb.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { selEp = +b.dataset.ep; ep2Pick = selEp >= 2 ? epMax(selEp) : 1; renderChapters(); }));
-  const box = $('chapters'), max = selEp >= 2 ? epMax(selEp) : 1; box.hidden = selEp < 2;
+  if (!epOpen(selEp)) { const s0 = nextStep(); if (s0) { selEp = s0.ep; ep2Pick = s0.ch; } }
+  const nx = nextStep();
+  // each line: its open episodes, then the closed ones folded into a single chip (the list stays short)
+  eb.innerHTML = LINES.map((L) => { const E = L.eps.filter((k) => EP_NAMES[k]), open = E.filter((k) => epOpen(k)), shut = E.filter((k) => !epOpen(k));
+    return `<span class="ep-season">${L.name} · пройдено ${E.filter((e) => epDone(e)).length}/${E.length}</span>` + open.map((k) => {
+      const d = epDone(k), isNext = !!(nx && nx.ep === k);
+      return `<button class="chip${selEp === k ? ' active' : ''}${k >= 17 ? ' s3' : ''}${isNext ? ' next' : ''}" type="button" data-ep="${k}">${d ? '✓ ' : isNext ? '▶ ' : ''}${k} · ${EP_NAMES[k]}</button>`;
+    }).join('') + (shut.length ? `<button class="chip locked" type="button" data-ep="${shut[0]}" title="${lockText(shut[0])}">🔒 ${open.length ? 'ещё ' : ''}${shut.length} ${shut.length === 1 ? 'эпизод' : shut.length < 5 ? 'эпизода' : 'эпизодов'} · после эпизода ${epNeed(shut[0])}</button>` : ''); }).join('');
+  eb.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { const k = +b.dataset.ep; if (!epOpen(k)) { toast(lockText(k), 2.4); return; } selEp = k; ep2Pick = selEp >= 2 ? epMaxAny(selEp) : 1; renderChapters(); }));
+  const box = $('chapters'), max = selEp >= 2 ? epMaxAny(selEp) : 1; box.hidden = selEp < 2;
   if (ep2Pick > max) ep2Pick = max;
   const titles = selEp === 2 ? EP2_TITLES : selEp >= 3 ? EPS[selEp].chapters.map((c) => c.t) : [];
-  box.innerHTML = titles.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1}. ${t}</button>`).join('');
+  box.innerHTML = titles.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}${i + 1 === max && !epDone(selEp) ? ' next' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1 < max || epDone(selEp) ? '✓ ' : i + 1 > max ? '🔒 ' : '▶ '}${i + 1}. ${t}</button>`).join('');
   box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { ep2Pick = +b.dataset.ch; renderChapters(); }));
   const L = loadLast();
   $('btnGo').textContent = L && L.ep === selEp && L.ch === ep2Pick && selEp >= 2 ? `Продолжить: эпизод ${selEp}, миссия ${ep2Pick}` : selEp >= 2 ? (ep2Pick === 1 ? `Начать эпизод ${selEp}` : `Миссия ${ep2Pick}`) : 'В путь';
@@ -6297,7 +6401,8 @@ function showEnd2() {
       <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
       <button id="mNext" class="btn primary" type="button">Эпизод 3 →</button>
       <button id="mAgain" class="btn" type="button">В меню</button>
-    </div>`, {
+    </div>
+    ${endPathHtml(2)}`, {
     mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
     mNext: () => { hideModal(); startEpisode(3, 1); },
     mAgain: () => { hideModal(); showSelect(); },
@@ -7057,7 +7162,7 @@ const fixLine = ([w, t]) => [w, t.replace(/\{name\}/g, CH.name).replace(/\{g:([^
 const epLen = (ep) => (typeof EPS !== 'undefined' && EPS[ep] ? EPS[ep].chapters.length : 6);
 function epMax(ep) { if (typeof PROF !== 'undefined' && PROF && PROF.god) return epLen(ep);   // the test profile opens every chapter
   try { return clamp(parseInt(localStorage.getItem('nf-ep' + ep + '-ch'), 10) || 1, 1, epLen(ep)); } catch (e) { return 1; } }
-function epSave(ep, n) { try { if (n > epMax(ep)) { localStorage.setItem('nf-ep' + ep + '-ch', String(Math.min(epLen(ep), n))); if (typeof cloudSaveSoon === 'function') cloudSaveSoon(); } } catch (e) { /* storage unavailable */ } }
+function epSave(ep, n) { try { if (n > epMax(ep)) { localStorage.setItem('nf-ep' + ep + '-ch', String(Math.min(epLen(ep), n))); if (typeof cloudSaveSoon === 'function') cloudSaveSoon(); checkRank(); } } catch (e) { /* storage unavailable */ } }
 
 const ALLY_LOOKS = {
   ded: { model: 'savva', skin: '#e4b898', colors: { Shirt: '#5a4636', Pants: '#2e2e34', Hat: '#4a4a52', Detail: '#8a6a4a' }, face: { brow: '#e8e8e8', iris: '#4a6a8a', mouth: 'smirk', stache: '#ececec', wrinkles: true } },
@@ -7532,7 +7637,6 @@ function showEndGen(ep) {
   const E = EPS[ep];
   state.mode = 'end'; setEngine(0, false); $('hud').hidden = true; $('touch').hidden = true;
   const t = Math.round(state.time);
-  const nextEp = EPS[ep + 1] ? ep + 1 : 0;
   const render = () => showModal(`
     <div class="kicker">Эпизод ${ep} пройден</div>
     <h2 class="h2 good">${E.endTitle}</h2>
@@ -7545,13 +7649,13 @@ function showEndGen(ep) {
     </div>
     <div class="btns">
       <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
-      ${nextEp ? `<button id="mNext" class="btn primary" type="button">Эпизод ${nextEp} →</button>` : ''}
+      ${endPathBtns(ep)}
       <button id="mAgain" class="btn" type="button">В меню</button>
-    </div>`, {
+    </div>
+    ${endPathHtml(ep)}`, Object.assign({
     mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
-    mNext: () => { hideModal(); startEpisode(nextEp, 1); },
     mAgain: () => { hideModal(); showSelect(); },
-  });
+  }, endPathHandlers(ep)));
   render();
 }
 
@@ -8266,7 +8370,7 @@ function adBetween() {
   window.yaContextCb.push(() => { try { window.Ya.Context.AdvManager.render({ blockId: AD_BLOCK, type: 'fullscreen', platform: 'touch' }); } catch (e) { /* no ad */ } });
 }
 function profMax(k, v) { if (v > (PROF.st[k] || 0)) { PROF.st[k] = v; saveProfile(); checkAch(); } }
-function profEp(ep) { if (!PROF.st.eps.includes(ep)) { PROF.st.eps.push(ep); saveProfile(); } checkAch(); }
+function profEp(ep) { if (!PROF.st.eps.includes(ep)) { PROF.st.eps.push(ep); saveProfile(); } checkAch(); checkRank(); }
 function checkAch() {
   if (achBusy) return; achBusy = true;
   for (const [id, name, , reward, prog] of ACH) {
@@ -12294,7 +12398,8 @@ function showSelect() {
   pvEnemy.g.visible = false; arrow.visible = false; setBeam(null);
   if (hero) hero.g.visible = false;
   clearStage(); setMood('night');
-  const last = loadLast(); if (last) { selEp = last.ep; ep2Pick = last.ep >= 2 ? Math.max(1, Math.min(last.ch, epMax(last.ep))) : 1; }
+  const last = loadLast(), st = nextStep();
+  if (last && epOpen(last.ep) && !epDone(last.ep)) { selEp = last.ep; ep2Pick = last.ep >= 2 ? Math.max(1, Math.min(last.ch, epMaxAny(last.ep))) : 1; } else if (st) { selEp = st.ep; ep2Pick = st.ch; } else if (last) { selEp = last.ep; ep2Pick = 1; }
   renderChapters();
   pc.g.visible = true; pc.pos.set(SHOW.x - 4.6, 0, SHOW.z - 3.2); pc.h = PI * 0.82; pc.vel.set(0, 0, 0);
   pc.g.position.copy(pc.pos); pc.g.rotation.set(0, pc.h, 0);
@@ -12314,6 +12419,7 @@ function showPreview() {
   pvEnemy.g.visible = true; pc.g.visible = true; showDisc.visible = false; arrow.visible = false; setBeam(null);
   if (showFig) showFig.g.visible = false;
   pv.x = -140; pv.shot = 0; pv.shotT = 0; snapCam = true;
+  renderMenuPath();
 }
 function nextShot() { pv.shot = (pv.shot + 1) % 4; pv.shotT = 0; snapCam = true; }
 function updatePreview(dt) {
@@ -12418,6 +12524,7 @@ function showEnd() {
       <button id="mEp2" class="btn primary" type="button">Эпизод 2 →</button>
       <button id="mAgain" class="btn" type="button">Сменить водителя</button>
     </div>
+    ${endPathHtml(1)}
     <div class="kicker" style="color:var(--muted)">Гараж · наборы</div>
     <div class="garage">
       <div class="car-card owned"><b>Такси «Комета»</b><span>Скорость 3 · броня 2</span><span class="price">В гараже</span></div>
@@ -12433,8 +12540,9 @@ function showEnd() {
 }
 
 $('btnPlay').addEventListener('click', showSelect);
-$('btnS3').addEventListener('click', () => { showSelect(); selEp = 17; ep2Pick = 1; renderChapters(); });
-$('btnCities').addEventListener('click', () => { showSelect(); selEp = 20; ep2Pick = epMax(20); renderChapters(); const a = document.querySelector('#epChips .chip.active'); if (a && a.scrollIntoView) a.scrollIntoView({ block: 'nearest' }); });
+$('btnS3').addEventListener('click', () => openLine(LINES[1]));
+setInterval(() => { if (state.mode === 'preview') renderMenuPath(); }, 3000);   // the cloud profile may arrive after the menu is up
+$('btnCities').addEventListener('click', () => openLine(LINES[2]));
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
 $('btnOnline').addEventListener('click', startOnline);
@@ -12560,7 +12668,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
