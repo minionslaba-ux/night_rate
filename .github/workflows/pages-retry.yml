@@ -1,0 +1,52 @@
+# Автоповтор выкладки на GitHub Pages.
+# Иногда выкладка GitHub зависает на «syncing_files» и падает по таймауту — тогда сайт может отдавать
+# смесь старых и новых файлов. Этот процесс ждёт окончания выкладки и, если она упала,
+# через минуту заказывает новую сборку того же коммита. Не больше 3 повторов на один коммит.
+# Вручную: Actions → «Повтор выкладки Pages» → Run workflow (просто закажет сборку заново).
+name: Повтор выкладки Pages
+
+on:
+  workflow_run:
+    workflows: ["pages build and deployment"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  pages: write
+  contents: read
+
+concurrency:
+  group: pages-retry
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Заказать новую сборку
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          WF: ${{ github.event.workflow_run.workflow_id }}
+        run: |
+          set -e
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            fails=$(gh api "repos/$REPO/actions/workflows/$WF/runs?head_sha=$SHA&per_page=30" \
+              --jq '[.workflow_runs[] | select(.conclusion == "failure")] | length')
+            echo "Неудачных выкладок коммита $SHA: $fails"
+            if [ "$fails" -gt 3 ]; then
+              echo "::warning::Уже было 3 повтора для этого коммита — больше не повторяю. Проверьте GitHub Status."
+              exit 0
+            fi
+            latest=$(gh api "repos/$REPO/commits/${{ github.event.repository.default_branch }}" --jq .sha)
+            if [ "$latest" != "$SHA" ]; then
+              echo "В ветке уже новый коммит ($latest) — его выкладка идёт своим ходом, повтор не нужен."
+              exit 0
+            fi
+            sleep 60
+          fi
+          gh api -X POST "repos/$REPO/pages/builds" --jq '"Сборка заказана: " + .status'
