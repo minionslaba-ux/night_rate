@@ -465,6 +465,8 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .chip.s3 { border-color: rgba(255,210,58,.55); color: #ffd23a; }
 .btn.s3new { margin-left: 10px; border: 1px solid #ffd23a; color: #ffd23a; background: rgba(0,0,0,.35); }
 @media (max-width: 560px) { .btn.s3new { margin: 10px 0 0; } }
+.card-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; cursor: pointer; }
+#modalCard { position: relative; }
 .chip { border: 1px solid var(--hair-2); background: transparent; color: var(--muted); border-radius: 2px; font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; }
 .chip.active { background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); }
 .hud-chip { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -928,6 +930,7 @@ function boxB(b, x0, y0, z0, x1, y1, z1, o) {
     if (o.topWorld) face(b, [x0, y1, z1], [1, 0, 0], w, [0, 0, -1], d, [0, 1, 0], o.topWorld, o.topWorld, x0 * o.topWorld, -z1 * o.topWorld, col);
     else face(b, [x0, y1, z1], [1, 0, 0], w, [0, 0, -1], d, [0, 1, 0], 1 / w, 1 / d, 0, 0, col);
   }
+  if (o.bottom) face(b, [x0, y0, z0], [1, 0, 0], w, [0, 0, 1], d, [0, -1, 0], 1 / w, 1 / d, 0, 0, col);   // seen from below only (a ceiling)
 }
 const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new V3(), _p = new V3(), _n3 = new THREE.Matrix3(), _v = new V3();
 const NI = (geo) => (geo.index ? geo.toNonIndexed() : geo);
@@ -1740,7 +1743,7 @@ function buildLower() {
   const mk = (x0, z0, x1, z1, c) => boxB(B.mark, x0, 0.04, z0, x1, 0.06, z1, { sides: false, col: c });
   const lamp = (x, z) => { putB(B.metal, G.cyl6, x, 2.8, z, 0.14, 5.6, 0.14, 0, metal); putB(B.metal, G.box, x, 5.6, z, 0.55, 0.18, 0.55, 0, metal); putB(B.neon, G.sph, x, 5.4, z, 0.26, 0.2, 0.26, 0, HDR(0xffc89a, 4.5)); };
   const sign = (txt, w, h, x, y, z, ry, fg, bg, dead) => {
-    const t = cityText(1024, 256, (q, W, H) => { q.fillStyle = bg || 'rgba(0,0,0,0)'; q.fillRect(0, 0, W, H); q.font = 'bold 150px Arial'; q.textAlign = 'center'; q.textBaseline = 'middle';
+    const t = cityText(1024, 256, (q, W, H) => { q.fillStyle = bg || 'rgba(0,0,0,0)'; q.fillRect(0, 0, W, H); q.font = 'bold 150px Arial'; { const tw = q.measureText(txt).width; if (tw > W * 0.92) q.font = `bold ${Math.floor(150 * W * 0.92 / tw)}px Arial`; }   // a long name shrinks to fit instead of running off the edge q.textAlign = 'center'; q.textBaseline = 'middle';
       if (dead) { let x0 = W / 2 - q.measureText(txt).width / 2; for (let i = 0; i < txt.length; i++) { const ch = txt[i], cw = q.measureText(ch).width; q.fillStyle = dead.indexOf(i) >= 0 ? 'rgba(80,60,70,.6)' : fg; q.shadowColor = fg; q.shadowBlur = dead.indexOf(i) >= 0 ? 0 : 24; q.fillText(ch, x0 + cw / 2, H / 2 + 6); x0 += cw; } }
       else { q.fillStyle = fg; q.shadowColor = fg; q.shadowBlur = 24; q.fillText(txt, W / 2, H / 2 + 6); } });
     textPlane(t, w, h, x, y, z, ry, new THREE.Color(1.8, 1.8, 1.8));
@@ -1820,6 +1823,7 @@ function buildLower() {
   for (let f = 0; f < 3; f++) for (let k = 0; k < 14; k++) { const x = mx - 37 + k * 5.6; putB(B.trim, G.box, x, 1.15 + f * 3.2, mz - 11.95, 1.1, 2.1, 0.08, 0, col(pick([0x7a2a2a, 0x2a4a6a, 0x5a4a2a]))); const lit = Math.random() < 0.4; putB(lit ? B.bankL : B.trim, G.box, x + 2, 1.9 + f * 3.2, mz - 11.95, 1.4, 1, 0.06, 0, lit ? HDR(0xff9a6a, 1.2) : col(0x15171f)); }
   putB(B.metal, G.cyl6, mx + 46, 6, mz - 4, 0.3, 12, 0.3, 0, metal);
   sign('МОТЕЛЬ «БЕЗ ЗВЁЗД»', 14, 3.4, mx + 46, 13.5, mz - 3.8, 0, '#ff3d8b', '#14101a', [1, 3, 10]);
+  sign('МОТЕЛЬ «БЕЗ ЗВЁЗД»', 30, 5.6, mx, 13.6, mz - 11.6, 0, '#ff3d8b', '#14101a', [1, 3, 10]);   // the big one on the roof, seen from the street
   // 6. the call centre «Око»: a four-storey glass office, the eye logo, cameras on poles, dishes on the roof
   const [ox, oz] = LOWP.call;
   boxB(B.glassA, ox - 38, 0, oz - 40, ox + 38, 16, oz - 14, { us: 1 / 4, vs: 1 / 4 }); boxB(B.trim, ox - 38.4, 16, oz - 40.4, ox + 38.4, 16.8, oz - 13.6, { col: col(0x2a2c34) }); lSolid(ox - 38, oz - 40, ox + 38, oz - 14, 16.8);
@@ -1827,7 +1831,7 @@ function buildLower() {
   for (const s of [-1, 1]) { putB(B.metal, G.cyl, ox + s * 20, 17.6, oz - 30, 2.4, 0.3, 2.4, 0, col(0xc8ccd4)); putB(B.metal, G.cyl6, ox + s * 30, 3, oz - 10, 0.14, 6, 0.14, 0, metal); putB(B.metal, G.box, ox + s * 30, 6, oz - 9.6, 0.4, 0.3, 0.7, 0, dark); putB(B.neon, G.sph, ox + s * 30, 6, oz - 9.2, 0.07, 0.07, 0.07, 0, HDR(0xff2020, 8)); }
   // 7. the pier and the freighter «Беринг»: the deck at street level, containers, the bridge aft, cargo cranes
   const [px, pz] = LOWP.pier, [sx, sz] = LOWP.ship;
-  boxB(B.trim, 948, 0, pz - 60, 985, 0.4, pz + 60, { col: conc }); lSolid(985, pz - 60, 987, pz - 4, 2); lSolid(985, pz + 4, 987, pz + 60, 2); lSolid(958, pz - 60.6, 985, pz - 60, 2); lSolid(958, pz + 60, 985, pz + 60.6, 2);
+  boxB(B.trim, 948, 0, pz - 60, 985, 0.4, pz + 60, { col: col(0x4a4a50) });   // dark wet concrete: the light grey read as a pale blue sheet at night lSolid(985, pz - 60, 987, pz - 4, 2); lSolid(985, pz + 4, 987, pz + 60, 2); lSolid(958, pz - 60.6, 985, pz - 60, 2); lSolid(958, pz + 60, 985, pz + 60.6, 2);
   for (let k = -5; k <= 5; k++) putB(B.metal, G.cyl6, 984, 0.6, pz + k * 11, 0.5, 0.8, 0.5, 0, col(0x2a2a2e));
   boxB(B.trim, sx - 12, -6, sz - 70, sx + 12, 0.35, sz + 70, { col: col(0x3a1a1a) }); boxB(B.trim, sx - 12.3, -1.2, sz - 70.3, sx + 12.3, -0.4, sz + 70.3, { col: col(0xd8d8d8) });
   boxB(B.trim, sx - 11.5, 0.35, sz - 69.5, sx + 11.5, 0.45, sz + 69.5, { sides: false, col: col(0x5a3a2a) });
@@ -1878,7 +1882,7 @@ function buildInteriors() {
       continue;
     }
     for (const [a, b, c, d] of [[x0, z0, x1, z0 + 0.5], [x0, z1 - 0.5, x1, z1], [x0, z0, x0 + 0.5, z1], [x1 - 0.5, z0, x1, z1]]) { boxB(B.trim, a, 0, b, c, 4.2, d, { col: wall }); lSolid(a, b, c, d, 6); }
-    boxB(B.trim, x0, 4.2, z0, x1, 4.5, z1, { col: col(0x2a2a30) });
+    boxB(B.trim, x0, 4.2, z0, x1, 4.5, z1, { col: col(0x2a2a30), top: false, bottom: true });   // the ceiling: dark from inside, see-through from the top-down camera
     for (let x = x0 + 5; x < x1; x += 10) putB(B.neon, G.box, x, 4.15, cz, 4, 0.06, 0.4, 0, HDR(name === 'server' ? 0x7ad0ff : 0xfff0d0, 2.2));
     const prop = (x, z, sx, sz, h, c) => { boxB(B.trim, x - sx / 2, 0, z - sz / 2, x + sx / 2, h, z + sz / 2, { col: c }); lBox(x, z, sx, sz, h); };
     if (/motel/.test(name)) {
@@ -4095,7 +4099,8 @@ function nrCar(o) {
   const wheels = [];
   model.traverse((m) => {
     if (/^wheel/i.test(m.name)) wheels.push(m);
-    if (!m.isMesh) return; m.castShadow = true;
+    // only the body and the tyres make the shadow on the road: trim, calipers, lamps, interior and rims sit inside that outline, glass hardly blocks light
+    if (!m.isMesh) return; m.castShadow = /^(body|tire)/i.test(m.name);
     const n = (m.material && m.material.name) || '';
     m.material = o.wreck ? (/Glass/.test(n) ? NR_CARMAT.glass : NR_CARMAT.wreck) : n === 'Body_Color' ? body : /Glass_Gray/.test(n) ? NR_CARMAT.glass : /Tires/.test(n) ? NR_CARMAT.tire : /chrome/.test(n) ? NR_CARMAT.chrome : /Taillight/.test(n) ? NR_CARMAT.tail : /Projector|LED/.test(n) ? NR_CARMAT.head : /metal/.test(n) ? NR_CARMAT.metal : NR_CARMAT.plastic;
   });
@@ -6134,9 +6139,9 @@ const EPS = {
         about: 'Склад №7: две волны людей в масках и их главарь по прозвищу Маска. Мэр заперт внутри склада.',
         intro: [['hero', 'Охраны много. Значит, мэр точно здесь.']],
         outro: [['mayor', 'Вы… таксист с камер? Это вы меня спасли?'], ['hero', 'Работа такая. Садитесь, господин мэр. Едем в мэрию.'], ['orlova', 'Внимание, жёлтое такси у склада №7! Всем экипажам!'], ['mayor', 'Пока полиция думает, что похититель — вы, нас будут останавливать на каждом углу.']] },
-      { t: 'Кортеж', type: 'deliver', police: true, start: [110, -80, 'W'], chase: 3, ramp: 1, fragile: 30, fragileTitle: 'Мэр ранен', fragileText: 'Такси слишком сильно побили. Береги машину: уходи от таранов.',
+      { t: 'Кортеж', type: 'deliver', police: true, start: [110, -80, 'W'], chase: 2, ramp: 1, fragile: 25, fragileTitle: 'Мэр ранен', fragileText: 'Такси слишком сильно побили. Береги машину: уходи от таранов.',
         pts: [
-          { p: [-120, -80], name: 'Мост через канал', t: 50, say: [['mayor', 'Дайте рацию. Говорит мэр Ветров. Я в такси, меня везут в мэрию. Капитан Орлова, это не похититель.'], ['orlova', '…Принято. Но пока приказ дойдёт до всех экипажей — держитесь.']] },
+          { p: [-120, -80], name: 'Мост через канал', t: 50, chaseAfter: 1, say: [['mayor', 'Дайте рацию. Говорит мэр Ветров. Я в такси, меня везут в мэрию. Капитан Орлова, это не похититель.'], ['orlova', '…Принято. Но пока приказ дойдёт до всех экипажей — держитесь.']] },
           { p: [40, 0], name: 'Мэрия', t: 75 },
         ],
         about: 'Довезти мэра до мэрии, пока полиция всё ещё гонится за такси. В машине мэр — береги её.',
@@ -6741,7 +6746,7 @@ const GEN = {
         if (pc.pos.distanceTo(P_[leg].v) < 11) {
           const q = P_[leg]; leg++; pc.vel.set(0, 0, 0);
           if (leg >= P_.length) { if (c.loot) { addCoins(Math.round(loot * 10)); profMax('loot', loot); toast(`Довезли: ${loot.toFixed(1)} млн`, 2); } return done(); }
-          chase.max = Math.min(5, chase.max + (c.ramp || 0));
+          chase.max = q.chaseAfter !== undefined ? q.chaseAfter : Math.min(5, chase.max + (c.ramp || 0));   // a waypoint can calm the chase (the order reached the patrols)
           if (q.say) { left = 0; playDialog(q.say.map(fixLine), () => { state.mode = 'drive'; startLeg(); }); } else { toast(`${q.name} — есть`, 1.4); startLeg(); }
         }
       },
@@ -7077,7 +7082,7 @@ function cineUpdate(dt) {
   if (live && key !== CINE.key) { CINE.key = key; cineTitle(`Эпизод ${state.ep} · ${EP_NAMES[state.ep] || ''}`, MIS.title); }
   if (state.mode === 'preview' || state.mode === 'select') CINE.key = '';
   CINE.titleT = Math.max(0, CINE.titleT - dt);
-  const bars = (state.mode === 'dialog' && CINE.dlg) || (CINE.titleT > 0.5 && !isTouch);   // on phones the bars would cover the controls while driving
+  const bars = state.mode === 'dialog' && CINE.dlg;   // the title card no longer hides the HUD: the map and the task are there from the first second
   document.body.classList.toggle('cine', bars);
   // the lens: speed blur when driving fast, soft edges and a deeper vignette in dialogues
   const sp = state.mode === 'drive' && state.act === 1 && pc && carView !== 'cab' ? clamp((Math.abs(pc.vf || 0) - 20) / 18, 0, 1) + (state.nitroT > 0 ? 0.35 : 0) : 0;
@@ -7627,8 +7632,8 @@ function pushAsk() {
   if (Date.now() - (store.get('nf-push-ask') || 0) < 3 * 864e5 || !$('modal').hidden) return;
   store.set('nf-push-ask', Date.now());
   showModal(`<h2 class="h2">🔔 Включить напоминания?</h2><p class="lead">Подскажем, когда ${CH ? esc(CH.name) + ' ждёт на смене' : 'город ждёт водителя'}, кончается бензин или машину пора помыть, — 1–3 раза в день, не чаще.</p>
-    <div class="btns"><button id="paYes" class="btn primary" type="button">🔔 Включить</button><button id="paLater" class="btn" type="button">Позже</button><button id="paNever" class="btn linkish" type="button">Не спрашивать</button></div>`,
-    { paYes: () => { hideModal(); pushEnable(); }, paLater: hideModal, paNever: () => { hideModal(); store.set('nf-push-never', true); } });
+    <div class="btns"><button id="paYes" class="btn primary" type="button">🔔 Напоминать</button></div><button id="paClose" class="card-x" type="button" aria-label="Закрыть">✕</button>`,
+    { paYes: () => { hideModal(); pushEnable(); }, paClose: hideModal });   // one button; the corner ✕ closes it (asked again in 3 days at the earliest)
 }
 // при запуске: включённую подписку обновляем на сервере (браузер мог её сменить; привязка к профилю)
 setTimeout(async () => {
@@ -9992,7 +9997,7 @@ function musicUpdate() {
   const want = state.mode === 'drive' ? 'synth' : state.mode === 'foot' ? 'ind' : '';
   const ac = audio.ctx;
   if (!MUS.bus) { MUS.bus = ac.createGain(); MUS.bus.gain.value = 0; MUS.bus.connect(audio.master); MUS.noise = (() => { const b = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })(); }
-  MUS.bus.gain.setTargetAtTime(want && !muted ? (want === 'ind' ? 0.07 : 0.06) : 0, ac.currentTime, 0.6);
+  MUS.bus.gain.setTargetAtTime(want && !muted ? (want === 'ind' ? 0.21 : 0.17) : 0, ac.currentTime, 0.6);   // measured: at 0.07/0.06 the music sat ~40 dB under the gunshots — barely audible
   if (want !== MUS.style) { MUS.style = want; MUS.step = 0; MUS.next = ac.currentTime + 0.05; }
   if (!want) return;
   const bpm = want === 'synth' ? 100 : 128, st = 60 / bpm / 4;
@@ -10190,7 +10195,7 @@ Object.assign(GEN, {
     setObjective(`Догони: ${c.name || 'информатор'}. Не отставай больше чем на 45 м.`);
     return { title, update(dt) {
       const T = R0[Math.min(i, R0.length - 1)], d = hero.pos.distanceTo(r.pos);
-      const sp = d < 8 ? 8.4 : d < 20 ? 7.2 : 5.2; /* the hero runs 9 m/s: you gain on him, but slowly */ const to = T.clone().sub(r.pos).setY(0), L = to.length();
+      const sp = d < 8 ? 8.6 : d < 20 ? 7.6 : 5.6; /* the hero runs 9 m/s: you gain on him, but slowly */ const to = T.clone().sub(r.pos).setY(0), L = to.length();
       if (L < 1.5) { if (i < R0.length - 1) i++; else i = 1; } else { to.multiplyScalar(Math.min(1, sp * dt / L)); r.pos.add(to); collideCircle(r.pos, to, 0.5); r.face = Math.atan2(to.x, to.z); r.g.position.set(r.pos.x, 0, r.pos.z); r.g.rotation.y = r.face; if (r.cur !== 'Run') playAct(r, 'Run', 0.2); }
       setBeam(r.pos);
       if (d < 2.6) { setBeam(null); r.runner = false; playAct(r, 'Idle', 0.2); done(); return; }
@@ -10339,7 +10344,7 @@ EPS[17] = {
       intro: [['shilo', 'Это кто тут такой жёлтый и без машины? Миллион сам пришёл!'], ['hero', 'Елена, держись за мной. Шаг в шаг.']],
       outro: [['hero', 'Перекрёсток наш. До Бориса два квартала.']] },
     { t: 'Баррикады «Крыс»', type: 'footchase', fac: 'rats', start: [520, -466, PI], name: 'Разведчик «Крыс»', look: 'leva',
-      route: [[520, -494], [520, -560], [680, -560], [680, -700], [520, -700], [520, -560]], guards: [[680, -566], [676, -640]],   // along the streets: the chase does not stick to walls
+      route: [[520, -504], [520, -560], [680, -560], [680, -700], [520, -700], [520, -560]], guards: [[680, -566], [676, -640]],   // along the streets: the chase does not stick to walls
       about: 'Разведчик «Крыс» видел Елену и бежит звать своих. Догнать раньше, чем он добежит до штаба.',
       intro: [['elena', 'Тот парень с рацией! Он нас видел!'], ['hero', 'Стой здесь. Я быстро.']],
       outro: [['hero', 'Рация — в лужу. Ты никого не видел.'], ['thug', 'Да я… да никого!']] },
@@ -10987,7 +10992,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
-window.__nightFare = { get S3() { return S3; }, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
