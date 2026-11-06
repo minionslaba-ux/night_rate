@@ -11,12 +11,12 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="description" content="«Ночной тариф» — бесплатная браузерная 3D-игра: ночной город, такси, погони и перестрелки. 19 эпизодов сюжета с новым сезоном «Охота по тарифу» и онлайн «Открытый город» с чатом и заданиями. Играй на телефоне и компьютере без установки и без регистрации.">
+<meta name="description" content="«Ночной тариф» — бесплатная браузерная 3D-игра: ночной город, такси, погони и перестрелки. 22 эпизода сюжета: сезон «Охота по тарифу», Париж, Лондон и Нью-Йорк, и онлайн «Открытый город» с чатом и заданиями. Играй на телефоне и компьютере без установки и без регистрации.">
 <link rel="canonical" href="https://nightfaregame.com/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Ночной тариф">
 <meta property="og:title" content="Ночной тариф — ночной город, такси и погони">
-<meta property="og:description" content="Бесплатная 3D-игра в браузере: 19 эпизодов сюжета, новый сезон «Охота по тарифу» и онлайн «Открытый город». Без установки и регистрации.">
+<meta property="og:description" content="Бесплатная 3D-игра в браузере: 22 эпизода сюжета, сезон «Охота по тарифу», Париж, Лондон и Нью-Йорк, онлайн «Открытый город». Без установки и регистрации.">
 <meta property="og:url" content="https://nightfaregame.com/">
 <meta property="og:image" content="https://nightfaregame.com/promo/1.jpg">
 <meta property="og:locale" content="ru_RU">
@@ -539,7 +539,28 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .hint { transition: opacity .6s; }
 body.hint-off .hint { opacity: 0; pointer-events: none; }
 body.online:not(.task) .stat-line .sep { display: none; }
-@media (orientation: landscape) and (max-height: 480px) { .stat-line .coin-l { display: none; } #bars.bars { max-width: min(26vw, 300px); } }   /* phone held sideways: the boss bar and the coin line stay apart */
+@media (orientation: landscape) and (max-height: 480px) { .stat-line .coin-l { display: none; } #bars.bars { max-width: min(26vw, 300px); } }
+/* phone held sideways: compact panels; the profile button above the stick, the speedometer between the stick and the buttons */
+@media (orientation: landscape) and (max-height: 480px) {
+  .hud-tl { max-width: min(30vw, 280px); }
+  #nav.nav { max-width: 30vw; padding: 5px 9px; gap: 6px; } #nav.nav svg { width: 30px; height: 30px; } #nav.nav b { font-size: 13px; } #nav.nav span { font-size: 10px; }
+  .touch-on .tbtn.tprof { left: calc(22px + var(--sal)); right: auto; bottom: calc(142px + var(--sab)); width: 44px; height: 44px; }
+  .touch-on .speedo { left: calc(150px + var(--sal)); right: auto; transform: none; text-align: left; }
+}
+/* a narrow phone upright (iPhone SE size): the buttons stack on the right, clear of the stick; the navigator and the timer go down the left side */
+@media (orientation: portrait) and (max-width: 400px) {
+  .touch-on .joy { width: 110px; height: 110px; left: calc(14px + var(--sal)); bottom: calc(24px + var(--sab)); }
+  .touch-on .tbtn.fire { right: calc(18px + var(--sar)); bottom: calc(24px + var(--sab)); width: 84px; height: 84px; }
+  .touch-on .tbtn.drift, .touch-on .tbtn.aim { right: calc(18px + var(--sar)); bottom: calc(120px + var(--sab)); width: 62px; height: 62px; }
+  .touch-on .tbtn.melee { right: calc(92px + var(--sar)); bottom: calc(120px + var(--sab)); width: 56px; height: 56px; }
+  .touch-on .tbtn.nitro { right: calc(18px + var(--sar)); bottom: calc(194px + var(--sab)); width: 54px; height: 54px; }
+  .touch-on .tbtn.shield { right: calc(84px + var(--sar)); bottom: calc(194px + var(--sab)); width: 54px; height: 54px; }
+  .touch-on .tbtn.flash { right: calc(150px + var(--sar)); bottom: calc(194px + var(--sab)); width: 50px; height: 50px; }
+  .touch-on .tbtn.horn { right: calc(18px + var(--sar)); bottom: calc(260px + var(--sab)); width: 52px; height: 52px; }
+  .touch-on .tbtn.tprof { left: calc(18px + var(--sal)); bottom: calc(146px + var(--sab)); width: 46px; height: 46px; }
+  #nav.nav { top: calc(var(--sat) + 204px); }
+  #bars.bars { top: calc(var(--sat) + 262px); left: calc(12px + var(--sal)); right: auto; width: min(52vw, 300px); }
+}   /* phone held sideways: the boss bar and the coin line stay apart */
 /* a narrow portrait screen: the navigator goes under the task on the left, the timer/bars under the buttons — nothing stacks on the top row */
 @media (orientation: portrait) and (max-width: 600px) {
   .hud-tl { max-width: 54vw; }
@@ -2005,6 +2026,490 @@ function lowNavPts(pos, goal, out) {
   out.push(new V3(goal.x, 0, goal.z));
 }
 
+// ---------------- World cities: Paris, London, New York — each its own map far east of Port-Severny ----------------
+// A city: a rectangle with its own street grid (AV along z, ST along x), its colliders, an optional river with bridges,
+// a minimap picture and «rooms» on its east edge for the on-foot missions. CITY is the one the current mission runs in.
+const CITIES = {}; let CITY = null;
+function mkCity(id, o) { const C = Object.assign({ id, cols: [], mm: null, rooms: {}, lamps: [] }, o); C.COLL = [C.cols]; CITIES[id] = C; return C; }
+const cityAt = (p) => { for (const k in CITIES) { const C = CITIES[k]; if (p.x > C.x0 - 40 && p.x < C.x1 + 40 && p.z > C.z0 - 40 && p.z < C.z1 + 40) return C; } return null; };
+const cSolid = (C, x0, z0, x1, z1, h) => { const c = { minX: Math.min(x0, x1), maxX: Math.max(x0, x1), minZ: Math.min(z0, z1), maxZ: Math.max(z0, z1), h: h || 4 }; C.cols.push(c); return c; };
+// grid navigation inside a city: along the nearest avenue / street, over a bridge when the goal is across the river
+function gridNavPts(pos, goal, out, AV, ST, R) {
+  const near = (v, list) => list.reduce((b, a) => (Math.abs(a - v) < Math.abs(b - v) ? a : b));
+  if (R && (pos.z < R.z0) !== (goal.z < R.z0) && Math.abs(goal.z - pos.z) > 20) {
+    const bx = near((pos.x + goal.x) / 2, R.bridges), qa = pos.z < R.z0 ? R.qN : R.qS, qb = pos.z < R.z0 ? R.qS : R.qN;
+    const A = new V3(bx, 0, qa), Bq = new V3(bx, 0, qb);
+    if (Math.abs(pos.x - bx) < 10 && (pos.z - qa) * Math.sign(qb - qa) > -12) { out.push(Bq); gridNavPts(Bq, goal, out, AV, ST.filter((z) => (goal.z < R.z0 ? z < R.z0 : z > R.z1)), null); return; }   // already at the bridge: straight over, never back to the quay
+    gridNavPts(pos, A, out, AV, ST.filter((z) => (pos.z < R.z0 ? z < R.z0 : z > R.z1)), null);
+    out.push(Bq); gridNavPts(Bq, goal, out, AV, ST.filter((z) => (goal.z < R.z0 ? z < R.z0 : z > R.z1)), null); return;
+  }
+  if (Math.hypot(goal.x - pos.x, goal.z - pos.z) < 30) { out.push(new V3(goal.x, 0, goal.z)); return; }
+  if (pos.x < AV[0] - 30 || pos.x > AV[AV.length - 1] + 30 || pos.z < ST[0] - 30 || pos.z > ST[ST.length - 1] + 30) { out.push(new V3(goal.x, 0, goal.z)); return; }   // off the grid (an island, a yard): straight to the goal
+  if (AV.some((x) => Math.abs(pos.x - x) < 8 && Math.abs(goal.x - x) < 8) || ST.some((z) => Math.abs(pos.z - z) < 8 && Math.abs(goal.z - z) < 8)) { out.push(new V3(goal.x, 0, goal.z)); return; }   // the same avenue or street: straight along it
+  const onAv = AV.some((x) => Math.abs(pos.x - x) < 8), onSt = ST.some((z) => Math.abs(pos.z - z) < 8);
+  const gx = near(goal.x, AV), gz = near(goal.z, ST);
+  if (onAv && !onSt) { const ax = near(pos.x, AV); if (Math.abs(ax - gx) > 1) { out.push(new V3(ax, 0, gz)); out.push(new V3(gx, 0, gz)); } else out.push(new V3(ax, 0, gz)); }
+  else if (onSt) { const sz = near(pos.z, ST); if (Math.abs(sz - gz) > 1) { out.push(new V3(gx, 0, sz)); out.push(new V3(gx, 0, gz)); } else out.push(new V3(goal.x, 0, sz)); }
+  else { out.push(new V3(near(pos.x, AV), 0, pos.z)); out.push(new V3(gx, 0, gz)); }
+  out.push(new V3(goal.x, 0, goal.z));
+}
+// the minimap picture of a city: streets, water, parks
+function drawCityMap(C) {
+  const W = Math.round(C.x1 - C.x0 + 40), H = Math.round(C.z1 - C.z0 + 40), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), R = (x0, z0, x1, z1, c) => { g.fillStyle = c; g.fillRect(x0 - C.x0 + 20, z0 - C.z0 + 20, x1 - x0, z1 - z0); };
+  R(C.x0 - 20, C.z0 - 20, C.x1 + 20, C.z1 + 20, '#1a1d33');
+  for (const [x0, z0, x1, z1] of C.parks || []) R(x0, z0, x1, z1, '#1d3a2a');
+  if (C.river) R(C.x0 - 20, C.river.z0, C.x1 + 20, C.river.z1, '#123a5a');
+  const zA = C.ST[0] - 7, zB = C.ST[C.ST.length - 1] + 7;
+  for (const x of C.AV) { if (C.river && !C.river.bridges.includes(x)) { R(x - 7, zA, x + 7, C.river.z0, '#4a4f6a'); R(x - 7, C.river.z1, x + 7, zB, '#4a4f6a'); } else R(x - 7, zA, x + 7, zB, '#4a4f6a'); }
+  for (const z of C.ST) R(C.AV[0] - 7, z - 7, C.AV[C.AV.length - 1] + 7, z + 7, '#4a4f6a');
+  C.mm = cv;
+}
+
+// ---------- PARIS ----------
+const PARIS = mkCity('paris', {
+  name: 'Париж', x0: 2400, x1: 3400, z0: 0, z1: 800,
+  AV: [2440, 2560, 2680, 2800, 2920, 3040, 3160], ST: [40, 160, 310, 490, 640, 760],
+  river: { z0: 330, z1: 470, qN: 310, qS: 490, bridges: [2560, 2800, 3040] },
+  parks: [[3047, 647, 3153, 753], [2447, 647, 2553, 753]],
+  // named places the missions use
+  P: { museum: [2620, 100], museumDoor: [2620, 166], cafe: [2740, 232], tower: [3100, 700], arch: [2500, 700], basilica: [2980, 100], pier: [2680, 330], pierS: [2920, 470], hotel: [2860, 700] },
+});
+PARIS.rooms = { gallery: [3300, 120], roofs: [3300, 420], towertop: [3300, 700] };
+function buildParis() {
+  const C = PARIS, AV = C.AV, ST = C.ST, R = C.river;
+  const solid = (x0, z0, x1, z1, h) => cSolid(C, x0, z0, x1, z1, h);
+  const cream = col(0xd8cdb4), zinc = col(0x5a6472), ironC = col(0x8a6a3a), stone = col(0xb8b0a0), dark = col(0x1c1d22), metal = col(0x3a3c44);
+  const asph = (x0, z0, x1, z1) => boxB(B.asph, x0, 0.01, z0, x1, 0.022, z1, { topWorld: 1 / 10, sides: false });
+  const lamp = (x, z) => { C.lamps.push([x, z]); putB(B.metal, G.cyl6, x, 2.4, z, 0.12, 4.8, 0.12, 0, dark); putB(B.metal, G.box, x, 4.9, z, 0.5, 0.6, 0.5, 0, dark); putB(B.neon, G.box, x, 4.85, z, 0.36, 0.42, 0.36, 0, HDR(0xffd9a0, 3.2)); };
+  const winGrid = (x0, z0, x1, z1, floors, fh, face, litK) => {
+    const along = face === 'n' || face === 's', L = along ? x1 - x0 : z1 - z0, n = Math.max(1, Math.floor(L / 3.2));
+    for (let f = 1; f < floors; f++) for (let k = 0; k < n; k++) {
+      const lit = Math.random() < litK, cc = lit ? HDR(pick([0xffc070, 0xffd8a0, 0xffe6c0]), 1 + Math.random() * 0.6) : col(0x23262f), u = (k + 0.5) / n, y = 1.6 + f * fh;
+      if (along) putB(lit ? B.bankL : B.trim, G.box, x0 + u * L, y, face === 'n' ? z1 + 0.04 : z0 - 0.04, 1.1, 1.7, 0.06, 0, cc);
+      else putB(lit ? B.bankL : B.trim, G.box, face === 'e' ? x1 + 0.04 : x0 - 0.04, y, z0 + u * L, 0.06, 1.7, 1.1, 0, cc);
+    }
+  };
+  // a Haussmann house: cream stone, iron balconies on the 2nd and 5th floors, a zinc mansard with dormers, a café below
+  const house = (x0, z0, x1, z1, faces) => {
+    const fl = 6, fh = 3.2, h = 1.2 + fl * fh;
+    boxB(B.trim, x0, 0, z0, x1, h, z1, { col: cream }); solid(x0, z0, x1, z1, h + 6);
+    boxB(B.roof, x0 + 0.8, h, z0 + 0.8, x1 - 0.8, h + 4.2, z1 - 0.8, { col: zinc });
+    for (const f of faces) {
+      winGrid(x0, z0, x1, z1, fl, fh, f, 0.45);
+      for (const fy of [2, 5]) { const y = 1.2 + fy * fh; if (f === 'n' || f === 's') boxB(B.metal, x0, y, f === 'n' ? z1 : z0 - 0.7, x1, y + 0.9, f === 'n' ? z1 + 0.7 : z0, { col: dark }); else boxB(B.metal, f === 'e' ? x1 : x0 - 0.7, y, z0, f === 'e' ? x1 + 0.7 : x0, y + 0.9, z1, { col: dark }); }
+      // dormers on the mansard
+      const along = f === 'n' || f === 's', L = along ? x1 - x0 : z1 - z0;
+      for (let k = 1; k < L / 5; k++) { const u = (along ? x0 : z0) + k * 5; if (along) putB(B.roof, G.box, u, h + 2.2, f === 'n' ? z1 - 1.2 : z0 + 1.2, 1.4, 1.8, 1, 0, zinc); else putB(B.roof, G.box, f === 'e' ? x1 - 1.2 : x0 + 1.2, h + 2.2, u, 1, 1.8, 1.4, 0, zinc); }
+      if (Math.random() < 0.55) {   // a café: awning, warm window, two tables
+        const aw = col(pick([0xb8323a, 0x2f6a4a, 0x2a4f8a])), w = Math.min(10, L - 2), m = (along ? (x0 + x1) : (z0 + z1)) / 2;
+        if (along) { const z = f === 'n' ? z1 : z0; boxB(B.awning, m - w / 2, 2.8, f === 'n' ? z : z - 2.2, m + w / 2, 3.1, f === 'n' ? z + 2.2 : z, { col: aw }); putB(B.bankL, G.box, m, 1.5, f === 'n' ? z + 0.05 : z - 0.05, w - 1, 2.2, 0.06, 0, HDR(0xffc890, 1.6)); }
+        else { const x = f === 'e' ? x1 : x0; boxB(B.awning, f === 'e' ? x : x - 2.2, 2.8, m - w / 2, f === 'e' ? x + 2.2 : x, 3.1, m + w / 2, { col: aw }); putB(B.bankL, G.box, f === 'e' ? x + 0.05 : x - 0.05, 1.5, m, 0.06, 2.2, w - 1, 0, HDR(0xffc890, 1.6)); }
+      }
+    }
+  };
+  // ground, streets and the river
+  boxB(B.walk, C.x0, -0.07, C.z0, C.x1, -0.05, C.z1, { topWorld: 1 / 6, sides: false, col: col(0x6a6660) });
+  for (const x of AV) {
+    const bridge = R.bridges.includes(x);
+    if (bridge) asph(x - 7, ST[0] - 7, x + 7, ST[ST.length - 1] + 7);
+    else { asph(x - 7, ST[0] - 7, x + 7, R.qN + 7); asph(x - 7, R.qS - 7, x + 7, ST[ST.length - 1] + 7); }
+  }
+  for (const z of ST) asph(AV[0] - 7, z - 7, AV[AV.length - 1] + 7, z + 7);
+  boxB(B.water, C.x0, -1.6, R.z0, 3200, -1.5, R.z1, { sides: false, col: col(0x0e2a3e) });
+  for (const [z0, z1] of [[R.z0 - 8, R.z0], [R.z1, R.z1 + 8]]) {   // stone quays with a parapet; you drive along them, not into the Seine
+    boxB(B.stone, C.x0, -1.6, z0, 3200, 0.02, z1, { col: stone });
+    const pz = z0 === R.z0 - 8 ? R.z0 - 0.6 : R.z1, x0b = C.x0;
+    let xs = x0b; for (const bx of R.bridges.concat([3200])) { const xe = bx === 3200 ? 3200 : bx - 7; if (xe > xs) { boxB(B.stone, xs, 0, pz, xe, 1.1, pz + 0.6, { col: stone }); solid(xs, pz, xe, pz + 0.6, 0.9); } xs = bx + 7; }
+    for (let x = C.x0 + 10; x < 3200; x += 24) if (!R.bridges.some((b) => Math.abs(b - x) < 10)) { lamp(x, z0 === R.z0 - 8 ? R.z0 - 3 : R.z1 + 3); putB(B.leaf, G.sph, x + 12, 5.5, z0 === R.z0 - 8 ? R.z0 - 4 : R.z1 + 4, 2.6, 3.2, 2.6, 0, col(0x2a5a32)); putB(B.wood, G.cyl6, x + 12, 1.6, z0 === R.z0 - 8 ? R.z0 - 4 : R.z1 + 4, 0.35, 3.2, 0.35, 0, col(0x4a3426)); }
+  }
+  { let xs = C.x0; for (const bx of R.bridges.concat([3206])) { const xe = bx === 3206 ? 3206 : bx - 9; if (xe > xs) solid(xs, R.z0, xe, R.z1, 0.9); xs = bx + 9; } }   // the water itself: only the bridges cross it (boats are scripted and do not collide)
+  for (const bx of R.bridges) {   // stone bridges with arches and lamps
+    boxB(B.stone, bx - 9, -0.6, R.z0 - 8, bx + 9, 0.02, R.z1 + 8, { col: stone, sides: false });
+    for (const s of [-1, 1]) { boxB(B.stone, bx + s * 8.4, 0, R.z0 - 8, bx + s * 9, 1.1, R.z1 + 8, { col: stone }); solid(Math.min(bx + s * 8.4, bx + s * 9), R.z0 - 8, Math.max(bx + s * 8.4, bx + s * 9), R.z1 + 8, 0.9); for (let z = R.z0 + 10; z < R.z1; z += 26) lamp(bx + s * 8.7, z); }
+    for (let z = R.z0 + 14; z < R.z1; z += 28) boxB(B.stone, bx - 9, -1.6, z - 3, bx + 9, -0.6, z + 3, { col: col(0x9a9284) });
+  }
+  // moored boats along the quays (the boat chase starts from here)
+  for (const [x, z] of [[2620, 345], [2980, 455], [2740, 455], [3120, 345]]) { boxB(B.trim, x - 14, -1.5, z - 3, x + 14, -0.2, z + 3, { col: col(0x2a2e3a) }); boxB(B.glassA, x - 9, -0.2, z - 2.2, x + 7, 1.6, z + 2.2, { us: 1 / 4, vs: 1 / 2 }); }
+  // blocks
+  const special = (x, z) => { for (const [px, pz] of [[2620, 100], [3100, 700], [2500, 700], [2980, 100]]) if (Math.abs(x - px) < 50 && Math.abs(z - pz) < 50) return true; return false; };
+  for (let i = 0; i < AV.length - 1; i++) for (let j = 0; j < ST.length - 1; j++) {
+    const xa = AV[i] + 9, xb = AV[i + 1] - 9, za = ST[j] + 9, zb = ST[j + 1] - 9;
+    if (ST[j] === R.qN) continue;   // the river band
+    const cx = (xa + xb) / 2, cz = (za + zb) / 2;
+    if (special(cx, cz)) continue;
+    boxB(B.walk, xa - 2, 0, za - 2, xb + 2, 0.14, zb + 2, { topWorld: 1 / 3, col: col(0x8a8478) });
+    // three or four houses per block, with a courtyard
+    const n = 3 + (Math.random() < 0.5 ? 1 : 0), w = (xb - xa) / n;
+    for (let k = 0; k < n; k++) { const x0 = xa + k * w + 0.4, x1 = xa + (k + 1) * w - 0.4; house(x0, za, x1, za + 32, ['s', k === 0 ? 'w' : 'x', k === n - 1 ? 'e' : 'x'].filter((f) => f !== 'x')); house(x0, zb - 32, x1, zb, ['n', k === 0 ? 'w' : 'x', k === n - 1 ? 'e' : 'x'].filter((f) => f !== 'x')); }
+    for (let x = xa + 6; x < xb; x += 18) { lamp(x, za - 3); lamp(x, zb + 3); }
+  }
+  // the museum «Рассвет»: a long colonnade, a glass pyramid in the court
+  { const [mx, mz] = C.P.museum; boxB(B.walk, mx - 51, 0, mz - 51, mx + 51, 0.14, mz + 51, { topWorld: 1 / 3, col: stone });
+    boxB(B.trim, mx - 48, 0, mz - 48, mx + 48, 16, mz - 20, { col: col(0xe0d6c0) }); boxB(B.trim, mx - 48, 0, mz + 26, mx + 48, 16, mz + 48, { col: col(0xe0d6c0) });
+    solid(mx - 48, mz - 48, mx + 48, mz - 20, 18); solid(mx - 48, mz + 26, mx + 48, mz + 48, 18);
+    for (let x = mx - 44; x <= mx + 44; x += 6) putB(B.stone, G.cyl, x, 7, mz + 50, 1.2, 14, 1.2, 0, col(0xf0e8d8));
+    boxB(B.roof, mx - 48, 16, mz + 26, mx + 48, 18, mz + 52, { col: zinc });
+    winGrid(mx - 48, mz - 48, mx + 48, mz - 20, 4, 3.6, 'n', 0.6);
+    const pyr = NI(new THREE.ConeGeometry(0.71, 1, 4)); putB(B.glassA, pyr, mx, 5, mz + 3, 16, 10, 16, PI / 4, col(0x9ad0ff)); solid(mx - 9, mz - 6, mx + 9, mz + 12, 10);
+    putB(B.neon, G.box, mx, 0.2, mz + 3, 18, 0.3, 18, PI / 4, HDR(0x7ab8ff, 1.4));
+    signC('МУЗЕЙ «РАССВЕТ»', 22, 3, mx, 13, mz + 48.2, 0, '#ffe2a8', '#1a1612'); }
+  // the iron tower: four lattice legs, two platforms, a spire with a beacon
+  { const [tx, tz] = C.P.tower; boxB(B.grass, tx - 53, 0, tz - 53, tx + 53, 0.1, tz + 53, { topWorld: 1 / 8, sides: false });
+    const legAt = (y, s) => { const k = Math.pow(1 - Math.min(1, y / 70), 1.7); return 3 + 17 * k; };
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      for (let y = 0.6; y < 70; y += 1.4) { const d = legAt(y), d2 = legAt(y + 1.4); putB(B.metal, G.box, tx + sx * d, y, tz + sz * d, 1.9, 1.5, 1.9, 0, ironC, sz * (d - d2) * 0.5, -sx * (d - d2) * 0.5); }
+      solid(tx + sx * 20 - 3, tz + sz * 20 - 3, tx + sx * 20 + 3, tz + sz * 20 + 3, 10);
+    }
+    for (const [y, d] of [[16, 15], [38, 8.5], [62, 3.6]]) { boxB(B.metal, tx - d - 1, y, tz - d - 1, tx + d + 1, y + 1.6, tz + d + 1, { col: ironC }); for (let k = -d; k <= d; k += 2.5) for (const s of [-1, 1]) { putB(B.neon, G.sph, tx + k, y + 1.8, tz + s * (d + 1), 0.22, 0.22, 0.22, 0, HDR(0xffc860, 5)); putB(B.neon, G.sph, tx + s * (d + 1), y + 1.8, tz + k, 0.22, 0.22, 0.22, 0, HDR(0xffc860, 5)); } }
+    for (let y = 70; y < 92; y += 1.5) putB(B.metal, G.box, tx, y, tz, 2.2 - (y - 70) * 0.07, 1.5, 2.2 - (y - 70) * 0.07, 0, ironC);
+    putB(B.neon, G.sph, tx, 93, tz, 0.9, 0.9, 0.9, 0, HDR(0xffe0a0, 9)); }
+  // the arch on its square
+  { const [ax, az] = C.P.arch; boxB(B.stone, ax - 53, 0, az - 53, ax + 53, 0.12, az + 53, { topWorld: 1 / 4, sides: false, col: stone });
+    for (const s of [-1, 1]) { boxB(B.stone, ax + s * 9 - 4, 0, az - 5, ax + s * 9 + 4, 22, az + 5, { col: col(0xe6dcc8) }); solid(ax + s * 9 - 4, az - 5, ax + s * 9 + 4, az + 5, 22); }
+    boxB(B.stone, ax - 13, 22, az - 5, ax + 13, 30, az + 5, { col: col(0xe6dcc8) }); putB(B.neon, G.box, ax, 21.6, az, 10, 0.3, 9, 0, HDR(0xffe0b0, 1.6)); }
+  // the white basilica on the hill
+  { const [bx, bz] = C.P.basilica; boxB(B.walk, bx - 51, 0, bz - 51, bx + 51, 0.6, bz + 51, { col: col(0x9a9284) }); boxB(B.trim, bx - 26, 0.6, bz - 30, bx + 26, 22, bz + 18, { col: col(0xf2eee6) }); solid(bx - 26, bz - 30, bx + 26, bz + 18, 24);
+    putB(B.stone, G.sph, bx, 26, bz - 6, 11, 13, 11, 0, col(0xf6f2ea)); for (const [dx, dz] of [[-18, 8], [18, 8], [-18, -22], [18, -22]]) putB(B.stone, G.sph, bx + dx, 24, bz + dz, 4.5, 5.5, 4.5, 0, col(0xf6f2ea));
+    putB(B.neon, G.box, bx, 3, bz + 18.2, 24, 4, 0.1, 0, HDR(0xffe8c8, 1.6)); }
+  // the wall between the streets and the rooms on the east edge
+  solid(3200, C.z0, 3206, C.z1, 8); boxB(B.trim, 3200, 0, C.z0, 3206, 8, C.z1, { col: col(0x2a2c34) });
+  buildCityRooms(C); cityPools(C);
+}
+// the rooms of a city for its on-foot missions: a lit floor, low walls; the rooftop courses are built by their mission
+function buildCityRooms(C) {
+  const W = 56, D = 34;
+  for (const name in C.rooms) {
+    const [cx, cz] = C.rooms[name], x0 = cx - W / 2, x1 = cx + W / 2, z0 = cz - D / 2, z1 = cz + D / 2;
+    if (name === 'roofs' || name === 'towertop' || (C.skyRooms || []).includes(name)) {   // open air, far above the city: a field of lights below
+      boxB(B.bankL, x0 - 120, -40, z0 - 120, x1 + 120, -39.9, z1 + 120, { sides: false, col: HDR(0x3a3050, 0.7) });
+      continue;
+    }
+    if ((C.openRooms || []).includes(name)) {   // an open-air room: lawn and a tall hedge round it (the maze)
+      boxB(B.grass, x0 - 1, -0.05, z0 - 1, x1 + 1, 0, z1 + 1, { topWorld: 1 / 8, sides: false });
+      for (const [a, b, c2, d] of [[x0, z0, x1, z0 + 0.8], [x0, z1 - 0.8, x1, z1], [x0, z0, x0 + 0.8, z1], [x1 - 0.8, z0, x1, z1]]) { boxB(B.leaf, a, 0, b, c2, 3, d, { col: col(0x1f3a22) }); cSolid(C, a, b, c2, d, 4); }
+      continue;
+    }
+    boxB(B.walk, x0 - 1, -0.05, z0 - 1, x1 + 1, 0, z1 + 1, { topWorld: 1 / 3, sides: false, col: col(0x5a4a3a) });
+    for (const [a, b, c2, d] of [[x0, z0, x1, z0 + 0.5], [x0, z1 - 0.5, x1, z1], [x0, z0, x0 + 0.5, z1], [x1 - 0.5, z0, x1, z1]]) { boxB(B.trim, a, 0, b, c2, 5, d, { col: col(C.roomCol || 0x8a2a2a) }); cSolid(C, a, b, c2, d, 6); }
+    boxB(B.trim, x0, 5, z0, x1, 5.3, z1, { col: col(0x2a2228), top: false, bottom: true });
+    for (let x = x0 + 6; x < x1; x += 10) putB(B.neon, G.box, x, 4.95, cz, 4, 0.06, 0.4, 0, HDR(0xfff0d0, 2));
+  }
+}
+// warm pools of lamplight on the pavement: one mesh for the whole city
+function cityPools(C) {
+  const P = [], U = [], s = 7;
+  for (const [x, z] of C.lamps) { const y = 0.07; P.push(x - s, y, z - s, x - s, y, z + s, x + s, y, z + s, x - s, y, z - s, x + s, y, z + s, x + s, y, z - s); U.push(0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0); }
+  if (!P.length) return;
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.0, 0.62, 0.32), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  m.renderOrder = 1; scene.add(m);
+}
+// a sign with text that fits its plate (shared by the cities)
+function signC(txt, w, h, x, y, z, ry, fg, bg) {
+  const t = cityText(1024, 256, (q, W, H) => { q.fillStyle = bg; q.fillRect(0, 0, W, H); q.font = 'bold 150px Arial'; const tw = q.measureText(txt).width; if (tw > W * 0.92) q.font = `bold ${Math.floor(150 * W * 0.92 / tw)}px Arial`; q.fillStyle = fg; q.shadowColor = fg; q.shadowBlur = 24; q.fillText(txt, W / 2, H / 2 + 6); });
+  textPlane(t, w, h, x, y, z, ry, new THREE.Color(1.8, 1.8, 1.8));
+}
+
+// ---------- LONDON ----------
+// brick terraces, the river with a bascule bridge, a clock tower, a big wheel, a domed cathedral; traffic keeps left
+const LONDON = mkCity('london', {
+  name: 'Лондон', x0: 3600, x1: 4600, z0: 0, z1: 800, left: true, fogMin: 0.35, roomCol: 0x3a2a22,
+  AV: [3640, 3760, 3880, 4000, 4120, 4240, 4360], ST: [40, 170, 300, 500, 630, 760],
+  river: { z0: 320, z1: 480, qN: 300, qS: 500, bridges: [3760, 4000, 4240] },
+  parks: [[4247, 637, 4353, 753]],
+  P: { clock: [3700, 235], wheel: [3940, 565], dome: [4180, 105], market: [3820, 695], station: [4300, 235], bascule: [4000, 400], pub: [3880, 170], yard: [4360, 760] },
+  wall: 4400,
+});
+LONDON.rooms = { pub: [4500, 120], metro: [4500, 420], maze: [4500, 690] }; LONDON.openRooms = ['maze'];
+// a red double-decker: used parked in the streets and as the player's bus in «Ночной автобус»
+function makeDecker(c) {
+  const g = new THREE.Group(), red = std(c || 0xb81c22, { roughness: 0.45, metalness: 0.2 }), dk = std(0x15161a, { roughness: 0.3, metalness: 0.4 });
+  const body = new THREE.Mesh(box1Up, red); body.scale.set(2.5, 4.2, 10.4); body.position.y = 0.35; g.add(body);
+  for (const y of [1.55, 3.45]) { const w = new THREE.Mesh(box1, basic(new THREE.Color(1.6, 1.35, 0.9))); w.scale.set(2.54, 0.95, 9.2); w.position.set(0, y, -0.2); g.add(w); }
+  const band = new THREE.Mesh(box1, std(0xe8e0d0)); band.scale.set(2.56, 0.22, 10.42); band.position.y = 2.45; g.add(band);
+  const roof = new THREE.Mesh(box1, red); roof.scale.set(2.4, 0.2, 10.2); roof.position.y = 4.62; g.add(roof);
+  const front = new THREE.Mesh(box1, basic(new THREE.Color(3, 2.6, 1.6))); front.scale.set(1.6, 0.35, 0.05); front.position.set(0, 4.05, 5.22); g.add(front);
+  for (const s of [-1, 1]) { const hl = new THREE.Mesh(box1, basic(new THREE.Color(5, 4.6, 3.8))); hl.scale.set(0.35, 0.22, 0.05); hl.position.set(s * 0.9, 0.85, 5.22); g.add(hl); }
+  for (const [x, z] of [[-1.15, 3.6], [1.15, 3.6], [-1.15, -3.2], [1.15, -3.2]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 14).rotateZ(PI / 2), dk); w.position.set(x, 0.55, z); g.add(w); }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return g;
+}
+function buildLondon() {
+  const C = LONDON, AV = C.AV, ST = C.ST, R = C.river, WALL = C.wall;
+  const solid = (x0, z0, x1, z1, h) => cSolid(C, x0, z0, x1, z1, h);
+  const white = col(0xe8e4dc), slate = col(0x3a3e46), dark = col(0x141518), stone = col(0xb0a898), portland = col(0xd8d2c4), gothic = col(0xc8b48a);
+  const asph = (x0, z0, x1, z1) => boxB(B.asph, x0, 0.01, z0, x1, 0.022, z1, { topWorld: 1 / 10, sides: false });
+  const lamp = (x, z) => { C.lamps.push([x, z]); putB(B.metal, G.cyl6, x, 2.2, z, 0.14, 4.4, 0.14, 0, dark); putB(B.metal, G.box, x, 4.6, z, 0.6, 0.7, 0.6, 0, dark); putB(B.neon, G.box, x, 4.55, z, 0.45, 0.5, 0.45, 0, HDR(0xfff0c8, 2.6)); };
+  const booth = (x, z, ry) => { putB(B.trim, G.box, x, 1.3, z, 1, 2.6, 1, ry, col(0xc0161c)); putB(B.bankL, G.box, x, 1.5, z, 1.04, 1.4, 0.7, ry, HDR(0xfff0c0, 1.1)); putB(B.trim, G.box, x, 2.75, z, 1.1, 0.3, 1.1, ry, col(0xa01016)); };
+  // a terraced house: brick, white sash windows, a slate roof, chimney stacks with pots; some have a lit shop below
+  const house = (x0, z0, x1, z1, face, tint) => {
+    const fl = 3 + (Math.random() < 0.4 ? 1 : 0), fh = 3.3, h = 1 + fl * fh, along = face === 'n' || face === 's', L = along ? x1 - x0 : z1 - z0;
+    boxB(B.brick, x0, 0, z0, x1, h, z1, { col: tint, us: 1 / 6, vs: 1 / 6 }); solid(x0, z0, x1, z1, h + 4);
+    boxB(B.roof, x0 + 0.3, h, z0 + 0.3, x1 - 0.3, h + 2.6, z1 - 0.3, { col: slate });
+    boxB(B.trim, x0, h - 0.4, z0, x1, h, z1, { col: white, top: false });   // a white cornice
+    const n = Math.max(2, Math.floor(L / 3.4)), fz = face === 'n' ? z1 : z0, fx = face === 'e' ? x1 : x0, sg = face === 'n' || face === 'e' ? 1 : -1;
+    for (let f = 1; f < fl; f++) for (let k = 0; k < n; k++) {
+      const u = (along ? x0 : z0) + (k + 0.5) * L / n, y = 1 + f * fh + 1.2, lit = Math.random() < 0.4, cc = lit ? HDR(pick([0xffd090, 0xffe0b0, 0xfff0d0]), 1 + Math.random() * 0.5) : col(0x1c2028);
+      if (along) { putB(B.trim, G.box, u, y, fz + sg * 0.03, 1.5, 2.1, 0.06, 0, white); putB(lit ? B.bankL : B.trim, G.box, u, y, fz + sg * 0.07, 1.2, 1.8, 0.04, 0, cc); }
+      else { putB(B.trim, G.box, fx + sg * 0.03, y, u, 0.06, 2.1, 1.5, 0, white); putB(lit ? B.bankL : B.trim, G.box, fx + sg * 0.07, y, u, 0.04, 1.8, 1.2, 0, cc); }
+    }
+    // the ground floor: a black door with a fanlight, or a shopfront
+    const m = along ? (x0 + x1) / 2 : (z0 + z1) / 2;
+    if (Math.random() < 0.45) {
+      const sc = col(pick([0x1f3a2a, 0x2a2440, 0x5a1a1a, 0x1a2a44, 0x3a2a1a])), w = Math.min(L - 1, 8);
+      if (along) { boxB(B.trim, m - w / 2, 0, face === 'n' ? fz : fz - 0.3, m + w / 2, 3.2, face === 'n' ? fz + 0.3 : fz, { col: sc }); putB(B.bankL, G.box, m, 1.4, fz + sg * 0.33, w - 1.2, 2, 0.05, 0, HDR(0xffcf90, 1.5)); }
+      else { boxB(B.trim, face === 'e' ? fx : fx - 0.3, 0, m - w / 2, face === 'e' ? fx + 0.3 : fx, 3.2, m + w / 2, { col: sc }); putB(B.bankL, G.box, fx + sg * 0.33, 1.4, m, 0.05, 2, w - 1.2, 0, HDR(0xffcf90, 1.5)); }
+    } else if (along) { putB(B.trim, G.box, m, 1.2, fz + sg * 0.05, 1.2, 2.4, 0.08, 0, dark); putB(B.bankL, G.box, m, 2.7, fz + sg * 0.05, 1.2, 0.4, 0.08, 0, HDR(0xffd8a0, 1.4)); }
+    else { putB(B.trim, G.box, fx + sg * 0.05, 1.2, m, 0.08, 2.4, 1.2, 0, dark); putB(B.bankL, G.box, fx + sg * 0.05, 2.7, m, 0.08, 0.4, 1.2, 0, HDR(0xffd8a0, 1.4)); }
+    // chimney stacks with pots
+    const cx = along ? m : (face === 'e' ? x0 + 2 : x1 - 2), cz = along ? (face === 'n' ? z0 + 2 : z1 - 2) : m;
+    boxB(B.brick, cx - 1.4, h, cz - 0.6, cx + 1.4, h + 4.2, cz + 0.6, { col: tint, us: 1 / 3, vs: 1 / 3 });
+    for (const d of [-0.8, 0, 0.8]) putB(B.trim, G.cyl6, cx + d, h + 4.6, cz, 0.36, 0.8, 0.36, 0, col(0xa0522d));
+  };
+  // ground, streets
+  boxB(B.walk, C.x0, -0.07, C.z0, C.x1, -0.05, C.z1, { topWorld: 1 / 6, sides: false, col: col(0x5c5a58) });
+  for (const x of AV) {
+    if (R.bridges.includes(x)) asph(x - 7, ST[0] - 7, x + 7, ST[ST.length - 1] + 7);
+    else { asph(x - 7, ST[0] - 7, x + 7, R.qN + 7); asph(x - 7, R.qS - 7, x + 7, ST[ST.length - 1] + 7); }
+  }
+  for (const z of ST) asph(AV[0] - 7, z - 7, AV[AV.length - 1] + 7, z + 7);
+  // white zebra stripes and «LOOK RIGHT» style arrows are left out; a dashed centre line keeps the left-hand traffic readable
+  for (const x of AV) for (let z = ST[0] + 10; z < ST[ST.length - 1]; z += 8) if (!(z > R.qN + 8 && z < R.qS - 8) || R.bridges.includes(x)) boxB(B.mark, x - 0.12, 0.03, z, x + 0.12, 0.035, z + 3.5, { sides: false, col: col(0xe8e4d0) });
+  for (const z of ST) for (let x = AV[0] + 10; x < AV[AV.length - 1]; x += 8) boxB(B.mark, x, 0.03, z - 0.12, x + 3.5, 0.035, z + 0.12, { sides: false, col: col(0xe8e4d0) });
+  // the river: dark water, granite embankments with a parapet, lamps and plane trees
+  boxB(B.water, C.x0, -1.6, R.z0, WALL, -1.5, R.z1, { sides: false, col: col(0x10222e) });
+  for (const [z0, z1] of [[R.z0 - 8, R.z0], [R.z1, R.z1 + 8]]) {
+    boxB(B.stone, C.x0, -1.6, z0, WALL, 0.02, z1, { col: col(0x8a8478) });
+    const pz = z0 === R.z0 - 8 ? R.z0 - 0.7 : R.z1; let xs = C.x0;
+    for (const bx of R.bridges.concat([WALL])) { const xe = bx === WALL ? WALL : bx - 7; if (xe > xs) { boxB(B.stone, xs, 0, pz, xe, 1.2, pz + 0.7, { col: col(0x9a9488) }); solid(xs, pz, xe, pz + 0.7, 0.9); } xs = bx + 7; }
+    for (let x = C.x0 + 14; x < WALL; x += 22) if (!R.bridges.some((b) => Math.abs(b - x) < 12)) { const lz = z0 === R.z0 - 8 ? R.z0 - 3 : R.z1 + 3; lamp(x, lz); if ((x / 22 | 0) % 2) { putB(B.leaf, G.sph, x + 11, 6, lz + (lz < R.z0 ? -1 : 1), 3, 3.6, 3, 0, col(0x2a4a2a)); putB(B.wood, G.cyl6, x + 11, 1.8, lz + (lz < R.z0 ? -1 : 1), 0.4, 3.6, 0.4, 0, col(0x5a4a3a)); } }
+  }
+  { let xs = C.x0; for (const bx of R.bridges.concat([WALL + 6])) { const xe = bx === WALL + 6 ? WALL + 6 : bx - 9; if (xe > xs) solid(xs, R.z0, xe, R.z1, 0.9); xs = bx + 9; } }
+  // two plain bridges: iron-grey girders and lamps
+  for (const bx of R.bridges) {
+    if (bx === C.P.bascule[0]) continue;
+    boxB(B.stone, bx - 9, -0.6, R.z0 - 8, bx + 9, 0.02, R.z1 + 8, { col: stone, sides: false });
+    boxB(B.metal, bx - 9, -1.4, R.z0 - 8, bx + 9, -0.6, R.z1 + 8, { col: col(0x3a4a3a) });
+    for (const s of [-1, 1]) { boxB(B.metal, bx + s * 8.4, 0, R.z0 - 8, bx + s * 9, 1.2, R.z1 + 8, { col: col(0x3a4a3a) }); solid(Math.min(bx + s * 8.4, bx + s * 9), R.z0 - 8, Math.max(bx + s * 8.4, bx + s * 9), R.z1 + 8, 0.9); for (let z = R.z0 + 8; z < R.z1; z += 24) lamp(bx + s * 8.7, z); }
+  }
+  // the bascule bridge: two gothic towers in the river, high walkways, and two road leaves that lift (the mission moves them)
+  { const bx = C.P.bascule[0], tA = 362, tB = 438;
+    boxB(B.stone, bx - 9, -0.6, R.z0 - 8, bx + 9, 0.02, tA - 6, { col: stone, sides: false }); boxB(B.stone, bx - 9, -0.6, tB + 6, bx + 9, 0.02, R.z1 + 8, { col: stone, sides: false });
+    for (const s of [-1, 1]) { boxB(B.stone, bx + s * 8.4, 0, R.z0 - 8, bx + s * 9, 1.2, tA - 6, { col: gothic }); boxB(B.stone, bx + s * 8.4, 0, tB + 6, bx + s * 9, 1.2, R.z1 + 8, { col: gothic }); solid(Math.min(bx + s * 8.4, bx + s * 9), R.z0 - 8, Math.max(bx + s * 8.4, bx + s * 9), R.z1 + 8, 0.9); }
+    for (const tz of [tA, tB]) {
+      for (const s of [-1, 1]) {   // a tower straddles each side of the road
+        boxB(B.stone, bx + s * 9, -1.6, tz - 6, bx + s * 15, 38, tz + 6, { col: gothic }); solid(Math.min(bx + s * 9, bx + s * 15), tz - 6, Math.max(bx + s * 9, bx + s * 15), tz + 6, 40);
+        putB(B.roof, G.cone, bx + s * 12, 43, tz, 7, 10, 7, PI / 4, slate);
+        for (const [dx, dz] of [[-3, -6], [3, -6], [-3, 6], [3, 6]]) putB(B.roof, G.cone, bx + s * 12 + dx, 40.5, tz + dz * 0.9, 1.2, 5, 1.2, 0, slate);
+        for (let y = 8; y < 36; y += 7) for (const f of [-1, 1]) putB(B.archwin, G.box, bx + s * 12, y, tz + f * 6.05, 2.2, 3.6, 0.05, 0, WHITE);
+      }
+      boxB(B.stone, bx - 15, -1.6, tz - 6, bx + 15, 0.02, tz + 6, { col: gothic, sides: false });
+    }
+    for (const s of [-1, 1]) boxB(B.metal, bx - 9, 30, (tA + tB) / 2 + s * 2 - 1.2, bx + 9, 32.4, (tA + tB) / 2 + s * 2 + 1.2, { col: col(0x5a7aa0) });   // the high walkways
+    boxB(B.metal, bx - 9, 30, tA + 6, bx + 9, 32.4, tB - 6, { col: col(0x4a6a90), top: false, bottom: true });
+    // the leaves: real meshes so «Разводной мост» can lift them; hinge at each tower
+    const mat = std(0x6a6e78, { roughness: 0.6, metalness: 0.4 }), mk = (z0, z1, hz) => { const p = new THREE.Group(); p.position.set(bx, 0, hz); const m = new THREE.Mesh(box1, mat); m.scale.set(16.8, 0.6, Math.abs(z1 - z0)); m.position.set(0, -0.3, (z0 + z1) / 2 - hz); m.receiveShadow = true; p.add(m); const mk2 = new THREE.Mesh(box1, basic(new THREE.Color(2.4, 2.2, 1.6))); mk2.scale.set(0.25, 0.05, Math.abs(z1 - z0) * 0.9); mk2.position.set(0, 0.02, (z0 + z1) / 2 - hz); p.add(mk2); scene.add(p); return p; };
+    C.leaves = { a: mk(tA + 6, 400, tA + 6), b: mk(400, tB - 6, tB - 6), up: 0 };
+  }
+  // moored boats and a pier
+  for (const [x, z] of [[3700, 335], [3880, 465], [4120, 335], [4300, 465]]) { boxB(B.trim, x - 12, -1.5, z - 3, x + 12, -0.2, z + 3, { col: col(0x2a2a30) }); boxB(B.bankL, x - 8, -0.2, z - 2, x + 6, 1.4, z + 2, { col: HDR(0xffd8a0, 0.8) }); }
+  // blocks
+  const special = (x, z) => ['clock', 'wheel', 'dome', 'market', 'station'].some((k) => Math.abs(x - C.P[k][0]) < 50 && Math.abs(z - C.P[k][1]) < 50) || C.parks.some(([a, b, c2, d]) => x > a && x < c2 && z > b && z < d);
+  const tints = [0x8a4a3a, 0x7a3e30, 0x9a5a44, 0x6a4a3e, 0xa06a50, 0x8a6a5a].map((h) => col(h));
+  for (let i = 0; i < AV.length - 1; i++) for (let j = 0; j < ST.length - 1; j++) {
+    if (ST[j] === R.qN) continue;
+    const xa = AV[i] + 9, xb = AV[i + 1] - 9, za = ST[j] + 9, zb = ST[j + 1] - 9, cx = (xa + xb) / 2, cz = (za + zb) / 2;
+    if (special(cx, cz)) continue;
+    boxB(B.walk, xa - 2, 0, za - 2, xb + 2, 0.14, zb + 2, { topWorld: 1 / 3, col: col(0x7a7670) });
+    const n = 8, w = (xb - xa) / n, tint = pick(tints);
+    for (let k = 0; k < n; k++) {
+      const x0 = xa + k * w, x1 = xa + (k + 1) * w, t2 = Math.random() < 0.3 ? pick(tints) : tint;
+      house(x0, za, x1, za + 26, 's', t2); house(x0, zb - 26, x1, zb, 'n', t2);
+    }
+    // the ends of the terraces face the avenues
+    house(xa, za + 26, xa + 12, zb - 26, 'w', tint); house(xb - 12, za + 26, xb, zb - 26, 'e', tint);
+    for (let x = xa + 8; x < xb; x += 20) { lamp(x, za - 3); lamp(x, zb + 3); }
+    if (Math.random() < 0.7) booth(xa + 3, za - 3.5, 0); if (Math.random() < 0.5) booth(xb - 3, zb + 3.5, PI);
+  }
+  // parked double-deckers (one per few streets)
+  for (const [x, z, h] of [[3700, 46, PI / 2], [4060, 176, -PI / 2], [3820, 636, PI / 2], [4180, 506, -PI / 2], [4300, 766, PI / 2]]) { const g = makeDecker(); g.position.set(x, 0, z); g.rotation.y = h; scene.add(g); solid(x - 5.4, z - 1.4, x + 5.4, z + 1.4, 5); }
+  // the clock tower and the long gothic hall on the embankment
+  { const [cx, cz] = C.P.clock; boxB(B.walk, cx - 51, 0, cz - 51, cx + 51, 0.14, cz + 51, { topWorld: 1 / 3, col: stone });
+    boxB(B.stone, cx - 48, 0, cz + 8, cx + 48, 18, cz + 46, { col: gothic }); solid(cx - 48, cz + 8, cx + 48, cz + 46, 20);
+    for (let x = cx - 46; x <= cx + 46; x += 4) { putB(B.stone, G.box, x, 20, cz + 46.3, 0.8, 4, 0.8, 0, gothic); putB(B.archwin, G.box, x + 2, 9, cz + 46.05, 1.6, 5, 0.05, 0, WHITE); putB(B.archwin, G.box, x + 2, 9, cz + 7.95, 1.6, 5, 0.05, 0, WHITE); }
+    boxB(B.roof, cx - 47, 18, cz + 9, cx + 47, 22, cz + 45, { col: slate });
+    const tx = cx - 30, tz = cz - 20;
+    boxB(B.stone, tx - 7, 0, tz - 7, tx + 7, 62, tz + 7, { col: gothic }); solid(tx - 7, tz - 7, tx + 7, tz + 7, 64);
+    for (let y = 6; y < 50; y += 6) for (const [dx, dz, ry] of [[0, 7.05, 0], [0, -7.05, 0], [7.05, 0, PI / 2], [-7.05, 0, PI / 2]]) putB(B.archwin, G.box, tx + dx, y, tz + dz, 1.6, 4, 0.05, ry, WHITE);
+    boxB(B.stone, tx - 8, 50, tz - 8, tx + 8, 60, tz + 8, { col: col(0xd4c094) });
+    const face = cityText(512, 512, (q, W) => { q.fillStyle = '#f4ecd0'; q.beginPath(); q.arc(W / 2, W / 2, W * 0.46, 0, PI * 2); q.fill(); q.strokeStyle = '#1a1612'; q.lineWidth = 14; q.stroke(); q.fillStyle = '#1a1612'; for (let k = 0; k < 12; k++) { const a = k * PI / 6; q.fillRect(W / 2 + Math.sin(a) * W * 0.38 - 6, W / 2 - Math.cos(a) * W * 0.38 - 18, 12, 36); } q.lineWidth = 16; q.beginPath(); q.moveTo(W / 2, W / 2); q.lineTo(W / 2 + W * 0.2, W / 2 - W * 0.12); q.stroke(); q.lineWidth = 10; q.beginPath(); q.moveTo(W / 2, W / 2); q.lineTo(W / 2 - W * 0.04, W / 2 - W * 0.34); q.stroke(); });
+    for (const [dx, dz, ry] of [[0, 8.05, 0], [0, -8.05, PI], [8.05, 0, PI / 2], [-8.05, 0, -PI / 2]]) textPlane(face, 12, 12, tx + dx, 55, tz + dz, ry, new THREE.Color(2.2, 2, 1.6));
+    boxB(B.roof, tx - 7, 60, tz - 7, tx + 7, 64, tz + 7, { col: slate }); putB(B.roof, G.cone, tx, 72, tz, 12, 16, 12, PI / 4, slate); putB(B.metal, G.cyl6, tx, 82, tz, 0.4, 5, 0.4, 0, col(0xc8a040));
+    signC('ЧАСОВАЯ БАШНЯ', 14, 2.2, tx, 4, tz + 7.1, 0, '#ffe2a8', '#1a1612'); }
+  // the big wheel on the south bank
+  { const [wx, wz] = C.P.wheel, cy = 36, r = 32; boxB(B.walk, wx - 51, 0, wz - 51, wx + 51, 0.14, wz + 51, { topWorld: 1 / 3, col: stone });
+    const g = new THREE.Group(); g.position.set(wx, cy, wz - 10); g.rotation.y = 0;
+    const steel = std(0xdde2ea, { roughness: 0.35, metalness: 0.7 }); const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.5, 6, 64), steel); g.add(ring);
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(r - 2, 0.25, 6, 64), steel); g.add(ring2);
+    for (let k = 0; k < 16; k++) { const a = k * PI / 8, sp = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, r, 4), steel); sp.position.set(Math.cos(a) * r / 2, Math.sin(a) * r / 2, 0); sp.rotation.z = a - PI / 2; g.add(sp); }
+    for (let k = 0; k < 24; k++) { const a = k * PI / 12, cp = new THREE.Mesh(new THREE.SphereGeometry(1.3, 10, 6), new THREE.MeshStandardMaterial({ color: 0xa8d8ff, emissive: 0x3a6a9a, roughness: 0.1, metalness: 0.2 })); cp.scale.set(1, 0.8, 1.6); cp.position.set(Math.cos(a) * (r + 1.5), Math.sin(a) * (r + 1.5), 0); g.add(cp); }
+    const lights = new THREE.Mesh(new THREE.TorusGeometry(r + 0.2, 0.18, 4, 96), basic(new THREE.Color(1.2, 2.4, 4))); g.add(lights);
+    scene.add(g); C.wheelG = g;
+    for (const s of [-1, 1]) putB(B.metal, G.box, wx + s * 10, cy / 2, wz - 10, 1.2, cy + 2, 1.2, s * 0.28, col(0xdde2ea), 0, s * 0.28);
+    solid(wx - 14, wz - 13, wx + 14, wz - 7, 10);
+    boxB(B.trim, wx - 22, 0, wz + 18, wx + 22, 4, wz + 30, { col: col(0x2a3040) }); putB(B.bankL, G.box, wx, 2, wz + 17.9, 40, 2.6, 0.05, 0, HDR(0x9ad0ff, 1.2)); solid(wx - 22, wz + 18, wx + 22, wz + 30, 5); }
+  // the domed cathedral
+  { const [dx, dz] = C.P.dome; boxB(B.walk, dx - 51, 0, dz - 51, dx + 51, 0.4, dz + 51, { topWorld: 1 / 3, col: stone });
+    boxB(B.stone, dx - 36, 0.4, dz - 22, dx + 36, 24, dz + 22, { col: portland }); solid(dx - 36, dz - 22, dx + 36, dz + 22, 26);
+    boxB(B.stone, dx - 14, 0.4, dz + 22, dx + 14, 20, dz + 34, { col: portland }); solid(dx - 14, dz + 22, dx + 14, dz + 34, 22);
+    for (let x = dx - 12; x <= dx + 12; x += 4) putB(B.stone, G.cyl, x, 9, dz + 36, 1.4, 17, 1.4, 0, col(0xeeeae0));
+    boxB(B.stone, dx - 14, 17.5, dz + 34, dx + 14, 20, dz + 38, { col: portland });
+    putB(B.stone, G.cyl, dx, 30, dz, 26, 12, 26, 0, portland); putB(B.roof, G.sph, dx, 36, dz, 13, 14, 13, 0, col(0x6a7a80));
+    putB(B.stone, G.cyl, dx, 51, dz, 3.4, 6, 3.4, 0, portland); putB(B.metal, G.sph, dx, 55.5, dz, 1.2, 1.2, 1.2, 0, col(0xd8b040));
+    for (const s of [-1, 1]) { putB(B.stone, G.box, dx + s * 11, 28, dz + 30, 5, 16, 5, 0, portland); putB(B.roof, G.cone, dx + s * 11, 39, dz + 30, 4, 7, 4, 0, col(0x6a7a80)); }
+    for (let a = 0; a < 16; a++) putB(B.bankL, G.box, dx + Math.sin(a * PI / 8) * 13.05, 30, dz + Math.cos(a * PI / 8) * 13.05, 1.2, 4, 0.1, a * PI / 8, HDR(0xffe0b0, 1.2)); }
+  // the covered market: iron and glass
+  { const [mx, mz] = C.P.market; boxB(B.walk, mx - 51, 0, mz - 51, mx + 51, 0.14, mz + 51, { topWorld: 1 / 3, col: stone });
+    for (const s of [-1, 1]) { boxB(B.brick, mx - 46, 0, mz + s * 30 - 6, mx + 46, 9, mz + s * 30 + 6, { col: col(0x7a4a3a), us: 1 / 6, vs: 1 / 6 }); solid(mx - 46, mz + s * 30 - 6, mx + 46, mz + s * 30 + 6, 10); for (let x = mx - 42; x <= mx + 42; x += 6) putB(B.bankL, G.box, x, 3, mz + s * 36.05, 3, 4, 0.05, 0, HDR(0xffc890, 1.4)); }
+    for (let x = mx - 44; x <= mx + 44; x += 8) { putB(B.metal, G.box, x, 5, mz - 24, 0.4, 10, 0.4, 0, col(0x2a4a3a)); putB(B.metal, G.box, x, 5, mz + 24, 0.4, 10, 0.4, 0, col(0x2a4a3a)); }
+    boxB(B.glassA, mx - 46, 10, mz - 24, mx + 46, 11, mz + 24, { us: 1 / 8, vs: 1 / 8, bottom: true });
+    for (let x = mx - 36; x <= mx + 36; x += 12) for (const z of [mz - 12, mz, mz + 12]) { putB(B.awning, G.box, x, 2.6, z, 5, 0.2, 3, 0, col(pick([0xb8323a, 0x2f6a4a, 0xd08a2a]))); putB(B.wood, G.box, x, 0.9, z, 4.4, 1.8, 2.4, 0, col(0x6a4a2a)); solid(x - 2.2, z - 1.2, x + 2.2, z + 1.2, 2); }
+    signC('КРЫТЫЙ РЫНОК', 16, 2.4, mx, 7.5, mz + 36.1, 0, '#ffe8b0', '#2a1a12'); }
+  // the railway terminus: a brick front with arches and a clock, glass sheds behind
+  { const [sx, sz] = C.P.station; boxB(B.walk, sx - 51, 0, sz - 51, sx + 51, 0.14, sz + 51, { topWorld: 1 / 3, col: stone });
+    boxB(B.brick, sx - 44, 0, sz + 16, sx + 44, 20, sz + 30, { col: col(0x8a3a2a), us: 1 / 6, vs: 1 / 6 }); solid(sx - 44, sz + 16, sx + 44, sz + 30, 22);
+    for (let x = sx - 38; x <= sx + 38; x += 8) putB(B.archwin, G.box, x, 7, sz + 30.05, 4.4, 8, 0.05, 0, WHITE);
+    boxB(B.brick, sx - 4, 20, sz + 22, sx + 4, 32, sz + 30, { col: col(0x8a3a2a) }); putB(B.neon, G.cyl, sx, 27, sz + 30.1, 5, 0.1, 5, 0, HDR(0xfff0c8, 1.6), PI / 2);
+    for (let x = sx - 40; x <= sx + 40; x += 16) { const g2 = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 46, 16, 1, true, 0, PI), new THREE.MeshStandardMaterial({ color: 0x8aa0b8, roughness: 0.2, metalness: 0.5, transparent: true, opacity: 0.55, side: THREE.DoubleSide })); g2.rotation.set(PI / 2, 0, PI / 2); g2.rotation.order = 'YXZ'; g2.rotation.set(0, 0, 0); g2.geometry.rotateZ(PI / 2); g2.geometry.rotateY(PI / 2); g2.position.set(x, 12, sz - 10); scene.add(g2); }
+    boxB(B.brick, sx - 44, 0, sz - 34, sx + 44, 12, sz + 16, { col: col(0x6a3428), us: 1 / 6, vs: 1 / 6, top: false }); for (let x = sx - 40; x <= sx + 40; x += 8) putB(B.archwin, G.box, x, 6, sz - 34.05, 3, 6, 0.05, 0, WHITE); solid(sx - 44, sz - 34, sx + 44, sz + 16, 13);
+    signC('ВОКЗАЛ', 14, 2.4, sx, 16, sz + 30.1, 0, '#ffe8b0', '#2a1210'); }
+  // the park: lawns, plane trees, a hedge round it
+  { const [a, b, c2, d] = C.parks[0]; boxB(B.grass, a, 0, b, c2, 0.1, d, { topWorld: 1 / 8, sides: false });
+    for (let k = 0; k < 26; k++) { const x = rand(a + 6, c2 - 6), z = rand(b + 6, d - 6); putB(B.leaf, G.sph, x, 6.5, z, 4, 4.6, 4, 0, col(0x2a4a2a)); putB(B.wood, G.cyl6, x, 2, z, 0.5, 4, 0.5, 0, col(0x5a4a3a)); solid(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 3); }
+    for (const [x0, z0, x1, z1] of [[a, b, c2, b + 1.2], [a, d - 1.2, c2, d]]) boxB(B.leaf, x0, 0, z0, x1, 1.6, z1, { col: col(0x1f3a22) }); }
+  signC('ПАБ «СТАРЫЙ ФОНАРЬ»', 9, 1.4, 3880 - 12, 4.2, 179.4, 0, '#ffd890', '#1a2a1a');
+  // the wall to the rooms on the east edge
+  solid(WALL, C.z0, WALL + 6, C.z1, 8); boxB(B.brick, WALL, 0, C.z0, WALL + 6, 8, C.z1, { col: col(0x4a2a22), us: 1 / 6, vs: 1 / 6 });
+  buildCityRooms(C); cityPools(C);
+}
+
+// ---------- NEW YORK ----------
+// towers of glass and brick, water towers on the roofs, fire escapes, an elevated railway, a neon square, a big park, a harbour with a ferry
+const NYC = mkCity('ny', {
+  name: 'Нью-Йорк', x0: 4800, x1: 5800, z0: 0, z1: 800, roomCol: 0x2a2e3a,
+  AV: [4840, 4960, 5080, 5200, 5320, 5440, 5560], ST: [40, 140, 240, 340, 440, 540, 640],
+  parks: [[5087, 147, 5313, 333]],
+  P: { square: [5260, 490], park: [5200, 240], pierW: [4900, 700], pierE: [5500, 700], island: [5700, 720], el: 4960, garage: [5500, 90], hall: [4900, 190], tower: [5380, 590] },
+  harbour: { z0: 660, z1: 800 }, wall: 5600,
+});
+NYC.rooms = { crane: [5700, 140], vault: [5700, 420] }; NYC.skyRooms = ['crane'];
+function buildNY() {
+  const C = NYC, AV = C.AV, ST = C.ST, WALL = C.wall, H = C.harbour;
+  const solid = (x0, z0, x1, z1, h) => cSolid(C, x0, z0, x1, z1, h);
+  const dark = col(0x141518), rust = col(0x3a2a22), steel = col(0x4a4e58), yellow = col(0xf2c21a);
+  const asph = (x0, z0, x1, z1) => boxB(B.asph, x0, 0.01, z0, x1, 0.022, z1, { topWorld: 1 / 10, sides: false });
+  const lamp = (x, z) => { C.lamps.push([x, z]); putB(B.metal, G.cyl6, x, 3.6, z, 0.16, 7.2, 0.16, 0, steel); putB(B.metal, G.box, x, 7.3, z, 0.4, 0.25, 1.6, 0, steel); putB(B.neon, G.box, x, 7.15, z, 0.3, 0.08, 1.0, 0, HDR(0xffe0b0, 2.6)); };
+  // water tower on a roof: wooden barrel on steel legs with a cone hat
+  const wtower = (x, y, z) => { for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) putB(B.metal, G.box, x + a * 1.3, y + 1.5, z + b * 1.3, 0.2, 3, 0.2, 0, steel); putB(B.wood, G.cyl, x, y + 4.6, z, 3.6, 3.2, 3.6, 0, col(0x6a4a30)); putB(B.roof, G.cone, x, y + 7, z, 4, 1.6, 4, 0, col(0x2a2a2e)); };
+  // a tower: brick or glass; lit windows, a setback crown, maybe a water tower and fire escapes
+  const tower = (x0, z0, x1, z1, kind) => {
+    const h = kind === 'glass' ? rand(60, 130) : rand(22, 48), w = x1 - x0, d = z1 - z0;
+    if (kind === 'glass') {
+      boxB(B.glass, x0, 0, z0, x1, h, z1, { us: 1 / 8, vs: 1 / 4 }); solid(x0, z0, x1, z1, h);
+      boxB(B.glass, x0 + w * 0.2, h, z0 + d * 0.2, x1 - w * 0.2, h + h * 0.18, z1 - d * 0.2, { us: 1 / 8, vs: 1 / 4 });
+      putB(B.metal, G.cyl6, (x0 + x1) / 2, h * 1.18 + 6, (z0 + z1) / 2, 0.3, 12, 0.3, 0, steel); putB(B.neon, G.sph, (x0 + x1) / 2, h * 1.18 + 12.5, (z0 + z1) / 2, 0.5, 0.5, 0.5, 0, HDR(0xff3030, 6));
+      boxB(B.trim, x0 - 0.2, 0, z0 - 0.2, x1 + 0.2, 4.5, z1 + 0.2, { col: col(0x1a1c22) });
+    } else {
+      const t = col(pick([0x8a4a3a, 0x7a5a48, 0x9a6a50, 0x6a4038, 0xb08a6a])), fl = Math.floor((h - 4) / 3.4);
+      boxB(B.brick, x0, 0, z0, x1, h, z1, { col: t, us: 1 / 6, vs: 1 / 6 }); solid(x0, z0, x1, z1, h);
+      boxB(B.trim, x0 - 0.3, h, z0 - 0.3, x1 + 0.3, h + 0.6, z1 + 0.3, { col: col(0x5a5048) });
+      for (const f of ['n', 's', 'e', 'w']) {
+        const along = f === 'n' || f === 's', L = along ? w : d, n = Math.max(2, Math.floor(L / 3.2));
+        for (let k = 1; k < fl; k++) for (let q = 0; q < n; q++) {
+          if (Math.random() < 0.35) continue;
+          const u = (along ? x0 : z0) + (q + 0.5) * L / n, y = 4 + k * 3.4, lit = Math.random() < 0.5, cc = lit ? HDR(pick([0xffd090, 0xfff0d0, 0xa8d0ff]), 1 + Math.random() * 0.5) : col(0x1c2028);
+          if (along) putB(lit ? B.bankL : B.trim, G.box, u, y, f === 'n' ? z1 + 0.04 : z0 - 0.04, 1.2, 1.8, 0.06, 0, cc);
+          else putB(lit ? B.bankL : B.trim, G.box, f === 'e' ? x1 + 0.04 : x0 - 0.04, y, u, 0.06, 1.8, 1.2, 0, cc);
+        }
+      }
+      // fire escapes zig-zagging down the street front
+      if (Math.random() < 0.7) { const fz = z0 - 0.9, fx = x0 + w * 0.3; for (let k = 1; k < fl; k++) { const y = 3 + k * 3.4; boxB(B.metal, fx - 2.5, y, fz - 0.4, fx + 2.5, y + 0.12, fz + 0.9, { col: dark }); boxB(B.metal, fx - 2.5, y + 1, fz - 0.42, fx + 2.5, y + 1.06, fz - 0.36, { col: dark }); putB(B.metal, G.box, fx + (k % 2 ? 1.2 : -1.2), y - 1.7, fz + 0.2, 0.5, 3.6, 0.08, 0, dark, k % 2 ? 0.75 : -0.75); } }
+      if (Math.random() < 0.6) wtower(x0 + w * 0.7, h + 0.6, z0 + d * 0.6);
+      // shopfronts with neon
+      if (Math.random() < 0.6) { const nc = HDR(pick(NEON), 2.2); putB(B.bankL, G.box, (x0 + x1) / 2, 1.8, z0 - 0.06, w - 3, 2.6, 0.06, 0, HDR(0xffd8a0, 1.4)); putB(B.neon, G.box, (x0 + x1) / 2, 3.9, z0 - 0.12, Math.min(8, w - 4), 0.5, 0.06, 0, nc); }
+    }
+  };
+  // ground, streets, yellow lines
+  boxB(B.walk, C.x0, -0.07, C.z0, C.x1, -0.05, H.z0, { topWorld: 1 / 6, sides: false, col: col(0x6a6a6e) });
+  for (const x of AV) asph(x - 8, ST[0] - 8, x + 8, ST[ST.length - 1] + 8);
+  for (const z of ST) asph(AV[0] - 8, z - 7, AV[AV.length - 1] + 8, z + 7);
+  for (const x of AV) for (let z = ST[0] + 9; z < ST[ST.length - 1] - 4; z += 6) boxB(B.mark, x - 0.3, 0.03, z, x - 0.12, 0.035, z + 4, { sides: false, col: col(0xe8c020) });
+  // steam from the manholes is drawn by the missions; here: the grates
+  for (const x of AV) for (const z of ST) putB(B.metal, G.cyl, x + 3, 0.03, z + 3, 1.2, 0.02, 1.2, 0, col(0x2a2a2e));
+  // blocks: towers; the park and the neon square are their own
+  const isPark = (x, z) => C.parks.some(([a, b, c2, d]) => x > a - 10 && x < c2 + 10 && z > b - 10 && z < d + 10);
+  for (let i = 0; i < AV.length - 1; i++) for (let j = 0; j < ST.length - 1; j++) {
+    const xa = AV[i] + 10, xb = AV[i + 1] - 10, za = ST[j] + 9, zb = ST[j + 1] - 9, cx = (xa + xb) / 2, cz = (za + zb) / 2;
+    if (isPark(cx, cz) || (Math.abs(cx - C.P.square[0]) < 70 && Math.abs(cz - C.P.square[1]) < 50) || (Math.abs(cx - C.P.garage[0]) < 50 && Math.abs(cz - C.P.garage[1]) < 50) || (Math.abs(cx - C.P.hall[0]) < 50 && Math.abs(cz - C.P.hall[1]) < 50)) continue;
+    boxB(B.walk, xa - 2, 0, za - 2, xb + 2, 0.14, zb + 2, { topWorld: 1 / 3, col: col(0x8a8a88) });
+    const n = 3, w = (xb - xa) / n, glassy = i >= 2 && i <= 4;
+    for (let k = 0; k < n; k++) { const x0 = xa + k * w + 0.6, x1 = xa + (k + 1) * w - 0.6, mid = (za + zb) / 2; tower(x0, za, x1, mid - 0.6, glassy && Math.random() < 0.6 ? 'glass' : 'brick'); tower(x0, mid + 0.6, x1, zb, glassy && Math.random() < 0.5 ? 'glass' : 'brick'); }
+    for (let x = xa + 8; x < xb; x += 24) { lamp(x, za - 3.5); lamp(x, zb + 3.5); }
+  }
+  // the elevated railway over one avenue: steel columns, a girder deck, a lit train parked on it
+  { const x = C.P.el; for (let z = ST[0] - 6; z <= ST[ST.length - 1] + 6; z += 12) { for (const s of [-1, 1]) { putB(B.metal, G.box, x + s * 7.6, 3.6, z, 0.5, 7.2, 0.5, 0, col(0x2a3a4a)); solid(x + s * 7.6 - 0.3, z - 0.3, x + s * 7.6 + 0.3, z + 0.3, 7); } }
+    boxB(B.metal, x - 8, 7.2, ST[0] - 6, x + 8, 8.4, ST[ST.length - 1] + 6, { col: col(0x2a3a4a), bottom: true });
+    for (let z = ST[0]; z < ST[ST.length - 1]; z += 3) putB(B.wood, G.box, x, 8.5, z, 5, 0.15, 0.4, 0, col(0x3a2a20));
+    for (const s of [-1, 1]) boxB(B.metal, x + s * 7.8, 8.4, ST[0] - 6, x + s * 8, 9.6, ST[ST.length - 1] + 6, { col: col(0x2a3a4a) });
+    for (let k = 0; k < 4; k++) { const z = 300 + k * 17; boxB(B.metal, x - 1.6, 8.6, z, x + 1.6, 12, z + 16, { col: col(0x9aa0a8) }); putB(B.bankL, G.box, x - 1.62, 10.4, z + 8, 0.05, 1.2, 14, 0, HDR(0xfff0c8, 1.3)); putB(B.bankL, G.box, x + 1.62, 10.4, z + 8, 0.05, 1.2, 14, 0, HDR(0xfff0c8, 1.3)); } }
+  // the park: lawns, a lake, paths, trees, a low stone wall
+  { const [a, b, c2, d] = C.parks[0]; boxB(B.grass, a, 0, b, c2, 0.005, d, { topWorld: 1 / 8, sides: false });
+    const lk = [a + 128, b + 14, a + 212, b + 76]; boxB(B.water, lk[0], 0.03, lk[1], lk[2], 0.05, lk[3], { sides: false, col: col(0x1a3a4a) }); solid(lk[0], lk[1], lk[2], lk[3], 1);
+    for (let k = 0; k < 70; k++) { const x = rand(a + 5, c2 - 5), z = rand(b + 5, d - 5); if ((x > lk[0] - 5 && x < lk[2] + 5 && z > lk[1] - 5 && z < lk[3] + 5) || AV.some((q) => Math.abs(x - q) < 11) || ST.some((q) => Math.abs(z - q) < 10)) continue; putB(B.leaf, G.sph, x, 6, z, 3.6, 4.2, 3.6, 0, col(pick([0x2a4a2a, 0x3a5a2a, 0x2a3a22]))); putB(B.wood, G.cyl6, x, 2, z, 0.5, 4, 0.5, 0, col(0x4a3a2a)); solid(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 3); }
+    for (let x = a + 10; x < c2; x += 20) { lamp(x, b + 4); lamp(x, d - 4); } }
+  // the neon square: billboards stacked on the corners, a red staircase, lights everywhere
+  { const [sx, sz] = C.P.square; boxB(B.walk, sx - 52, 0, sz - 43, sx + 52, 0.14, sz + 43, { topWorld: 1 / 3, col: col(0x5a5a62) });
+    for (const [x0, z0, x1, z1, h] of [[sx - 48, sz - 39, sx - 22, sz - 14, 70], [sx + 22, sz - 39, sx + 48, sz - 14, 85], [sx - 48, sz + 14, sx - 22, sz + 39, 60], [sx + 22, sz + 14, sx + 48, sz + 39, 95]]) {
+      boxB(B.glass, x0, 0, z0, x1, h, z1, { us: 1 / 8, vs: 1 / 4 }); solid(x0, z0, x1, z1, h);
+      for (let y = 6; y < 34; y += 9) for (const f of [-1, 1]) { const zf = f < 0 ? z0 - 0.15 : z1 + 0.15; putB(B.ad, G.box, (x0 + x1) / 2, y + 3.5, zf, x1 - x0 - 4, 8, 0.1, 0, WHITE); }
+      for (const xf of [x0 - 0.15, x1 + 0.15]) putB(B.ad, G.box, xf, 20, (z0 + z1) / 2, 0.1, 28, z1 - z0 - 4, 0, WHITE);
+      boxB(B.neon, x0 - 0.3, 4.5, z0 - 0.3, x1 + 0.3, 5, z1 + 0.3, { col: HDR(pick(NEON), 2.4), top: false });
+    }
+    for (let k = 0; k < 8; k++) boxB(B.stone, sx - 10, k * 0.5, sz - 4 + k * 1.1, sx + 10, (k + 1) * 0.5, sz - 3 + k * 1.1, { col: col(0xb02a2a) });
+    solid(sx - 10, sz - 4, sx + 10, sz + 5, 4);
+    for (let k = 0; k < 18; k++) C.lamps.push([sx + rand(-18, 18), sz + rand(-36, 36)]); }
+  // the cab garage «Жёлтый парк»: a long shed, rows of yellow cabs
+  { const [gx, gz] = C.P.garage; boxB(B.walk, gx - 50, 0, gz - 41, gx + 50, 0.14, gz + 41, { topWorld: 1 / 3, col: col(0x5a5a5e) });
+    boxB(B.brick, gx - 46, 0, gz + 8, gx + 46, 10, gz + 38, { col: col(0x6a4a3a), us: 1 / 6, vs: 1 / 6 }); solid(gx - 46, gz + 8, gx + 46, gz + 38, 11);
+    for (let x = gx - 40; x <= gx + 40; x += 10) { boxB(B.trim, x - 4, 0, gz + 7.9, x + 4, 5, gz + 8, { col: col(0x2a2a30) }); putB(B.bankL, G.box, x, 6.5, gz + 7.95, 6, 0.6, 0.05, 0, HDR(0xffe8a0, 1.6)); }
+    signC('ЖЁЛТЫЙ ПАРК · ТАКСИ', 20, 2.6, gx, 8.4, gz + 7.8, PI, '#1a1a1a', '#f2c21a');
+    for (let k = 0; k < 6; k++) { const m = makeCar(0xf2c21a, true); m.g.position.set(gx - 30 + k * 12, 0, gz - 4); m.g.rotation.y = PI; scene.add(m.g); solid(gx - 31.2 + k * 12, gz - 6.2, gx - 28.8 + k * 12, gz - 1.8, 2); } }
+  // the old city hall with a colonnade (the medallion office)
+  { const [hx, hz] = C.P.hall; boxB(B.walk, hx - 50, 0, hz - 40, hx + 50, 0.3, hz + 40, { topWorld: 1 / 3, col: col(0x9a9284) });
+    boxB(B.stone, hx - 40, 0.3, hz - 30, hx + 40, 22, hz + 20, { col: col(0xd8d0c0) }); solid(hx - 40, hz - 30, hx + 40, hz + 20, 24);
+    for (let x = hx - 36; x <= hx + 36; x += 6) putB(B.stone, G.cyl, x, 10, hz + 23, 1.4, 19.4, 1.4, 0, col(0xeeeae0));
+    boxB(B.stone, hx - 40, 19.6, hz + 20, hx + 40, 22, hz + 26, { col: col(0xd8d0c0) }); putB(B.stone, G.cyl, hx, 28, hz - 5, 10, 10, 10, 0, col(0xd8d0c0)); putB(B.roof, G.sph, hx, 33, hz - 5, 5, 4, 5, 0, col(0x6a8a7a));
+    signC('ПАЛАТА МЕДАЛЬОНОВ', 22, 2.4, hx, 17, hz + 26.1, 0, '#ffe8b0', '#2a2418'); }
+  // the harbour: a quay along the south, two piers, the ferry, the island with a lighthouse
+  { boxB(B.water, C.x0 - 40, -1.6, H.z0, C.x1 + 40, -1.5, H.z1 + 60, { sides: false, col: col(0x0e2030) });
+    boxB(B.stone, C.x0, -1.6, H.z0 - 8, WALL, 0.02, H.z0, { col: col(0x7a7468) });
+    let xs = C.x0; for (const px of [C.P.pierW[0], C.P.pierE[0], WALL]) { const xe = px === WALL ? WALL : px - 8; if (xe > xs) { boxB(B.stone, xs, 0, H.z0 - 0.6, xe, 1.1, H.z0, { col: col(0x8a8478) }); solid(xs, H.z0 - 0.6, xe, H.z0, 2); } xs = px + 8; }
+    { let xs = C.x0 - 40; for (const px of [C.P.pierW[0], C.P.pierE[0], C.x1 + 40]) { const xe = px > C.x1 ? C.x1 + 40 : px - 8; if (px > C.x1) { const [ix, iz] = C.P.island; solid(xs, H.z0, ix - 60, H.z1 + 60, 0.9); solid(ix + 60, H.z0, xe, H.z1 + 60, 0.9); solid(ix - 60, H.z0, ix + 60, iz - 30, 0.9); solid(ix - 60, iz + 50, ix + 60, H.z1 + 60, 0.9); } else solid(xs, H.z0, xe, H.z1 + 60, 0.9); if (px < C.x1) solid(px - 8, H.z0 + 34, px + 8, H.z1 + 60, 0.9); xs = px + 8; } }   // the water: only the piers go out into it
+    for (const [px] of [C.P.pierW, C.P.pierE]) { boxB(B.wood, px - 8, -1.6, H.z0 - 1, px + 8, 0.06, H.z0 + 34, { col: col(0x5a4a3a) }); for (const s of [-1, 1]) { boxB(B.metal, px + s * 7.6, 0, H.z0, px + s * 8, 1, H.z0 + 34, { col: dark }); } for (let z = H.z0 + 4; z < H.z0 + 34; z += 10) lamp(px + 7, z); }
+    // the island: a lawn and a lighthouse; the ferry lands at its pier
+    const [ix, iz] = C.P.island; boxB(B.grass, ix - 60, -1.6, iz - 30, ix + 60, 0.03, iz + 50, { topWorld: 1 / 8, col: col(0x2a4a2a) }); solid(ix + 27, iz + 17, ix + 33, iz + 23, 28);
+    putB(B.stone, G.cyl, ix + 30, 14, iz + 20, 6, 28, 6, 0, col(0xe8e4dc)); putB(B.neon, G.cyl, ix + 30, 29.5, iz + 20, 4, 3, 4, 0, HDR(0xfff0c0, 4)); putB(B.roof, G.cone, ix + 30, 32.5, iz + 20, 5, 3, 5, 0, col(0xa02020));
+    for (let k = 0; k < 12; k++) putB(B.leaf, G.sph, ix + rand(-50, 20), 4.5, iz + rand(-20, 40), 3, 3.4, 3, 0, col(0x2a4a2a));
+    // the ferry: a real mesh so «Паром» can sail it
+    const fg = new THREE.Group(), hull = new THREE.Mesh(box1, std(0xe8a020, { roughness: 0.5 })); hull.scale.set(18, 2.4, 30); hull.position.y = -1; fg.add(hull);
+    const deck = new THREE.Mesh(box1, std(0x3a3c44, { roughness: 0.8 })); deck.scale.set(16, 0.2, 28); deck.position.y = 0.25; fg.add(deck);
+    const cab = new THREE.Mesh(box1, std(0xe8e4dc)); cab.scale.set(5, 3.2, 6); cab.position.set(-5.5, 2, 0); fg.add(cab);
+    const win = new THREE.Mesh(box1, basic(new THREE.Color(1.6, 1.4, 1))); win.scale.set(5.05, 0.9, 6.05); win.position.set(-5.5, 2.6, 0); fg.add(win);
+    fg.position.set(C.P.pierE[0], 0, H.z0 + 52); scene.add(fg); C.ferry = fg; }
+  // the wall to the rooms on the east edge
+  solid(WALL, C.z0, WALL + 6, H.z0 - 8, 9); boxB(B.brick, WALL, 0, C.z0, WALL + 6, 9, H.z0 - 8, { col: col(0x3a2a24), us: 1 / 6, vs: 1 / 6 });
+  buildCityRooms(C); cityPools(C);
+}
 function buildTrack() {
   const N = TRK.N, P = TRK.pts, NR = TRK.nrm, metal = col(0x3a3c44), white = col(0xe8e8ec), red = col(0xd83a2a), conc = col(0xb8b8c0);
   const solid = (x0, z0, x1, z1, h) => addBox((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, h);
@@ -2474,7 +2979,7 @@ function buildWorld() {
   buildSignals(tlights); buildRoadSigns();
 
   CONTS.glb = (!isTouch || HD()) && perf.level === 0;
-  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage(); buildLower();
+  buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage(); buildLower(); buildParis(); buildLondon(); buildNY();
   contBuild();
 
   // one material per batch: a few draw calls for the whole city
@@ -2691,6 +3196,9 @@ function zoneRoutes() {
     for (const x of AV) L.push(R([[x, ST[0]], [x, ST[ST.length - 1]]], 6));
     for (const z of ST) L.push(R([[AV[0], z], [AV[AV.length - 1], z]], 6));
     L.push(R([[272, -470], [392, -470]], 4.5)); L.push(R([[663, -246], [663, ST[0]]], 6)); }
+  for (const k in CITIES) { const C = CITIES[k];   // the world cities: their avenues (split by the river where there is no bridge) and streets
+    for (const x of C.AV) { if (C.river && !C.river.bridges.includes(x)) { L.push(R([[x, C.ST[0]], [x, C.river.qN]], 6)); L.push(R([[x, C.river.qS], [x, C.ST[C.ST.length - 1]]], 6)); } else L.push(R([[x, C.ST[0]], [x, C.ST[C.ST.length - 1]]], 6)); }
+    for (const z of C.ST) L.push(R([[C.AV[0], z], [C.AV[C.AV.length - 1], z]], 6)); }
   return (ZR.list = L);
 }
 function routeAt(r, s, off, out) {
@@ -2930,7 +3438,7 @@ function updateLife(dt) {
       if (m.wait > 0) { m.wait -= dt; want = 0; }
       m.v += clamp(want - m.v, -dt * 16, dt * 5); Z.s += Z.dir * m.v * dt;
       if (Z.s > Z.r.len - 4 || Z.s < 4) { Z.dir = Z.s < 4 ? 1 : -1; Z.s = clamp(Z.s, 4, Z.r.len - 4); }
-      const hh = routeAt(Z.r, Z.s, Z.dir * Math.min(2.2, Z.r.w * 0.45), m.pos); m.h = Z.dir > 0 ? hh : hh + PI;
+      const hh = routeAt(Z.r, Z.s, Z.dir * (CITY && CITY.left ? -1 : 1) * Math.min(2.2, Z.r.w * 0.45), m.pos); m.h = Z.dir > 0 ? hh : hh + PI;
       m.g.position.set(m.pos.x, 0, m.pos.z); m.g.rotation.y = m.h;
       for (const w of m.wheels) w.rotation.x += m.v * dt * 2.2;
       bumpPlayer(m, 3.4); continue;
@@ -4370,12 +4878,12 @@ function updateWeather(dt, focusP) {
     }
     if (first) { const t = WX_TARGET[k]; WX.rain = t[0]; WX.snow = t[1]; WX.fog = t[2]; WX.cloud = t[3]; }
   }
-  const t = WX_TARGET[WX.kind], s = Math.min(1, dt * 0.08);   // ~20 s to change over
+  const mwx = MIS && MIS.wx && CITY ? MIS.wx : null, t = WX_TARGET[mwx || WX.kind], s = Math.min(1, dt * (mwx ? 0.6 : 0.08));   // ~20 s to change over; a city mission's own weather comes in fast
   WX.rain += (t[0] - WX.rain) * s; WX.snow += (t[1] - WX.snow) * s; WX.fog += (t[2] - WX.fog) * s; WX.cloud += (t[3] - WX.cloud) * s;
   // rain: lines and splashes; fog: the fog closes in; wet asphalt reflects more
   const indoor = state.act === 2 && hero && hero.pos.x > 1270 && (state.mode === 'foot' || state.mode === 'dialog') && !['roof', 'motelRoof'].some((n) => Math.abs(hero.pos.x - INT[n][0]) < INT_W / 2 + 3 && Math.abs(hero.pos.z - INT[n][1]) < INT_D / 2 + 3);   // Season 3 rooms: no rain or snow under a roof (the rooftops stay open)
   rain.visible = WX.rain > 0.03 && !indoor; rain.material.opacity = 0.42 * WX.rain;
-  scene.fog.near = 70 - 62 * WX.fog; scene.fog.far = 290 - 215 * WX.fog;
+  const fogK = Math.max(WX.fog, CITY && CITY.fogMin || 0, MIS && MIS.fog || 0); scene.fog.near = 70 - 62 * fogK; scene.fog.far = 290 - 215 * fogK;
   if (KIT.groundMat) KIT.groundMat.envMapIntensity = 0.35 + 0.6 * Math.min(1, WX.rain + 0.4 * WX.fog);
   if (WX.snow > 0.03 && !indoor) {
     if (!WX.snowPts) wxSnowBuild();
@@ -4645,6 +5153,7 @@ function updateNav(pos, goal) {
     || (vert && Math.abs(pos.x - GA[0]) < 9 && pos.z >= Math.min(GA[1], GB[1]) - 2 && pos.z <= Math.max(GA[1], GB[1]) + 2)
     || Math.hypot(pos.x - NG.x, pos.z - NG.z) < 12;
   if (TRK.on) trkNavPts(pos, goal || GOAL, NAV.pts);
+  else if (CITY) gridNavPts(pos, goal || GOAL, NAV.pts, CITY.AV, CITY.ST, CITY.river);
   else if (lowTail && !goal) lowLinkPts(pos, lowTail, NAV.pts);
   else if (lowHere) lowNavPts(pos, goal || GOAL, NAV.pts);
   else if (VIL.on) vilNavPts(pos, goal || GOAL, NAV.pts);
@@ -4691,6 +5200,7 @@ function setBeam(v) { beam.visible = !!v; if (v) beam.position.set(v.x, 45, v.z)
 function inColliders(p, y) {
   for (const c of colliders) if (p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
   if (p.z < -330) for (const c of VCOLS) if (p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
+  if (p.x > 2000) { const C = cityAt(p); if (C) { for (const c of C.cols) if (p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true; return false; } }
   if (p.x > 360 && p.z < -270) for (const c of LCOLS) if (!c.dry && p.x > c.minX && p.x < c.maxX && p.z > c.minZ && p.z < c.maxZ && (y === undefined ? p.y : y) < c.h) return true;
   return false;
 }
@@ -4707,7 +5217,8 @@ function freeClamp(pos) {
 const COLL_C = [colliders], COLL_V = [colliders, VCOLS], COLL_L = [colliders, LCOLS];   // south of the city the village colliders are checked too
 function collideCircle(pos, vel, r) {
   let impact = 0;
-  for (const L of (pos.x > 360 && pos.z < -270 ? COLL_L : pos.z < -330 ? COLL_V : COLL_C)) for (const c of L) {
+  const CTZ = pos.x > 2000 ? cityAt(pos) : null;
+  for (const L of (CTZ ? CTZ.COLL : pos.x > 360 && pos.z < -270 ? COLL_L : pos.z < -330 ? COLL_V : COLL_C)) for (const c of L) {
     if (pos.x < c.minX - r || pos.x > c.maxX + r || pos.z < c.minZ - r || pos.z > c.maxZ + r) continue;
     const cx = clamp(pos.x, c.minX, c.maxX), cz = clamp(pos.z, c.minZ, c.maxZ);
     let dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
@@ -4723,6 +5234,7 @@ function collideCircle(pos, vel, r) {
   }
   if (TRK.on && pos.x < TRK.x1 + 15) impact = Math.max(impact, trkWall(pos, vel, r));
   if (LOW.on && !ONL.on) { pos.x = clamp(pos.x, -LIM, LOW.x1); pos.z = clamp(pos.z, LOW.z0, LIM + 2); }
+  if (CITY && !ONL.on) { pos.x = clamp(pos.x, CITY.x0, CITY.x1); pos.z = clamp(pos.z, CITY.z0, CITY.z1); }
   else if ((AIR.on || STA.on || TRK.on || VIL.on) && !ONL.on) { const Z = AIR.on ? AIR : STA.on ? STA : TRK.on ? TRK : VIL; pos.x = clamp(pos.x, Z.x0, Z.x1); pos.z = clamp(pos.z, Z.z0, Z.z1); }
   else if (ONL.on) freeClamp(pos);
   else { pos.x = clamp(pos.x, -LIM, LIM); pos.z = clamp(pos.z, -LIM, LIM + 2); }
@@ -4754,7 +5266,7 @@ function carPhysics(c, dt, throttle, steer, drift, maxF, keepSpeed) {
   const turn = (drift ? 2.7 : 2.1) * sp * (vf < -0.5 ? -1 : 1) * (1 - 0.3 * clamp(Math.abs(vf) / maxF, 0, 1));
   c.h = wrapA(c.h - steer * turn * dt);
   c.pos.addScaledVector(c.vel, dt);
-  const imp = collideCircle(c.pos, c.vel, 2.1);
+  const imp = c.ghost ? 0 : collideCircle(c.pos, c.vel, 2.1);
   c.vf = vf; c.vr = vr;
   c.g.position.set(c.pos.x, 0, c.pos.z); c.g.rotation.y = c.h; c.g.rotation.z = clamp(-vr * 0.012, -0.12, 0.12);
   for (const w of c.wheels) w.rotation.x += vf * dt / 0.43;
@@ -5288,7 +5800,7 @@ const LOOKS = {
 let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
   if (ONL.on) leaveRoom();
-  removeHeli(); AIR.on = false; STA.on = false; TRK.on = false; VIL.on = false; LOW.on = false; if (typeof S3 !== 'undefined' && S3) s3Clear(); if (pc) pc.locked = false; state.lightsOff = false; TR.field = []; TR.count = 0; if (TRKX.lights.length) trkLights(0); tMarksClear();
+  removeHeli(); AIR.on = false; STA.on = false; TRK.on = false; VIL.on = false; LOW.on = false; CITY = null; if (typeof ctClear === 'function') ctClear(); if (typeof S3 !== 'undefined' && S3) s3Clear(); if (pc) pc.locked = false; state.lightsOff = false; TR.field = []; TR.count = 0; if (TRKX.lights.length) trkLights(0); tMarksClear();
   for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
@@ -5307,7 +5819,8 @@ function freeSpot(x, z, r) {
   const p = new V3(x, 0, z);
   for (let k = 0; k < 60; k++) {
     let ok = true;
-    for (const L of (p.x > 360 && p.z < -270 ? COLL_L : p.z < -330 ? COLL_V : COLL_C)) { for (const c of L) if (!c.dry && p.x > c.minX - r && p.x < c.maxX + r && p.z > c.minZ - r && p.z < c.maxZ + r) { ok = false; break; } if (!ok) break; }
+    const CTZ = p.x > 2000 ? cityAt(p) : null;
+    for (const L of (CTZ ? CTZ.COLL : p.x > 360 && p.z < -270 ? COLL_L : p.z < -330 ? COLL_V : COLL_C)) { for (const c of L) if (!c.dry && p.x > c.minX - r && p.x < c.maxX + r && p.z > c.minZ - r && p.z < c.maxZ + r) { ok = false; break; } if (!ok) break; }
     if (ok) return p;
     const a = k * 2.4, d = 1.5 + k * 0.5; p.set(x + Math.cos(a) * d, 0, z + Math.sin(a) * d);
   }
@@ -5753,7 +6266,7 @@ function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else st
 const EP_NAMES = { 1: 'Кейс', 2: 'Двойной тариф', 3: 'Конечная остановка', 4: 'Встречная полоса', 5: 'Красный свет', 6: 'Последний пассажир', 7: 'Рассвет', 8: 'Большой куш', 9: 'Хранилище', 10: 'Чёрная книга', 11: 'Сокол', 12: 'Похищение мэра', 13: 'Последний рейс', 14: 'Северный экспресс', 15: 'Северное кольцо', 16: 'Сосновый Бор' };
 function renderChapters() {
   const eb = $('epChips');
-  eb.innerHTML = Object.keys(EP_NAMES).map((k) => (+k === 17 ? '<span class="ep-season">Новый сезон · «Охота по тарифу»</span>' : '') + `<button class="chip${selEp === +k ? ' active' : ''}${+k >= 17 ? ' s3' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
+  eb.innerHTML = Object.keys(EP_NAMES).map((k) => (+k === 17 ? '<span class="ep-season">Новый сезон · «Охота по тарифу»</span>' : +k === 20 ? '<span class="ep-season">Города мира</span>' : '') + `<button class="chip${selEp === +k ? ' active' : ''}${+k >= 17 ? ' s3' : ''}" type="button" data-ep="${k}">${k} · ${EP_NAMES[k]}</button>`).join('');
   eb.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { selEp = +b.dataset.ep; ep2Pick = selEp >= 2 ? epMax(selEp) : 1; renderChapters(); }));
   const box = $('chapters'), max = selEp >= 2 ? epMax(selEp) : 1; box.hidden = selEp < 2;
   if (ep2Pick > max) ep2Pick = max;
@@ -6679,7 +7192,7 @@ function startGen(ep, i, withIntro) {
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
   };
-  AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village'; LOW.on = (c.zone || E.zone) === 'lower' || (c.zone || E.zone) === 'city' && !!E.season3;
+  AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village'; LOW.on = (c.zone || E.zone) === 'lower' || (c.zone || E.zone) === 'city' && !!E.season3; CITY = CITIES[c.zone || E.zone] || null;
   resetJet(c.jetAt);
   MIS = GEN[c.type](c, title, done, E);
   if (c.carStyle || E.carStyle) MIS.carStyle = c.carStyle || E.carStyle; if (c.chaseMsg || E.chaseMsg) MIS.chaseMsg = c.chaseMsg || E.chaseMsg;
@@ -7341,7 +7854,8 @@ function drawMinimap() {
   if (STA.on || me.pos.x > 300) { if (!mmSta) drawStaMap(); mctx.drawImage(mmSta, STA.x0 - 40, STA.z0 - 15, STA.x1 - STA.x0 + 55, STA.z1 - STA.z0 + 30); }
   if (VIL.on || me.pos.z < -330) { if (!mmVil) drawVilMap(); mctx.drawImage(mmVil, VIL.x0 - 20, -925, VIL.x1 - VIL.x0 + 40, 905 - 318 + 40); }
   if (TRK.on || me.pos.x < -400) { if (!mmTrk) drawTrkMap(); mctx.drawImage(mmTrk, TRK.x0 - 20, TRK.z0 - 20, TRK.x1 - TRK.x0 + 100, TRK.z1 - TRK.z0 + 40); }
-  if (AIR.on || (me.pos.z > 380)) { if (!mmAir) drawAirMap(); mctx.drawImage(mmAir, AIR.x0 - 15, AIR.z0 - 15, AIR.x1 - AIR.x0 + 30, AIR.z1 - AIR.z0 + 30); }
+  if (CITY) { if (!CITY.mm) drawCityMap(CITY); mctx.drawImage(CITY.mm, CITY.x0 - 20, CITY.z0 - 20, CITY.mm.width, CITY.mm.height); }
+  else if (AIR.on || (me.pos.z > 380)) { if (!mmAir) drawAirMap(); mctx.drawImage(mmAir, AIR.x0 - 15, AIR.z0 - 15, AIR.x1 - AIR.x0 + 30, AIR.z1 - AIR.z0 + 30); }
   if (state.act === 1 && pc && NAV.pts.length) {
     mctx.strokeStyle = 'rgba(77,255,166,.9)'; mctx.lineWidth = 4 / k; mctx.lineJoin = 'round'; mctx.setLineDash([8 / k, 5 / k]); mctx.lineDashOffset = -state.t * 24 / k;
     mctx.beginPath(); mctx.moveTo(pc.pos.x, pc.pos.z); for (const q of NAV.pts) mctx.lineTo(q.x, q.z); mctx.stroke(); mctx.setLineDash([]);
@@ -10656,6 +11170,926 @@ function s3Vik() {
   if (S3.prevIdx === null) S3.prevIdx = curIdx; curIdx = vi; CH = CHARS[vi]; applyChar(); if (hero) { scene.remove(hero.g); hero = null; }
 }
 function s3VikBack() { if (S3.prevIdx === null) return; curIdx = S3.prevIdx; S3.prevIdx = null; CH = CHARS[curIdx]; applyChar(); if (hero) { scene.remove(hero.g); hero = null; } }
+// ---------------- World cities: mission types of their own (no other city or episode uses them) ----------------
+const CT = { tmp: [] };   // meshes a city mission adds; removed when the mission ends
+function ctAdd(o) { scene.add(o); CT.tmp.push(o); return o; }
+function ctClear() { for (const o of CT.tmp) { if (typeof o === 'function') o(); else if (o.parent) o.parent.remove(o); } CT.tmp.length = 0; }   // meshes, or undo steps (walls, the bus body)
+const cityLook = () => LOOKS[pick(['leva', 'sonya', 'ded', 'host', 'mark'])] || LOOKS.leva;
+Object.assign(GEN, {
+  // PARIS · «Попутчики»: several passengers at once, three seats; each has a destination and runs out of patience
+  pool(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const seats = c.seats || 3, R = c.riders.map((r) => {
+      const a = spawnAlly(cityLook(), r.at[0], r.at[1], { hp: 1e6, name: r.name, face: 0 });
+      return { name: r.name, at: new V3(r.at[0], 0, r.at[1]), to: new V3(r.to[0], 0, r.to[1]), toName: r.toName, T: r.t, t: r.t, st: 'wait', a, mk: tMark(r.at[0], r.at[1], 0x5ad1ff, 5), mk2: null };
+    });
+    let lost = 0, got = 0; const riding = () => R.filter((r) => r.st === 'ride').length;
+    setObjective(`Попутчики: ${R.length} пассажиров, ${seats} места. Подбирай и развози в любом порядке — у каждого своё терпение.`);
+    const next = () => { let b = null, bd = 1e9; for (const r of R) { const q = r.st === 'ride' ? r.to : r.st === 'wait' && riding() < seats ? r.at : null; if (!q) continue; const d = q.distanceTo(pc.pos); if (d < bd) { bd = d; b = q; } } return b || pc.pos; };
+    return { title, noFire: true, noFireMsg: 'Пассажиры в салоне: без стрельбы', chase: { max: 0 }, navName: 'Пассажиры', navGoal: next,
+      update(dt) {
+        const slow = Math.abs(pc.vf || 0) < 3.2;
+        for (const r of R) {
+          if (r.st === 'done' || r.st === 'lost') continue;
+          r.t -= dt * (r.st === 'ride' ? 0.6 : 1);
+          if (r.t <= 0) { r.st = 'lost'; lost++; scene.remove(r.mk); if (r.mk2) scene.remove(r.mk2); r.a.g.visible = false; toast(`${r.name} не дождался и ушёл пешком`, 2); if (lost > (c.lostMax || 0)) return failChapter('Пассажиры ушли', 'Слишком долго. Сначала вези тех, кто ближе, и подбирай по дороге.'); continue; }
+          if (r.st === 'wait' && slow && riding() < seats && pc.pos.distanceTo(r.at) < 9.5) { r.st = 'ride'; r.a.g.visible = false; scene.remove(r.mk); r.mk2 = tMark(r.to.x, r.to.z, 0x4dffa6, 6); toast(`${r.name} сел: «${r.toName}»`, 1.8); sfx.key(); }
+          else if (r.st === 'ride' && slow && pc.pos.distanceTo(r.to) < 9.5) { r.st = 'done'; got++; scene.remove(r.mk2); addCoins(40); toast(`${r.name} доволен: «Merci!»`, 1.6); sfx.bell(); }
+        }
+        setBeam(next());
+        if (got + lost >= R.length) done();
+      },
+      hud() { return { bars: R.filter((r) => r.st === 'wait' || r.st === 'ride').slice(0, 4).map((r) => ({ label: `${r.name} ${r.st === 'ride' ? '→ ' + r.toName : '(ждёт)'}`, frac: r.t / r.T, color: r.st === 'ride' ? '#4dffa6' : '#5ad1ff' })), timer: `Довезено ${got} · мест ${seats - riding()}/${seats}` }; } };
+  },
+  // PARIS · «Сена»: a speedboat runs the river; follow along the quays and fire at it, don't let it get away
+  boat(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const boats = [];
+    for (let k = 0; k < (c.n || 1); k++) {
+      const e = makeScripted('tail', c.route, c.boat[0] - k * 30, c.boat[1], hdg(c.boat[2]), { speed: c.speed || 14, loop: true, hp: c.hp || 500, shoot: !!c.shoot });
+      while (e.g.children.length) e.g.remove(e.g.children[0]);
+      const hull = new THREE.Mesh(box1, std(0xf0f0f4, { roughness: 0.4 })); hull.scale.set(3.2, 1.2, 9); hull.position.y = -0.9; e.g.add(hull);
+      const cab = new THREE.Mesh(box1, std(0x1a1d26, { roughness: 0.3, metalness: 0.3 })); cab.scale.set(2.4, 1.2, 3); cab.position.set(0, 0.2, -0.6); e.g.add(cab);
+      const lt = new THREE.Mesh(box1, basic(new THREE.Color(5, 4.6, 3.8))); lt.scale.set(0.5, 0.2, 0.1); lt.position.set(0, 0.2, 4.4); e.g.add(lt);
+      e.hitR = 3.2; e.kind = 'boat'; e.ghost = true; boats.push(e);   // on the water: no walls to bump into
+    }
+    let far = 0;
+    setObjective(`${c.name || 'Катер'} уходит по Сене. Едь вдоль набережной и стреляй — не отставай дальше ${c.far || 70} м.`);
+    const alive = () => boats.filter((b) => !b.disabled && !b.dead);
+    return { title, chase: { max: c.chase || 0 }, navName: c.name || 'Катер', navGoal: () => { const a = alive()[0] || boats[0]; return new V3(a.pos.x, 0, a.pos.z < PARIS.river.z0 + 70 ? PARIS.river.qN : PARIS.river.qS); },
+      update(dt) {
+        const a = alive();
+        if (!a.length) { setBeam(null); return done(); }
+        const t = a.reduce((b, e) => (e.pos.distanceTo(pc.pos) < b.pos.distanceTo(pc.pos) ? e : b)); setBeam(t.pos);
+        if (Math.abs(pc.pos.x - t.pos.x) > (c.far || 70)) far += dt; else far = Math.max(0, far - dt);   // along the river: the quay is far from mid-stream anyway
+        if (far > 9) return failChapter('Катер ушёл', 'Он скрылся под мостами. Держись набережной и не отставай.');
+      },
+      hud() { return { bars: boats.map((b, i) => ({ label: `${c.name || 'Катер'}${boats.length > 1 ? ' ' + (i + 1) : ''}`, frac: b.disabled ? 0 : b.hp / b.max, color: '#5ad1ff' })), timer: far > 0.3 ? `Уходит: ${Math.ceil(9 - far)}` : '', bad: far > 0.3 }; } };
+  },
+  // PARIS · «Ласточки»: moped thieves snatch bags and race for the alleys; stop them before they vanish
+  mopeds(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const C = PARIS, list = []; let spawned = 0, caught = 0, gone = 0, spT = 1.5;
+    const escapes = (c.escapes || [[2440, 40], [3160, 40], [2440, 760], [3160, 640], [2440, 490]]).map(([x, z]) => new V3(x, 0, z));
+    const spawn = () => {
+      const near = C.AV[Math.floor(Math.random() * C.AV.length)], sz = pick(C.ST.filter((z) => Math.abs(z - pc.pos.z) < 260)) || C.ST[0];
+      const from = new V3(near, 0, sz); if (from.distanceTo(pc.pos) < 40) from.x = C.AV[(C.AV.indexOf(near) + 3) % C.AV.length];
+      const goal = escapes.reduce((b, e) => (e.distanceTo(from) > b.distanceTo(from) ? e : b));
+      const pts = []; gridNavPts(from, goal, pts, C.AV, C.ST, C.river);
+      const e = makeScripted('tail', pts.map((q) => [q.x, q.z]), from.x, from.z, 0, { speed: c.speed || 16, hp: c.hp || 24, shoot: !!c.shoot });
+      while (e.g.children.length) e.g.remove(e.g.children[0]); const bk = makeBike(); scene.remove(bk.g); e.g.add(bk.g);
+      e.hitR = 1.6; e.bike = true; list.push(e); spawned++; toast(c.msg || '«Ласточка» вырвала сумку — за ней!', 1.6);
+    };
+    setObjective(`Мопедисты «Ласточки» крадут сумки. Останови ${c.need} из ${c.n}: тарань или стреляй. Уйти могут не больше ${c.n - c.need}.`);
+    const live = () => list.filter((e) => !e.disabled && !e.arrived && !e.dead);
+    return { title, chase: { max: 0 }, navName: 'Мопедист', navGoal: () => { const l = live(); return l.length ? l.reduce((b, e) => (e.pos.distanceTo(pc.pos) < b.pos.distanceTo(pc.pos) ? e : b)).pos : pc.pos; },
+      update(dt) {
+        spT -= dt; if (spawned < c.n && spT <= 0 && live().length < (c.together || 2)) { spawn(); spT = c.every || 7; }
+        for (const e of list) {
+          if (e.counted) continue;
+          if (e.disabled) { e.counted = true; caught++; addCoins(30); toast(`Сумка возвращена: ${caught}/${c.need}`, 1.4); }
+          else if (e.arrived) { e.counted = true; gone++; scene.remove(e.g); e.dead = true; toast('Ушёл дворами!', 1.4); }
+        }
+        const l = live(); setBeam(l.length ? l[0].pos : null);
+        if (gone > c.n - c.need) return failChapter('Ласточки улетели', 'Слишком многие ушли. Отрезай им путь по соседней улице.');
+        if (caught >= c.need) done();
+      },
+      hud() { return { timer: `Поймано ${caught}/${c.need} · ушло ${gone}/${c.n - c.need}` }; } };
+  },
+  // PARIS · «Подделки»: six paintings in the gallery, only one is the original — study each, then name it
+  clues(c, title, done) {
+    const [rx, rz] = PARIS.rooms.gallery; beginFoot(rx - 24, rz, PI / 2);
+    const truth = c.truth, P = c.paintings.map((p, i) => {
+      const side = i < 3 ? -1 : 1, x = rx - 16 + (i % 3) * 16, z = rz + side * 16.6;
+      const g = new THREE.Group(); g.position.set(x, 2.4, z); g.rotation.y = side > 0 ? PI : 0;
+      const fr = new THREE.Mesh(box1, std(p.frame === 'oak' ? 0x5a3a22 : 0xc8a040, { roughness: 0.5, metalness: p.frame === 'oak' ? 0 : 0.7 })); fr.scale.set(4.6, 3.4, 0.2); g.add(fr);
+      const tex = canvasTex(256, 192, (q, w, h) => { const gr = q.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, p.sky); gr.addColorStop(1, '#2a3a5a'); q.fillStyle = gr; q.fillRect(0, 0, w, h); q.fillStyle = '#ffd890'; q.beginPath(); q.arc(w * (0.3 + 0.4 * Math.random()), h * 0.55, 22, 0, PI * 2); q.fill(); q.fillStyle = '#1a2436'; q.fillRect(0, h * 0.7, w, h * 0.3); q.fillStyle = '#e8e0d0'; q.font = 'italic 16px Georgia'; q.fillText('A.', p.sig === 'right' ? w - 30 : 12, h - 12); if (p.crack) { q.strokeStyle = 'rgba(30,20,10,.45)'; for (let k = 0; k < 40; k++) { q.beginPath(); const x0 = Math.random() * w, y0 = Math.random() * h; q.moveTo(x0, y0); q.lineTo(x0 + rand(-12, 12), y0 + rand(-12, 12)); q.stroke(); } } });
+      const cv = new THREE.Mesh(new THREE.PlaneGeometry(4.1, 2.9), new THREE.MeshBasicMaterial({ map: tex })); cv.position.z = 0.12; g.add(cv);
+      ctAdd(g); return Object.assign({}, p, { g, pos: new V3(x, 0, z - side * 2.2), seen: false, t: 0 });
+    });
+    for (const [x, z] of c.guards || []) spawnEnemy(rx + x, rz + z, false, { look: factionLook('rats'), react: 1.4 });
+    let wrong = 0, asked = false;
+    const say = (p) => `«${p.name}»: подпись ${p.sig === 'right' ? 'справа' : 'слева'}, ${p.crack ? 'краска в трещинах' : 'краска гладкая'}, рама ${p.frame === 'oak' ? 'дубовая' : 'золочёная'}`;
+    setObjective(`Найди подлинник: подпись ${truth.sig === 'right' ? 'справа' : 'слева'}, краска ${truth.crack ? 'в трещинах' : 'гладкая'}, рама ${truth.frame === 'oak' ? 'дубовая' : 'золочёная'}. Подойди к каждой картине и постой рядом.`);
+    const ask = () => {
+      asked = true; state.mode = 'paused';
+      showModal(`<div class="kicker">Галерея</div><h2 class="h2">Какая — подлинник?</h2><p class="lead">${P.map(say).join('<br>')}</p><div class="btns">${P.map((p, i) => `<button id="cl${i}" class="btn" type="button">«${p.name}»</button>`).join('')}</div>`,
+        Object.fromEntries(P.map((p, i) => [`cl${i}`, () => {
+          hideModal(); state.mode = 'foot'; state.fireLock = true;
+          if (p.sig === truth.sig && p.crack === truth.crack && p.frame === truth.frame) { toast('Подлинник! Амели снимает его со стены', 2); return done(); }
+          wrong++; toast('Это копия. Охрана подделывателей проснулась!', 2);
+          queueWave([[rx - 20, rz - 10], [rx + 20, rz + 10], [rx + 20, rz - 10]], 0.6, () => ({ look: factionLook('rats'), react: 1 }));
+          if (wrong >= 2) return failChapter('Не та картина', 'Сверь все три приметы: подпись, трещины и раму. Совпасть должны все три.');
+          setTimeout(() => { asked = false; }, 6000);
+        }])));
+    };
+    return { title, noFire: false, update(dt) {
+      for (const p of P) { if (p.seen) continue; if (hero.pos.distanceTo(p.pos) < 2.6) { p.t += dt; if (p.t > 1.3) { p.seen = true; toast(say(p), 3.2); sfx.key(); p.g.children[0].material.emissive = new THREE.Color(0.25, 0.2, 0.05); } } else p.t = 0; }
+      const n = P.filter((p) => p.seen).length;
+      setObjective(n < P.length ? `Осмотрено картин: ${n}/${P.length}. Подлинник: подпись ${truth.sig === 'right' ? 'справа' : 'слева'}, ${truth.crack ? 'трещины' : 'гладкая краска'}, рама ${truth.frame === 'oak' ? 'дубовая' : 'золочёная'}.` : 'Все осмотрены — выбери подлинник.');
+      if (n === P.length && !asked && !enemies.some((e) => !e.dead)) ask();
+    }, hud() { return { timer: `Картины: ${P.filter((p) => p.seen).length}/${P.length}` }; } };
+  },
+  // PARIS · «Крыши»: planks and zinc roofs high above the city; step off and you fall back to the last chimney
+  roofs(c, title, done) {
+    const [rx, rz] = PARIS.rooms[c.room || 'roofs'], pieces = c.pieces.map(([a, b, x1, z1]) => [rx + a, rz + b, rx + x1, rz + z1]);
+    for (const [x0, z0, x1, z1] of pieces) {
+      const w = x1 - x0, d = z1 - z0, plank = Math.min(w, d) < 2.5;
+      const m = new THREE.Mesh(box1, std(plank ? 0x6a4a2a : (c.room === 'towertop' ? 0x8a6a3a : 0x55606e), { roughness: 0.8, metalness: c.room === 'towertop' ? 0.5 : 0.2 }));
+      m.scale.set(w, plank ? 0.25 : 1.2, d); m.position.set((x0 + x1) / 2, plank ? -0.12 : -0.6, (z0 + z1) / 2); m.receiveShadow = true; ctAdd(m);
+      if (!plank && Math.random() < 0.6) { const ch = new THREE.Mesh(box1, std(0x8a4a3a)); ch.scale.set(1, 2.2, 1); ch.position.set(x0 + 1.2, 1.1, z0 + 1.2); ctAdd(ch); }
+    }
+    const checks = c.checks.map(([x, z]) => new V3(rx + x, 0, rz + z)); let ci = 0, falls = 0, left = c.secs || 150, fallT = 0;
+    beginFoot(checks[0].x, checks[0].z, hdg(c.face || 'E'));
+    const mk = tMark(checks[1].x, checks[1].z, 0x4dffa6, 4);
+    for (const [x, z] of c.guards || []) spawnEnemy(rx + x, rz + z, false, { look: factionLook('rats'), react: 1.2, speed: 0.01 });
+    if (c.boss) spawnEnemy(rx + c.boss.at[0], rz + c.boss.at[1], true, { look: BOSS_LOOKS[c.boss.look] || undefined, hp: c.boss.hp, name: c.boss.name, burst: 3, dmg: 8 });
+    const onRoof = (p) => pieces.some(([x0, z0, x1, z1]) => p.x > x0 - 0.35 && p.x < x1 + 0.35 && p.z > z0 - 0.35 && p.z < z1 + 0.35);
+    setObjective(c.obj || 'По крышам: иди по доскам и кровлям к зелёной метке. Шаг мимо — и падение.');
+    return { title, update(dt) {
+      left -= dt; if (left <= 0) return failChapter('Не успел', 'Время вышло. Не останавливайся на каждой доске.');
+      if (fallT > 0) { fallT -= dt; if (fallT <= 0) { hero.pos.copy(checks[ci]); hero.g.position.copy(hero.pos); } return; }
+      if (!onRoof(hero.pos)) { falls++; sfx.crash(4); toast(falls > (c.falls || 3) ? 'Сорвался…' : `Сорвался! Назад к трубе (${falls}/${c.falls || 3})`, 1.6); if (falls > (c.falls || 3)) return failChapter('Падение', 'Смотри под ноги: доски узкие, идти по ним надо ровно.'); fallT = 0.7; hero.hp = Math.max(1, hero.hp - 10); return; }
+      const T = checks[ci + 1];
+      if (T && hero.pos.distanceTo(T) < 2.4) { ci++; sfx.bell(); if (ci >= checks.length - 1) { if (c.boss && enemies.some((e) => e.boss && !e.dead)) { setObjective(`Добей: ${c.boss.name}`); } else { scene.remove(mk); return done(); } } else { mk.position.set(checks[ci + 1].x, 0, checks[ci + 1].z); toast('Чекпоинт', 0.8); } }
+      if (ci >= checks.length - 1 && c.boss && !enemies.some((e) => e.boss && !e.dead)) { scene.remove(mk); return done(); }
+      setBeam(checks[Math.min(ci + 1, checks.length - 1)]);
+    }, hud() { return { timer: `${fmt(left)} · падений ${falls}/${c.falls || 3}`, bad: left < 20 }; } };
+  },
+  // PARIS · «Колокола»: gates on the route open only while the bell rings; through a red gate costs seconds
+  bells(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const per = c.period || 6, open = c.open || 2.2; let gi = 0, left = c.secs, t = 0, lastRing = -1;
+    const gates = c.gates.map(([x, z, ax]) => {
+      const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ax === 'z' ? 0 : PI / 2;
+      for (const s of [-1, 1]) { const p = new THREE.Mesh(box1, std(0x2a2c34)); p.scale.set(0.6, 6, 0.6); p.position.set(s * 7.5, 3, 0); g.add(p); }
+      const bar = new THREE.Mesh(box1, basic(new THREE.Color(3, 0.3, 0.3))); bar.scale.set(15, 0.5, 0.5); bar.position.y = 6; g.add(bar);
+      ctAdd(g); return { x, z, g, bar, ok: false };
+    });
+    setObjective(`Колокола: проезжай ворота, пока звонит колокол (они зелёные ${open} с из каждых ${per}). Красные — минус ${c.pen || 6} с.`);
+    return { title, chase: { max: 0 }, noFire: true, navName: 'Ворота', navGoal: () => (gates[gi] ? new V3(gates[gi].x, 0, gates[gi].z) : pc.pos),
+      update(dt) {
+        t += dt; left -= dt; if (left <= 0) return failChapter('Колокола отзвонили', 'Не успел. Подстраивай скорость под звон: подъезжай, когда колокол вот-вот ударит.');
+        const phase = t % per, green = phase < open, ring = Math.floor(t / per);
+        if (ring !== lastRing) { lastRing = ring; sfx.bell(); }
+        for (const q of gates) q.bar.material.color.setRGB(green ? 0.4 : 3, green ? 3 : 0.3, green ? 0.6 : 0.3);
+        const q = gates[gi]; if (!q) return done();
+        setBeam(new V3(q.x, 0, q.z));
+        if (Math.hypot(pc.pos.x - q.x, pc.pos.z - q.z) < 7) { gi++; if (green) { toast('В такт!', 0.9); addCoins(15); } else { left -= c.pen || 6; toast(`Красные ворота: −${c.pen || 6} с`, 1.2); } q.g.visible = false; if (gi >= gates.length) return done(); }
+      },
+      hud() { const phase = t % per; return { bars: [{ label: phase < open ? 'Звонит!' : 'До звона', frac: phase < open ? 1 - phase / open : (phase - open) / (per - open), color: phase < open ? '#4dffa6' : '#ffd23a' }], timer: `${fmt(left)} · ворота ${gi}/${gates.length}`, bad: left < 20 }; } };
+  },
+});
+
+// a wall that exists only while a city mission runs (the maze, the platform edge)
+function ctCol(C, x0, z0, x1, z1, h) { const c = cSolid(C, x0, z0, x1, z1, h); CT.tmp.push(() => { const i = C.cols.indexOf(c); if (i >= 0) C.cols.splice(i, 1); }); return c; }
+// which side of the road the car keeps: > 0 its left, < 0 its right, 0 off the straight road or across it
+function laneSide(C) {
+  const x = pc.pos.x, z = pc.pos.z, av = C.AV.filter((a) => Math.abs(x - a) < 7)[0], st = C.ST.filter((s) => Math.abs(z - s) < 7)[0];
+  if ((av === undefined) === (st === undefined)) return 0;
+  if ((av !== undefined ? Math.abs(Math.cos(pc.h)) : Math.abs(Math.sin(pc.h))) < 0.8) return 0;
+  return (av !== undefined ? x - av : 0) * Math.cos(pc.h) + (st !== undefined ? z - st : 0) * -Math.sin(pc.h);
+}
+const sideWord = (rel) => (Math.abs(rel) < 0.5 ? 'впереди' : Math.abs(rel) > 2.6 ? 'позади' : rel > 0 ? 'слева' : 'справа');
+Object.assign(GEN, {
+  // LONDON · «Левая сторона»: traffic keeps left; drive Harry round his calls without straying onto the right
+  left(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const S = c.stops.map(([x, z, n]) => ({ v: new V3(x, 0, z), n })); let si = 0, fouls = 0, wrongT = 0, cool = 0, left = c.secs, mk = tMark(S[0].v.x, S[0].v.z, 0x4dffa6, 6);
+    setObjective(`Здесь едут по ЛЕВОЙ стороне. Довези Гарри по ${S.length} адресам и не выезжай на правую полосу: нарушений можно не больше ${c.fouls}.`);
+    return { title, noFire: true, noFireMsg: 'Гарри в машине: без стрельбы', chase: { max: 0 }, navName: 'Адрес', navGoal: () => S[Math.min(si, S.length - 1)].v,
+      update(dt) {
+        left -= dt; cool -= dt; if (left <= 0) return failChapter('Не успели', 'Гарри опоздал на все вызовы. Держи левую сторону, но не сбавляй.');
+        const sd = laneSide(LONDON);
+        if ((pc.vf || 0) > 4 && sd < -0.8) { wrongT += dt; if (wrongT > 1.3 && cool <= 0) { fouls++; wrongT = 0; cool = 2.5; sfx.crash(3); toast(fouls > c.fouls ? 'Опять по правой!' : `По правой стороне! Нарушение ${fouls}/${c.fouls}`, 1.6); if (fouls > c.fouls) return failChapter('Лицензия под угрозой', 'Слишком много езды по правой стороне. В Лондоне держатся левее: на перекрёстке поворачивай в ближнюю левую полосу.'); } }
+        else wrongT = Math.max(0, wrongT - dt * 2);
+        const s = S[si]; setBeam(s.v);
+        if (pc.pos.distanceTo(s.v) < 8 && Math.abs(pc.vf || 0) < 3) { si++; scene.remove(mk); addCoins(25); sfx.bell(); toast(`${s.n}: Гарри доволен`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 6); }
+      },
+      hud() { return { bars: [{ label: wrongT > 0 ? 'Правая сторона!' : 'Левая сторона', frac: 1 - wrongT / 1.3, color: wrongT > 0 ? '#ff5a5a' : '#4dffa6' }], timer: `${fmt(left)} · адрес ${Math.min(si + 1, S.length)}/${S.length} · нарушений ${fouls}/${c.fouls}`, bad: wrongT > 0 || left < 20 }; } };
+  },
+  // LONDON · «Туман»: the navigator is blind; a beacon's signal grows louder and fuller as you close in
+  fog(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.points.map(([x, z, n]) => ({ v: new V3(x, 0, z), n })); let i = 0, left = c.secs, beep = 0, k = 0, hint = '';
+    const L = P_.map((p) => { const g = new THREE.Group(); g.position.copy(p.v); const pole = new THREE.Mesh(box1, std(0x1a1a1e)); pole.scale.set(0.3, 6, 0.3); pole.position.y = 3; g.add(pole); const l = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), basic(new THREE.Color(4, 3, 1.2))); l.position.y = 6.5; g.add(l); g.visible = false; ctAdd(g); return { g, l }; });
+    setObjective(`Туман. Навигатор ослеп: ищи маяки по сигналу. Чем чаще писк и полнее шкала — тем ближе. Маяков: ${P_.length}.`);
+    return { title, fog: 1, noFire: true, chase: { max: 0 }, navName: 'Сигнал', navGoal: () => pc.pos,
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Заблудились в тумане', 'Следи за подсказкой «слева / справа» и за шкалой: если она пустеет, разворачивайся.');
+        arrow.visible = false; setBeam(null);
+        const p = P_[i], d = pc.pos.distanceTo(p.v); k = clamp(1 - d / 420, 0, 1); hint = sideWord(wrapA(Math.atan2(p.v.x - pc.pos.x, p.v.z - pc.pos.z) - pc.h));
+        L[i].g.visible = true; L[i].l.scale.setScalar(1 + 0.4 * Math.sin(state.t * 6));
+        beep -= dt; if (beep <= 0) { sfx.key(); beep = 0.12 + 1.5 * (1 - k); }
+        if (d < 9) { L[i].g.visible = false; i++; sfx.bell(); addCoins(20); toast(`Маяк «${p.n}» найден`, 1.4); if (i >= P_.length) return done(); }
+      },
+      hud() { return { bars: [{ label: `Сигнал · ${hint}`, frac: k, color: k > 0.8 ? '#4dffa6' : k > 0.5 ? '#ffd23a' : '#5ad1ff' }], timer: `${fmt(left)} · маяк ${Math.min(i + 1, P_.length)}/${P_.length}`, bad: left < 20 }; } };
+  },
+  // LONDON · «Ночной автобус»: a double-decker on a night route; stop inside each stop box, and no jolts for the top deck
+  bus(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const deck = makeDecker(), hid = pc.g.children.filter((o) => o.visible); hid.forEach((o) => { o.visible = false; }); pc.g.add(deck);
+    CT.tmp.push(() => { pc.g.remove(deck); hid.forEach((o) => { o.visible = true; }); });
+    const S = c.stops.map(([x, z, n]) => ({ v: new V3(x, 0, z), n })); let si = 0, hold = 0, stars = c.stars || 4, left = c.secs, prevV = 0, bumpCd = 0, mk = tMark(S[0].v.x, S[0].v.z, 0xffd23a, 4);
+    setObjective(`Ночной автобус: ${S.length} остановок. Встань в жёлтый круг и постой 2 секунды. Резкие удары — пассажиры наверху падают (можно ${stars - 1}).`);
+    return { title, speedCap: c.cap || 17, noFire: true, noFireMsg: 'Автобус с пассажирами: без стрельбы', chase: { max: 0 }, navName: 'Остановка', navGoal: () => S[Math.min(si, S.length - 1)].v,
+      update(dt) {
+        left -= dt; bumpCd -= dt; if (left <= 0) return failChapter('Автобус выбился из графика', 'Не тормози задолго до остановки и не стой лишнего.');
+        const v = Math.abs(pc.vf || 0);
+        if (prevV > 9 && prevV - v > 8 && bumpCd <= 0) { stars--; bumpCd = 1.5; toast(stars > 0 ? `Удар! Пассажиры недовольны (осталось ${stars})` : 'Удар! Пассажиры выходят', 1.6); if (stars <= 0) return failChapter('Пассажиры вышли', 'Двухэтажный автобус высокий: входи в повороты медленно и не бейся о бордюры.'); }
+        prevV = v;
+        const s = S[si]; setBeam(s.v);
+        if (pc.pos.distanceTo(s.v) < 7 && v < 2.5) { hold += dt; if (hold > 2) { hold = 0; si++; scene.remove(mk); addCoins(20); sfx.bell(); toast(`«${s.n}»: посадка закончена`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0xffd23a, 4); } }
+        else hold = Math.max(0, hold - dt);
+      },
+      hud() { return { bars: [{ label: hold > 0 ? 'Посадка…' : `Остановка «${S[Math.min(si, S.length - 1)].n}»`, frac: hold / 2, color: '#ffd23a' }], timer: `${fmt(left)} · остановка ${Math.min(si + 1, S.length)}/${S.length} · ${'★'.repeat(Math.max(0, stars))}`, bad: left < 20 }; } };
+  },
+  // LONDON · «Точно по часам»: each client steps out on a chime; come early and wait at the door — a warden fines you; come late — the client is gone
+  clock(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const S = c.stops.map(([x, z, n]) => ({ v: new V3(x, 0, z), n })), pace = c.pace || 13, win = c.win || 12;
+    let k = 0, t = 0, strikes = 0, early = 0, rang = false, mk = tMark(S[0].v.x, S[0].v.z, 0x5ad1ff, 6);
+    const sched = (from, i) => t + (Math.abs(S[i].v.x - from.x) + Math.abs(S[i].v.z - from.z)) / pace + (c.slack || 5);
+    let open = sched(pc.pos, 0);
+    const next = () => { k++; scene.remove(mk); early = 0; rang = false; if (k >= S.length) return done(); open = sched(S[k - 1].v, k); mk = tMark(S[k].v.x, S[k].v.z, 0x5ad1ff, 6); };
+    const strike = (msg) => { strikes++; toast(`${msg} (${strikes}/${c.strikes})`, 2); if (strikes > c.strikes) { failChapter('Не по часам', 'Приезжай к самому бою: рано — штраф за стоянку, поздно — клиент уходит. Смотри на шкалу «до окна».'); return true; } return false; };
+    setObjective(`Точно по часам: клиенты выходят с боем курантов. Окно — ${win} с. Раньше у двери стоять нельзя (штраф), позже — клиент уйдёт. Ошибок можно ${c.strikes}.`);
+    return { title, noFire: true, chase: { max: 0 }, navName: 'Клиент', navGoal: () => S[Math.min(k, S.length - 1)].v,
+      update(dt) {
+        t += dt; const s = S[k]; if (!s) return; setBeam(s.v);
+        const d = pc.pos.distanceTo(s.v);
+        if (!rang && t >= open) { rang = true; sfx.bell(); toast('Бьют часы: окно открыто', 1.2); mk.children[0].material.color.set(0x4dffa6); }
+        if (t > open + win) { if (strike(`«${s.n}» не дождался`)) return; return next(); }
+        if (d < 14 && t < open) { early += dt; if (early > 4) { if (strike('Штраф: стоянка у входа до времени')) return; early = -6; } }
+        if (d < 8 && Math.abs(pc.vf || 0) < 2.5 && t >= open) { addCoins(30); toast(`«${s.n}» сел минута в минуту`, 1.4); next(); }
+      },
+      hud() { const before = t < open; return { bars: [{ label: before ? `До окна ${Math.ceil(open - t)} с` : `Окно: ещё ${Math.max(0, Math.ceil(open + win - t))} с`, frac: before ? clamp(1 - (open - t) / 30, 0, 1) : clamp(1 - (t - open) / win, 0, 1), color: before ? '#ffd23a' : '#4dffa6' }], timer: `Клиент ${Math.min(k + 1, S.length)}/${S.length} · ошибок ${strikes}/${c.strikes}`, bad: early > 1.5 }; } };
+  },
+  // LONDON · «Гонка с метро»: the underground train runs the same line below; be at each station's entrance before it pulls in
+  metro(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const S = c.stations.map(([x, z, n]) => ({ v: new V3(x, 0, z), n })), dwell = c.dwell || 4, arr = [];
+    { let a = 0; c.legs.forEach((l, i) => { a += l + (i ? dwell : 0); arr.push(a); }); }
+    for (const s of S) { const g = new THREE.Group(); g.position.set(s.v.x + 9, 0, s.v.z + 9); const p = new THREE.Mesh(box1, std(0x2a2c34)); p.scale.set(0.3, 4, 0.3); p.position.y = 2; g.add(p); const d = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.2, 20).rotateX(PI / 2), basic(new THREE.Color(0.4, 1.8, 0.9))); d.position.y = 4.4; g.add(d); ctAdd(g); }
+    let i = 0, t = 0, mk = tMark(S[0].v.x, S[0].v.z, 0x4dffa6, 8);
+    setObjective(`Гонка с метро: поезд идёт под землёй по тем же станциям. Будь у входа раньше поезда. Станций: ${S.length}.`);
+    return { title, noFire: true, chase: { max: 0 }, navName: 'Станция', navGoal: () => S[Math.min(i, S.length - 1)].v,
+      update(dt) {
+        t += dt; const s = S[i]; if (!s) return; setBeam(s.v);
+        if (pc.pos.distanceTo(s.v) < 9) { const lead = arr[i] - t; i++; scene.remove(mk); addCoins(25); sfx.bell(); toast(`«${s.n}»: раньше поезда на ${Math.max(1, Math.round(lead))} с`, 1.4); if (i >= S.length) return done(); mk = tMark(S[i].v.x, S[i].v.z, 0x4dffa6, 8); return; }
+        if (t >= arr[i]) return failChapter('Поезд пришёл первым', 'Метро не стоит в пробках. Срезай по прямым и не тормози на пустых перекрёстках.');
+      },
+      hud() { const a0 = i ? arr[i - 1] + dwell : 0, a1 = arr[Math.min(i, arr.length - 1)]; return { bars: [{ label: `Поезд → «${S[Math.min(i, S.length - 1)].n}»`, frac: clamp((t - a0) / Math.max(1, a1 - a0), 0, 1), color: '#ff5a5a' }], timer: `Станция ${Math.min(i + 1, S.length)}/${S.length} · поезд через ${Math.max(0, Math.ceil(a1 - t))} с`, bad: a1 - t < 8 }; } };
+  },
+  // LONDON · «Карманник»: a crowded platform; someone cries out, a red flash — and one walker heads for the stairs a bit too fast
+  pickpocket(c, title, done) {
+    const C = LONDON, [rx, rz] = C.rooms.metro, x0 = rx - 28, x1 = rx + 28, z0 = rz - 17, z1 = rz + 17;
+    beginFoot(rx, rz + 6, PI);
+    // the platform: the track bed along the north wall, a yellow line, columns, a passing train
+    const bed = new THREE.Mesh(box1, std(0x121214, { roughness: 1 })); bed.scale.set(56, 0.1, 5); bed.position.set(rx, 0.02, z0 + 2.5); ctAdd(bed); ctCol(C, x0, z0, x1, z0 + 5, 2);
+    const yl = new THREE.Mesh(box1, basic(new THREE.Color(2.4, 2, 0.3))); yl.scale.set(56, 0.03, 0.35); yl.position.set(rx, 0.05, z0 + 5.6); ctAdd(yl);
+    for (const rz2 of [z0 + 1.6, z0 + 3.4]) { const r = new THREE.Mesh(box1, std(0x8a8a90, { metalness: 0.8, roughness: 0.3 })); r.scale.set(56, 0.12, 0.12); r.position.set(rx, 0.12, rz2); ctAdd(r); }
+    for (let x = x0 + 8; x < x1; x += 10) { const p = new THREE.Mesh(box1, std(0xd8d0c0)); p.scale.set(1, 5, 1); p.position.set(x, 2.5, rz + 1); ctAdd(p); ctCol(C, x - 0.5, rz + 0.5, x + 0.5, rz + 1.5, 5); }
+    const train = new THREE.Group(); { const b = new THREE.Mesh(box1, std(0xc8ccd4, { metalness: 0.5, roughness: 0.4 })); b.scale.set(60, 3.2, 3); b.position.y = 1.7; train.add(b); const w = new THREE.Mesh(box1, basic(new THREE.Color(1.6, 1.5, 1.2))); w.scale.set(58, 0.9, 3.05); w.position.y = 2.2; train.add(w); const s2 = new THREE.Mesh(box1, std(0xb81c22)); s2.scale.set(60.1, 0.4, 3.08); s2.position.y = 0.6; train.add(s2); }
+    train.position.set(rx - 200, 0, z0 + 2.5); ctAdd(train); signC('ПЛАТФОРМА 2', 10, 1.6, rx, 3.8, z1 - 0.3, PI, '#ffffff', '#1a2a5a');
+    const exits = [new V3(x0 + 1.5, 0, z1 - 3), new V3(x1 - 1.5, 0, z1 - 3), new V3(rx, 0, z1 - 1.5)];
+    for (const e of exits) tMark(e.x, e.z, 0x9a9aa0, 2);
+    const freeP = () => new V3(rand(x0 + 3, x1 - 3), 0, rand(z0 + 7, z1 - 3));
+    const crowd = []; for (let k = 0; k < (c.crowd || 12); k++) { const p = freeP(); const a = spawnAlly(cityLook(), p.x, p.z, { hp: 1e6, name: '' }); a.runner = true; a.to = freeP(); a.sp = rand(1.1, 1.6); a.walk = 0; crowd.push(a); }
+    let thefts = 0, caught = 0, gone = 0, nextT = 4, flash = null, flashT = 0, trainT = 6;
+    setObjective(`Карманник на платформе. Крик и красная вспышка — значит, украли. Вор уходит к лестницам быстрее остальных: догони и коснись его. Поймать ${c.need} из ${c.n}.`);
+    return { title, noFire: true, noFireMsg: 'Толпа на платформе: стрелять нельзя', update(dt) {
+      trainT -= dt; if (trainT < 0) { train.position.x += dt * 34; if (train.position.x > rx + 200) { train.position.x = rx - 200; trainT = rand(10, 16); } }
+      if (flash) { flashT -= dt; if (flashT <= 0) { scene.remove(flash); flash = null; } }
+      nextT -= dt;
+      if (nextT <= 0 && thefts < c.n && !crowd.some((a) => a.thief)) {
+        const pool = crowd.filter((a) => !a.out); const a = pick(pool); if (a) { a.thief = true; a.sp = c.speed || 3.4; a.to = exits.reduce((b, e) => (e.distanceTo(a.pos) < b.distanceTo(a.pos) ? b : e)); thefts++;
+          flash = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), basic(new THREE.Color(5, 0.4, 0.4), { transparent: true, opacity: 0.8 })); flash.position.set(a.pos.x, 2.2, a.pos.z); ctAdd(flash); flashT = c.flash || 1.2;
+          sfx.crash(2); toast(`«Мой кошелёк!» — вспышка ${sideWord(wrapA(Math.atan2(a.pos.x - hero.pos.x, a.pos.z - hero.pos.z) - hero.face))}`, 1.8); }
+        nextT = c.every || 9;
+      }
+      for (const a of crowd) {
+        if (a.out) continue;
+        const to = a.to.clone().sub(a.pos).setY(0), d = to.length();
+        if (d < 1.2) { if (a.thief) { a.out = true; a.g.visible = false; gone++; toast(`Вор ушёл по лестнице (${gone}/${c.n - c.need})`, 1.6); if (gone > c.n - c.need) return failChapter('Карманник ушёл', 'Сразу после вспышки смотри, кто идёт к лестницам быстрее всех.'); continue; } a.to = freeP(); continue; }
+        to.multiplyScalar(Math.min(d, a.sp * dt) / d); a.pos.add(to); collideCircle(a.pos, to, 0.4); a.face = Math.atan2(to.x, to.z); a.walk += to.length() * 9.5;
+        a.g.position.set(a.pos.x, 0, a.pos.z); a.g.rotation.y = a.face; poseHuman(a, { walk: a.walk, move: a.thief ? 0.7 : 0.35, t: state.t });
+        if (a.thief && hero.pos.distanceTo(a.pos) < 1.9) { a.out = true; a.thief = false; a.g.visible = false; caught++; addCoins(30); sfx.bell(); toast(`Попался! Кошелёк вернули (${caught}/${c.need})`, 1.6); if (caught >= c.need) return done(); nextT = Math.min(nextT, 3); }
+      }
+      if (thefts >= c.n && !crowd.some((a) => a.thief) && caught < c.need) return failChapter('Карманник ушёл', 'Сразу после вспышки смотри, кто идёт к лестницам быстрее всех.');
+    }, hud() { return { timer: `Поймано ${caught}/${c.need} · ушло ${gone}/${c.n - c.need} · краж ${thefts}/${c.n}` }; } };
+  },
+  // LONDON · «Лабиринт»: a hedge maze in the park at night; the torn ledger pages lie in its dead ends, the keepers patrol it
+  maze(c, title, done) {
+    const C = LONDON, [rx, rz] = C.rooms.maze, cs = 4, nx = 13, nz = 8, ox = rx - nx * cs / 2, oz = rz - nz * cs / 2;
+    const id = (i, j) => j * nx + i, seen = new Array(nx * nz).fill(false), wE = [], wS = [];   // wE[i,j]: wall east of cell, wS: wall south of cell
+    for (let k = 0; k < nx * nz; k++) { wE.push(true); wS.push(true); }
+    const st = [[0, nz >> 1]]; seen[id(0, nz >> 1)] = true;
+    while (st.length) {
+      const [i, j] = st[st.length - 1], nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [i + a, j + b]).filter(([a, b]) => a >= 0 && b >= 0 && a < nx && b < nz && !seen[id(a, b)]);
+      if (!nb.length) { st.pop(); continue; }
+      const [a, b] = pick(nb); if (a > i) wE[id(i, j)] = false; else if (a < i) wE[id(a, b)] = false; else if (b > j) wS[id(i, j)] = false; else wS[id(a, b)] = false;
+      seen[id(a, b)] = true; st.push([a, b]);
+    }
+    const segs = [];
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      if (wE[id(i, j)] && i < nx - 1) segs.push([ox + (i + 1) * cs - 0.4, oz + j * cs, ox + (i + 1) * cs + 0.4, oz + (j + 1) * cs]);
+      if (wS[id(i, j)] && j < nz - 1) segs.push([ox + i * cs, oz + (j + 1) * cs - 0.4, ox + (i + 1) * cs, oz + (j + 1) * cs + 0.4]);
+    }
+    const H = 2.4, im = new THREE.InstancedMesh(box1, std(0x23452a, { roughness: 1 }), segs.length), o = new THREE.Object3D();
+    segs.forEach(([a, b, c2, d], k) => { o.position.set((a + c2) / 2, H / 2, (b + d) / 2); o.scale.set(c2 - a + 0.1, H, d - b + 0.1); o.updateMatrix(); im.setMatrixAt(k, o.matrix); ctCol(C, a, b, c2, d, H); });
+    im.castShadow = true; im.receiveShadow = true; ctAdd(im);
+    // dead ends far from the start keep the pages; the exit is the far cell on the east side
+    const deg = (i, j) => [(i < nx - 1 && !wE[id(i, j)]), (i > 0 && !wE[id(i - 1, j)]), (j < nz - 1 && !wS[id(i, j)]), (j > 0 && !wS[id(i, j - 1)])].filter(Boolean).length;
+    const cells = []; for (let j = 0; j < nz; j++) for (let i = 2; i < nx; i++) if (deg(i, j) === 1) cells.push([i, j]);
+    cells.sort((p, q) => (q[0] + Math.abs(q[1] - nz / 2) * 0.5) - (p[0] + Math.abs(p[1] - nz / 2) * 0.5));
+    const pages = []; for (const [i, j] of cells) { if (pages.length >= (c.pages || 3)) break; if (pages.some((p) => Math.abs(p.i - i) + Math.abs(p.j - j) < 4)) continue; const v = new V3(ox + (i + 0.5) * cs, 0, oz + (j + 0.5) * cs); const m = new THREE.Mesh(box1, basic(new THREE.Color(3, 2.8, 2.2))); m.scale.set(0.5, 0.05, 0.7); m.position.set(v.x, 1.1, v.z); ctAdd(m); pages.push({ i, j, v, m, got: false }); }
+    const exit = new V3(ox + (nx - 0.5) * cs, 0, oz + (nz - 0.5) * cs); let exitMk = null, left = c.secs;
+    beginFoot(ox + cs / 2, oz + (nz >> 1) * cs + cs / 2, PI / 2);
+    for (let k = 0; k < (c.guards || 2); k++) { const [i, j] = pick(cells.slice(3)) || [nx >> 1, 1]; spawnEnemy(ox + (i + 0.5) * cs, oz + (j + 0.5) * cs, false, { look: factionLook('zero'), react: 1.6, speed: 0.6 }); }
+    setObjective(`Лабиринт: найди ${pages.length} листа бухгалтерии Ноля в тупиках, потом выход в дальнем углу. Сторожа ходят по аллеям.`);
+    return { title, update(dt) {
+      left -= dt; if (left <= 0) return failChapter('Рассвет в лабиринте', 'Держись одной рукой за изгородь — так обходится любой лабиринт.');
+      for (const p of pages) { if (p.got) continue; p.m.rotation.y += dt * 2; if (hero.pos.distanceTo(p.v) < 1.6) { p.got = true; scene.remove(p.m); sfx.key(); toast(`Лист бухгалтерии ${pages.filter((q) => q.got).length}/${pages.length}`, 1.4); } }
+      const got = pages.every((p) => p.got);
+      if (got && !exitMk) { exitMk = tMark(exit.x, exit.z, 0x4dffa6, 4); setObjective('Все листы у тебя. Выход — в дальнем углу лабиринта.'); }
+      if (got && hero.pos.distanceTo(exit) < 2.2) return done();
+    }, hud() { return { timer: `${fmt(left)} · листов ${pages.filter((p) => p.got).length}/${pages.length}`, bad: left < 20 }; } };
+  },
+  // LONDON · «Разводной мост»: the leaves start rising as you come; cross before they are up or take them at speed and fly the gap
+  bascule(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const C = LONDON, L = C.leaves, bx = C.P.bascule[0], gA = 368, gB = 432, goal = new V3(c.goal[0], 0, c.goal[1]), jumpV = c.jumpV || 22;
+    const setUp = (a) => { L.up = a; L.a.rotation.x = -a; L.b.rotation.x = a; };
+    setUp(0); CT.tmp.push(() => { setUp(0); pc.ghost = false; });
+    let lifting = false, J = null, crossed = false, left = c.secs, mk = tMark(goal.x, goal.z, 0x4dffa6, 8), side0 = pc.pos.z < 400 ? -1 : 1;
+    setObjective(`${c.obj || 'Через разводной мост на ту сторону.'} Мост начнёт подниматься, когда подъедешь: успей до подъёма или прыгай на скорости от ${Math.round(jumpV * 3.6)} км/ч.`);
+    return { title, chase: { max: c.chase || 0 }, navName: c.goalName || 'Цель', navGoal: () => (crossed ? goal : new V3(bx, 0, side0 < 0 ? gB + 40 : gA - 40)),
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Не успели', c.failText || 'Время вышло.');
+        if (!lifting && Math.abs(pc.pos.x - bx) < 40 && Math.abs(pc.pos.z - 400) < (c.near || 150)) { lifting = true; sfx.bell(); toast('Звонок на мосту: пролёты поднимаются!', 1.8); }
+        if (lifting && L.up < 1.1) setUp(Math.min(1.1, L.up + dt * (c.rate || 0.05)));
+        const onGap = Math.abs(pc.pos.x - bx) < 8.4 && pc.pos.z > gA && pc.pos.z < gB;
+        if (J) {
+          J.t += dt; const k = J.t / J.dur; pc.g.position.y = Math.sin(Math.min(1, k) * PI) * J.h; pc.g.rotation.x = -Math.cos(Math.min(1, k) * PI) * 0.18 * J.dir;
+          if (k >= 1 || !onGap && J.t > 0.3) { J = null; pc.ghost = false; pc.g.position.y = 0; pc.g.rotation.x = 0; sfx.crash(6); toast('Приземлились!', 1.2); }
+        } else if (onGap && L.up > 0.05) {
+          const v = Math.abs(pc.vf || 0);
+          if (v >= jumpV && L.up < 0.6) { J = { t: 0, dur: (gB - gA) / v, h: 3 + L.up * 12, dir: pc.vel.z > 0 ? 1 : -1 }; pc.ghost = true; addCoins(40); toast('Прыжок через пролёт!', 1.6); }
+          else if (L.up >= 0.6) return failChapter('Мост поднят', 'Пролёты встали слишком круто. Не жди: подлетай к мосту сразу и на полной скорости.');
+          else { const e = pc.vel.z > 0 ? gA - 1 : gB + 1; pc.pos.z = e; pc.vel.set(0, 0, 0); pc.vf = 0; sfx.crash(4); toast(`Мало скорости! Нужно ${Math.round(jumpV * 3.6)} км/ч — разгонись`, 1.6); }
+        }
+        if (!crossed && (side0 < 0 ? pc.pos.z > gB + 6 : pc.pos.z < gA - 6) && Math.abs(pc.pos.x - bx) < 12) { crossed = true; toast('На той стороне!', 1.2); }
+        if (!crossed && L.up >= 1.1) return failChapter('Мост поднят', 'Пролёты встали. Подлетай к мосту сразу и на полной скорости.');
+        setBeam(crossed ? goal : null);
+        if (crossed && pc.pos.distanceTo(goal) < 9) { scene.remove(mk); return done(); }
+      },
+      hud() { return { bars: [{ label: L.up > 0.05 ? 'Пролёты поднимаются' : 'Мост', frac: L.up / 1.1, color: L.up < 0.6 ? '#ffd23a' : '#ff5a5a' }], timer: `${fmt(left)} · ${Math.round(Math.abs(pc.vf || 0) * 3.6)} км/ч`, bad: left < 15 }; } };
+  },
+  // LONDON · «Тир Ноля»: cardboard figures pop up in the pub cellar; hit the collectors, spare the passers-by with umbrellas
+  popup(c, title, done) {
+    const C = LONDON, [rx, rz] = C.rooms.pub;
+    beginFoot(rx - 20, rz, PI / 2);
+    ctCol(C, rx - 12, rz - 17, rx - 11.4, rz + 17, 1.1);   // the counter: shoot from behind it
+    { const ct = new THREE.Mesh(box1, std(0x4a2e1a, { roughness: 0.6 })); ct.scale.set(0.8, 1.1, 32); ct.position.set(rx - 11.7, 0.55, rz); ctAdd(ct);
+      for (let z = rz - 14; z <= rz + 14; z += 2) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.5, 6), basic(new THREE.Color(pick([0.3, 1.2]), pick([0.8, 1.4]), 0.4))); b.position.set(rx - 27, 2.2, z); ctAdd(b); }
+      const sh = new THREE.Mesh(box1, std(0x3a2414)); sh.scale.set(0.6, 0.1, 30); sh.position.set(rx - 27.2, 1.92, rz); ctAdd(sh); }
+    const tex = (friend) => canvasTex(128, 256, (q, w, h) => { q.fillStyle = friend ? '#3a7ad8' : '#c8283a'; q.beginPath(); q.arc(w / 2, 46, 30, 0, PI * 2); q.fill(); q.fillRect(w / 2 - 40, 80, 80, 120); q.fillRect(w / 2 - 30, 196, 24, 60); q.fillRect(w / 2 + 6, 196, 24, 60); q.fillStyle = '#fff'; q.beginPath(); q.arc(w / 2, 130, 22, 0, PI * 2); q.lineWidth = 6; q.strokeStyle = '#fff'; q.stroke(); if (friend) { q.fillStyle = '#1a1a20'; q.beginPath(); q.arc(w / 2 + 34, 40, 40, PI, 0); q.fill(); q.fillRect(w / 2 + 32, 40, 4, 70); } });
+    const TX = [tex(false), tex(true)], slots = [];
+    for (let k = 0; k < 7; k++) {
+      const x = rx + 10 + (k % 2) * 8, z = rz - 13 + k * 4.3, g = new THREE.Group(); g.position.set(x, 0, z);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 2.2), new THREE.MeshBasicMaterial({ map: TX[0], transparent: true, side: THREE.DoubleSide })); m.position.y = 1.1; m.rotation.y = -PI / 2; g.add(m);
+      g.rotation.z = PI / 2; ctAdd(g);
+      const T = { g, m, pos: new V3(x, 1.2, z), r: 0.75, hp: 1, max: 1, dead: true, kind: 'card', up: 0, show: 0, friend: false };
+      T.onKill = () => { T.show = 0; T.g.visible = true; if (T.friend) { friendHits++; toast(friendHits > (c.friendMax || 1) ? 'Опять прохожий!' : 'Это прохожий с зонтом!', 1.4); } else { hits++; sfx.bell(); } };
+      S3.targets.push(T); slots.push(T);
+    }
+    const nf = c.friends || 3, seq = [false, false].concat(Array.from({ length: c.n - 2 + nf }, (_, k) => k < nf)).map((f, k) => [k < 2 ? -1 : Math.random(), f]).sort((a, b) => a[0] - b[0]).map((q) => q[1]);
+    let shown = 0, hits = 0, friendHits = 0, shots = 0, popT = 1.5; const seen = new WeakSet();
+    setObjective(`Тир Ноля: мишени-должники выскакивают на ${c.show || 1.7} с. Красные — бей, синие с зонтом — прохожие, не трогай. Нужно ${c.need} из ${c.n}, патронов ${c.shots}.`);
+    return { title, update(dt) {
+      for (const b of bullets) if (b.team === 'p' && !seen.has(b)) { seen.add(b); shots++; }
+      if (friendHits > (c.friendMax || 1)) return failChapter('Ставка проиграна', 'Синие мишени с зонтом — прохожие. Смотри на цвет, прежде чем жать на спуск.');
+      if (shots > c.shots) return failChapter('Патроны кончились', 'По одной пуле на мишень: стреляй, когда фигура уже поднялась.');
+      popT -= dt;
+      if (popT <= 0 && shown < seq.length) {
+        const free = slots.filter((s) => s.show <= 0 && s.up <= 0.01); const s = pick(free);
+        if (s) { s.friend = seq[shown]; s.m.material.map = TX[s.friend ? 1 : 0]; s.m.material.needsUpdate = true; s.dead = false; s.hp = 1; s.g.visible = true; s.show = c.show || 1.7; shown++; }
+        popT = rand(0.6, 1.4) * (c.gap || 1);
+      }
+      for (const s of slots) { s.show -= dt; const want = s.show > 0 && !s.dead ? 1 : 0; s.up += (want - s.up) * Math.min(1, dt * 14); s.g.rotation.z = (1 - s.up) * PI / 2; if (s.show <= 0 && !s.dead) s.dead = true; }
+      if (hits >= c.need) return done();
+      if (shown >= seq.length && slots.every((s) => s.up < 0.02)) return failChapter('Ставка проиграна', `Попаданий ${hits} из ${c.need}. Целься заранее туда, где мишени поднимаются.`);
+    }, hud() { return { timer: `Попаданий ${hits}/${c.need} · патронов ${Math.max(0, c.shots - shots)} · прохожих ${friendHits}/${c.friendMax || 1}` }; } };
+  },
+  // LONDON · «Таран»: Mr Zero's armoured car shrugs off bullets; only a ram hurts it
+  ram(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const e = makeScripted('tail', c.route, c.boss[0], c.boss[1], hdg(c.boss[2]), { speed: c.speed || 17, loop: true, hp: c.hp || 140 });
+    e.noTarget = true; e.kind = 'boss';
+    const bc = new THREE.Mesh(box1, basic(new THREE.Color(4, 0.5, 0.3))); bc.scale.set(0.5, 0.25, 0.5); bc.position.y = 1.9; e.g.add(bc);
+    const esc = []; for (let k = 0; k < (c.escorts || 0); k++) { const q = makeScripted('tail', c.route, c.boss[0] + (k + 1) * 16 * Math.sin(hdg(c.boss[2])), c.boss[1] + (k + 1) * 16 * Math.cos(hdg(c.boss[2])), hdg(c.boss[2]), { speed: (c.speed || 17) - 1, loop: true, hp: 60, shoot: true }); esc.push(q); }
+    let far = 0;
+    setObjective(`${c.name || 'Броневик'}: пули его не берут. Только таран — бей на скорости, лучше в бок. Не отставай дальше ${c.far || 80} м.`);
+    return { title, noFire: !(c.escorts > 0), noFireMsg: 'Пули его не берут: только таран', chase: { max: 0 }, navName: c.name || 'Броневик', navGoal: () => e.pos,
+      update(dt) {
+        bc.material.color.setRGB(Math.sin(state.t * 10) > 0 ? 4 : 0.3, 0.3, Math.sin(state.t * 10) > 0 ? 0.3 : 3);
+        if (e.disabled) { setBeam(null); return done(); }
+        setBeam(e.pos);
+        if (pc.pos.distanceTo(e.pos) > (c.far || 80)) far += dt; else far = Math.max(0, far - dt);
+        if (far > 14) return failChapter('Ушёл', 'Не отпускай его: срезай по соседней улице и бей на выходе из поворота.');
+      },
+      hud() { return { bars: [{ label: c.name || 'Броневик', frac: e.hp / e.max, color: '#ff5a5a' }], timer: far > 0.3 ? `Уходит: ${Math.ceil(14 - far)}` : 'Таран!', bad: far > 0.3 }; } };
+  },
+});
+
+// a road point of a city: a random crossing-free spot on an avenue or a street
+function cityRoadPt(C, avoid, minD) {
+  for (let k = 0; k < 40; k++) {
+    const onAv = Math.random() < 0.5, p = onAv ? new V3(pick(C.AV), 0, rand(C.ST[0] + 14, C.ST[C.ST.length - 1] - 14)) : new V3(rand(C.AV[0] + 14, C.AV[C.AV.length - 1] - 14), 0, pick(C.ST));
+    if (C.ST.some((z) => Math.abs(p.z - z) < 10) && onAv) continue;
+    if (!avoid || p.distanceTo(avoid) > (minD || 0)) return p;
+  }
+  return new V3(C.AV[1], 0, C.ST[1] + 40);
+}
+Object.assign(GEN, {
+  // NEW YORK · «Счётчик»: a free shift — hails come and go, each fare's tip melts by the second; make the night's take
+  meter(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const C = NYC; let cash = 0, left = c.secs, ride = null; const hails = [];
+    const addHail = () => { const p = cityRoadPt(C, pc.pos, 80); const a = spawnAlly(cityLook(), p.x + 9, p.z + 9, { hp: 1e6, name: 'Пассажир', face: 0 }); hails.push({ p, a, mk: tMark(p.x, p.z, 0xf2c21a, 6), life: rand(35, 55) }); };
+    for (let k = 0; k < 3; k++) addHail();
+    setObjective(`Ночная смена: заработай $${c.target} за ${fmt(c.secs)}. Машут — подбирай; чаевые тают каждую секунду, так что вези быстро.`);
+    return { title, noFire: true, chase: { max: 0 }, navName: 'Пассажир', navGoal: () => (ride ? ride.to : (hails.reduce((b, h) => (!b || h.p.distanceTo(pc.pos) < b.p.distanceTo(pc.pos) ? h : b), null) || { p: pc.pos }).p),
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Смена кончилась', `Заработано $${Math.round(cash)} из $${c.target}. Бери ближних пассажиров и не трать время на дальние вызовы.`);
+        for (let i = hails.length - 1; i >= 0; i--) { const h = hails[i]; h.life -= dt; if (h.life <= 0 && !ride || h.life <= 0 && ride && ride.h !== h) { scene.remove(h.mk); h.a.g.visible = false; hails.splice(i, 1); } }
+        while (hails.length < 3) addHail();
+        const v = Math.abs(pc.vf || 0);
+        if (!ride) { for (const h of hails) if (v < 2.5 && pc.pos.distanceTo(h.p) < 9) { const to = cityRoadPt(C, h.p, 220); const d = Math.abs(to.x - h.p.x) + Math.abs(to.z - h.p.z); ride = { h, to, fare: 6 + d * 0.02, tip: c.tip || 12, tip0: c.tip || 12, mk: tMark(to.x, to.z, 0x4dffa6, 6) }; scene.remove(h.mk); h.a.g.visible = false; hails.splice(hails.indexOf(h), 1); toast(`Поехали: $${ride.fare.toFixed(0)} по счётчику + чаевые`, 1.6); sfx.key(); break; } }
+        else {
+          ride.tip = Math.max(0, ride.tip - dt * (c.melt || 0.25)); setBeam(ride.to);
+          if (v < 2.5 && pc.pos.distanceTo(ride.to) < 9) { const got = ride.fare + ride.tip; cash += got; scene.remove(ride.mk); addCoins(Math.round(got)); toast(`+$${got.toFixed(0)} (чаевые $${ride.tip.toFixed(0)})`, 1.6); sfx.bell(); ride = null; if (cash >= c.target) return done(); }
+        }
+        if (!ride) setBeam(null);
+      },
+      hud() { return { bars: ride ? [{ label: `Чаевые $${ride.tip.toFixed(0)}`, frac: ride.tip / ride.tip0, color: '#f2c21a' }] : [], timer: `${fmt(left)} · $${Math.round(cash)}/${c.target}`, bad: left < 30 }; } };
+  },
+  // NEW YORK · «Пробка»: whole blocks stand still; the navigator doesn't know where — the jams show as red lights; they move every so often
+  gridlock(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const C = NYC, S = c.stops.map(([x, z, n]) => ({ v: new V3(x, 0, z), n })); let si = 0, left = c.secs, shuffleT = c.every || 45, jams = [];
+    const segs = []; for (let i = 0; i < C.AV.length; i++) for (let j = 0; j < C.ST.length - 1; j++) segs.push({ x: C.AV[i], z0: C.ST[j], z1: C.ST[j + 1] }); for (let j = 0; j < C.ST.length; j++) for (let i = 0; i < C.AV.length - 1; i++) segs.push({ z: C.ST[j], x0: C.AV[i], x1: C.AV[i + 1] });
+    const MAX = 22 * (c.n || 9), im = new THREE.InstancedMesh(box1, std(0xffffff, { roughness: 0.5, metalness: 0.3 }), MAX), lights = new THREE.InstancedMesh(box1, basic(new THREE.Color(4, 0.3, 0.25)), MAX), o = new THREE.Object3D(), cc = new THREE.Color();
+    im.count = 0; lights.count = 0; ctAdd(im); ctAdd(lights);
+    const segOf = (p) => segs.find((s) => (s.x !== undefined ? Math.abs(p.x - s.x) < 9 && p.z > s.z0 && p.z < s.z1 : Math.abs(p.z - s.z) < 8 && p.x > s.x0 && p.x < s.x1));
+    const place = () => {
+      for (const j of jams) j.undo(); jams = []; im.count = 0; lights.count = 0;
+      const keep = [segOf(pc.pos)].concat(S.slice(si).map((q) => segOf(q.v)));   // never on the way to a stop still ahead
+      const pool = segs.filter((s) => !keep.includes(s)); let k = 0;
+      while (jams.length < (c.n || 9) && k++ < 200) {
+        const s = pick(pool); if (jams.some((j) => j.s === s)) continue;
+        const along = s.x !== undefined, a = along ? s.z0 + 12 : s.x0 + 12, b = along ? s.z1 - 12 : s.x1 - 12;
+        const col0 = along ? cSolid(C, s.x - 8, a, s.x + 8, b, 3) : cSolid(C, a, s.z - 7, b, s.z + 7, 3);
+        for (let u = a + 2; u < b - 2; u += 6.5) for (const ln of [-3.2, 3.2]) {
+          if (im.count >= MAX) break;
+          o.position.set(along ? s.x + ln : u, 0.8, along ? u : s.z + ln); o.rotation.set(0, along ? 0 : PI / 2, 0); o.scale.set(1.9, 1.4, 4.4); o.updateMatrix(); im.setMatrixAt(im.count, o.matrix); im.setColorAt(im.count, cc.set(pick([0xf2c21a, 0xf2c21a, 0x2a2c34, 0xb8bcc4, 0x7a1a1a, 0x1a3a6a]))); im.count++;
+          o.position.y = 0.9; o.position[along ? 'z' : 'x'] -= 2.25 * (ln > 0 ? 1 : -1) * (along ? 1 : 1); o.scale.set(1.6, 0.25, 0.08); o.updateMatrix(); lights.setMatrixAt(lights.count++, o.matrix);
+        }
+        jams.push({ s, undo: () => { const i = C.cols.indexOf(col0); if (i >= 0) C.cols.splice(i, 1); } });
+      }
+      im.instanceMatrix.needsUpdate = true; lights.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    };
+    CT.tmp.push(() => { for (const j of jams) j.undo(); jams = []; });
+    place(); let mk = tMark(S[0].v.x, S[0].v.z, 0x4dffa6, 8);
+    setObjective(`Пробки: ${c.n || 9} кварталов стоят намертво, а навигатор о них не знает. Красные огни — затор, объезжай по соседним улицам. Пробки перемещаются каждые ${c.every || 45} с.`);
+    return { title, noFire: true, chase: { max: 0 }, navName: 'Адрес', navGoal: () => S[Math.min(si, S.length - 1)].v,
+      update(dt) {
+        left -= dt; shuffleT -= dt; if (left <= 0) return failChapter('Застряли', 'Не жди, пока затор рассосётся: сворачивай заранее и объезжай квартал.');
+        if (shuffleT <= 0) { shuffleT = c.every || 45; place(); toast('Пробки сдвинулись', 1.4); }
+        const s = S[si]; setBeam(s.v);
+        if (pc.pos.distanceTo(s.v) < 9 && Math.abs(pc.vf || 0) < 3) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}» — приехали`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 8); }
+      },
+      hud() { return { timer: `${fmt(left)} · адрес ${Math.min(si + 1, S.length)}/${S.length} · пробки сдвинутся через ${Math.ceil(shuffleT)} с`, bad: left < 25 }; } };
+  },
+  // NEW YORK · «Гололёд»: a blizzard glazes the streets; the cab slides like a puck — the blood bags must still reach the hospitals
+  ice(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const S = c.stops.map(([x, z, n]) => ({ v: new V3(x, 0, z), n })); let si = 0, left = c.secs, hits = 0, prev = pc.vel.clone(), prevV = 0, cd = 0, mk = tMark(S[0].v.x, S[0].v.z, 0xff5a5a, 6);
+    setObjective(`Гололёд: машина скользит. Отвези кровь в ${S.length} больницы. Удары о стены портят груз — можно не больше ${c.hits}.`);
+    return { title, wx: 'snow', noFire: true, chase: { max: 0 }, navName: 'Больница', navGoal: () => S[Math.min(si, S.length - 1)].v,
+      update(dt) {
+        left -= dt; cd -= dt; if (left <= 0) return failChapter('Не довезли', 'На льду тормози заранее и входи в повороты медленно — машину несёт.');
+        // ice: the car keeps much of its old velocity — it turns and stops late
+        const g = 1 - Math.pow(1 - (c.grip || 0.18), dt * 30); pc.vel.x = prev.x + (pc.vel.x - prev.x) * g; pc.vel.z = prev.z + (pc.vel.z - prev.z) * g; prev.copy(pc.vel);
+        const v = pc.vel.length(); if (prevV - v > 6 && cd <= 0) { hits++; cd = 1.2; toast(hits > c.hits ? 'Пакеты разбились…' : `Удар! Груз под угрозой (${hits}/${c.hits})`, 1.6); if (hits > c.hits) return failChapter('Груз испорчен', 'На льду удар неизбежен, если входить в поворот на скорости. Сбрасывай газ за полквартала.'); } prevV = v;
+        const s = S[si]; setBeam(s.v);
+        if (pc.pos.distanceTo(s.v) < 9 && v < 3.5) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}»: кровь принята`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0xff5a5a, 6); }
+      },
+      hud() { return { timer: `${fmt(left)} · больница ${Math.min(si + 1, S.length)}/${S.length} · ударов ${hits}/${c.hits}`, bad: left < 25 }; } };
+  },
+  // NEW YORK · «Эвакуатор»: tow a sabotaged cab on a rope; it swings out on the turns and every knock damages it
+  tow(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const L = c.rope || 7.5, T = makeCar(0xf2c21a, true); scene.remove(T.g); ctAdd(T.g);
+    const tp = pc.pos.clone().add(new V3(-Math.sin(pc.h) * L, 0, -Math.cos(pc.h) * L)), tv = new V3(); let th = pc.h, hp = 100, cd = 0, left = c.secs;
+    const rope = new THREE.Mesh(box1, std(0x1a1a1a)); ctAdd(rope);
+    const haz = new THREE.Mesh(box1, basic(new THREE.Color(4, 2.4, 0.2))); haz.scale.set(1.6, 0.12, 0.12); haz.position.set(0, 1.5, -2.2); T.g.add(haz);
+    const goal = new V3(c.goal[0], 0, c.goal[1]), mk = tMark(goal.x, goal.z, 0x4dffa6, 8);
+    setObjective(`${c.obj || 'Отбуксируй машину в гараж.'} Трос ${L} м: на поворотах её заносит. Каждый удар о стену — минус прочность.`);
+    return { title, noFire: true, chase: { max: c.chase || 0 }, navName: c.goalName || 'Гараж', navGoal: () => goal,
+      update(dt) {
+        left -= dt; cd -= dt; if (left <= 0) return failChapter('Не дотянули', 'Тяни ровно: на прямых — газ, в поворотах — медленно, чтобы прицеп не бил о дома.');
+        // the towed car: a rope (no push) and a little inertia, then the walls
+        tv.multiplyScalar(Math.pow(0.4, dt)); tp.addScaledVector(tv, dt);
+        const hx = pc.pos.x - Math.sin(pc.h) * 2.4, hz = pc.pos.z - Math.cos(pc.h) * 2.4, dx = hx - tp.x, dz = hz - tp.z, d = Math.hypot(dx, dz);
+        if (d > L) { const k = (d - L) / d; tp.x += dx * k; tp.z += dz * k; tv.x = dx / d * Math.abs(pc.vf || 0); tv.z = dz / d * Math.abs(pc.vf || 0); }
+        if (d > 0.5) th = Math.atan2(dx, dz);
+        const imp = collideCircle(tp, tv, 1.9) || 0;
+        if (imp > 3 && cd <= 0) { hp -= Math.min(30, imp * 3); cd = 0.8; sfx.crash(imp); sparks(new V3(tp.x, 1, tp.z)); toast(hp > 0 ? `Прицеп ударился (${Math.max(0, Math.round(hp))}%)` : 'Прицеп разбит', 1.2); if (hp <= 0) return failChapter('Машина разбита', 'Трос длинный: в поворотах прицеп идёт по внутренней дуге и цепляет углы. Поворачивай шире.'); }
+        T.g.position.set(tp.x, 0, tp.z); T.g.rotation.y = th; haz.visible = Math.sin(state.t * 8) > 0;
+        rope.position.set((hx + tp.x + Math.sin(th) * 2.2) / 2, 0.7, (hz + tp.z + Math.cos(th) * 2.2) / 2); rope.rotation.y = Math.atan2(dx, dz); rope.scale.set(0.08, 0.08, Math.max(0.1, d - 2.2));
+        setBeam(goal);
+        if (tp.distanceTo(goal) < 10 && Math.abs(pc.vf || 0) < 3) { scene.remove(mk); return done(); }
+      },
+      hud() { return { bars: [{ label: 'Прицеп', frac: Math.max(0, hp) / 100, color: hp > 40 ? '#4dffa6' : '#ff5a5a' }], timer: `${fmt(left)}`, bad: left < 20 }; } };
+  },
+  // NEW YORK · «Эстакада»: a train runs on the elevated line; stay right under its middle car so the package can be lowered and taken
+  elrun(c, title, done) {
+    const C = NYC, x = C.P.el; beginDrive(x, C.ST[0] - 2, 0);
+    const tr = new THREE.Group(); for (let k = 0; k < 3; k++) { const b = new THREE.Mesh(box1, std(0xb8bcc4, { metalness: 0.6, roughness: 0.35 })); b.scale.set(3, 3.2, 16); b.position.set(0, 10.4, (k - 1) * 17); tr.add(b); const w = new THREE.Mesh(box1, basic(new THREE.Color(1.6, 1.5, 1.1))); w.scale.set(3.05, 1, 14); w.position.set(0, 10.8, (k - 1) * 17); tr.add(w); }
+    const bag = new THREE.Mesh(box1, std(0x8a5a2a)); bag.scale.set(0.6, 0.6, 0.6); bag.position.y = 7; tr.add(bag);
+    const cord = new THREE.Mesh(box1, std(0x1a1a1a)); cord.scale.set(0.04, 1.6, 0.04); cord.position.y = 8; tr.add(cord);
+    tr.position.set(x, 0, C.ST[0] + 10); ctAdd(tr);
+    const z0 = C.ST[0] + 10, z1 = C.ST[C.ST.length - 1] - 10; let tz = z0, dir = 1, held = 0, run = 0, wait = 2, stopT = 0, lapse = 0, lastS = null;
+    const stops = c.stops || [140, 340, 540];
+    setObjective(`Эстакада: поезд едет наверху. Держись прямо под средним вагоном — оттуда спустят пакет. Нужно ${c.need} с под поездом за ${c.runs || 2} прохода.`);
+    return { title, noFire: true, chase: { max: c.chase || 0 }, navName: 'Поезд', navGoal: () => new V3(x, 0, tz),
+      update(dt) {
+        wait -= dt;
+        if (wait <= 0) { const sp = c.speed || 14; if (stopT > 0) stopT -= dt; else { tz += dir * sp * dt; for (const s of stops) if (s !== lastS && Math.abs(tz - s) < sp * dt) { stopT = c.dwell || 3; lastS = s; break; } }
+          if (tz > z1 || tz < z0) { dir = -dir; run++; lastS = null; tz = clamp(tz, z0, z1); wait = 2; if (run >= (c.runs || 2)) return held >= c.need ? done() : failChapter('Пакет не передали', 'Держись прямо под серединой поезда: скорость как у него, без обгонов.'); toast('Поезд пошёл обратно', 1.4); } }
+        tr.position.z = tz; tr.rotation.y = dir > 0 ? 0 : PI;
+        const under = Math.abs(pc.pos.x - x) < 6 && Math.abs(pc.pos.z - tz) < (c.window || 6);
+        if (under && wait <= 0) { held += dt; lapse = 0; } else lapse += dt;
+        bag.position.y = 7 - Math.min(1, held / c.need) * 4.5; cord.scale.y = 1 + Math.min(1, held / c.need) * 4.5; cord.position.y = 8 - Math.min(1, held / c.need) * 2.2;
+        setBeam(new V3(x, 0, tz));
+        if (held >= c.need) { addCoins(40); toast('Пакет у тебя!', 1.6); return done(); }
+      },
+      hud() { return { bars: [{ label: lapse < 0.3 ? 'Под поездом' : 'Догони середину поезда', frac: held / c.need, color: lapse < 0.3 ? '#4dffa6' : '#ffd23a' }], timer: `Проход ${Math.min(run + 1, c.runs || 2)}/${c.runs || 2} · ${held.toFixed(0)}/${c.need} с` }; } };
+  },
+  // NEW YORK · «Парад»: the floats roll round the blocks; cross the column only through its gaps — touching a float stops the show and the mission
+  parade(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const route = c.route.map(([x, z]) => new V3(x, 0, z)), seg = [], n = c.floats || 10, gap = c.gap || 22, sp = c.speed || 5;
+    let total = 0; for (let i = 0; i < route.length; i++) { const a = route[i], b = route[(i + 1) % route.length], l = a.distanceTo(b); seg.push({ a, b, l, s: total }); total += l; }
+    const at = (s) => { s = ((s % total) + total) % total; const q = seg.find((g) => s >= g.s && s < g.s + g.l) || seg[0]; const k = (s - q.s) / q.l; return { p: new V3(q.a.x + (q.b.x - q.a.x) * k, 0, q.a.z + (q.b.z - q.a.z) * k), h: Math.atan2(q.b.x - q.a.x, q.b.z - q.a.z) }; };
+    const F = []; for (let k = 0; k < n; k++) {
+      const g = new THREE.Group(), cl = pick([0xe83a5a, 0x3a8ae8, 0xf2c21a, 0x4ad87a, 0xb45ae8]);
+      const base = new THREE.Mesh(box1, std(cl, { roughness: 0.5 })); base.scale.set(5, 1.6, 9); base.position.y = 0.8; g.add(base);
+      const top = new THREE.Mesh(k % 3 === 0 ? new THREE.SphereGeometry(2.6, 14, 10) : new THREE.ConeGeometry(2.4, 4.5, 8), std(pick([0xffffff, 0xffd23a, 0xff8ac8]), { roughness: 0.4, emissive: new THREE.Color(cl).multiplyScalar(0.25) })); top.position.y = 4; g.add(top);
+      if (k % 2) { const bal = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 8), std(pick([0xff5a7a, 0x7ad0ff, 0xffe07a]), { roughness: 0.3 })); bal.scale.set(1, 1.3, 1); bal.position.y = 12; g.add(bal); const st = new THREE.Mesh(box1, std(0xdddddd)); st.scale.set(0.05, 6, 0.05); st.position.y = 7; g.add(st); }
+      for (const s of [-1, 1]) { const l = new THREE.Mesh(box1, basic(new THREE.Color(3, 2.6, 1.4))); l.scale.set(0.1, 0.3, 8.6); l.position.set(s * 2.55, 1.7, 0); g.add(l); }
+      ctAdd(g); F.push({ g, s: k * (9 + gap) });
+    }
+    const S = c.stops.map(([x, z, nm]) => ({ v: new V3(x, 0, z), n: nm })); let si = 0, left = c.secs, touches = 0, cd = 0, mk = tMark(S[0].v.x, S[0].v.z, 0x4dffa6, 8);
+    setObjective(`Парад: колонна платформ идёт по кругу через кварталы. Пересекай её только в просветы — задеть платформу нельзя. Адресов: ${S.length}.`);
+    return { title, noFire: true, chase: { max: 0 }, navName: 'Адрес', navGoal: () => S[Math.min(si, S.length - 1)].v,
+      update(dt) {
+        left -= dt; cd -= dt; if (left <= 0) return failChapter('Не успели', 'Не жди у колонны: подъезжай туда, где просвет вот-вот подойдёт.');
+        for (const f of F) { f.s += sp * dt; const q = at(f.s); f.g.position.copy(q.p); f.g.rotation.y = q.h; f.p = q.p; f.h = q.h;
+          const dx = pc.pos.x - q.p.x, dz = pc.pos.z - q.p.z, fw = dx * Math.sin(q.h) + dz * Math.cos(q.h), sd = dx * Math.cos(q.h) - dz * Math.sin(q.h);
+          if (Math.abs(fw) < 4.5 + 2 && Math.abs(sd) < 2.5 + 1.6) { const d = Math.hypot(dx, dz) || 1; pc.pos.x += dx / d * 3; pc.pos.z += dz / d * 3; pc.vel.set(0, 0, 0); pc.vf = 0; if (cd <= 0) { touches++; cd = 1.5; sfx.crash(5); toast(touches > (c.touches || 2) ? 'Парад остановлен!' : `Задел платформу! (${touches}/${c.touches || 2})`, 1.6); if (touches > (c.touches || 2)) return failChapter('Въехал в парад', 'Колонна не остановится. Жди просвет между платформами и проскакивай сразу за хвостом одной из них.'); } } }
+        const s = S[si]; setBeam(s.v);
+        if (pc.pos.distanceTo(s.v) < 9 && Math.abs(pc.vf || 0) < 3) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}» — на месте`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 8); }
+      },
+      hud() { return { timer: `${fmt(left)} · адрес ${Math.min(si + 1, S.length)}/${S.length} · касаний ${touches}/${c.touches || 2}`, bad: left < 25 }; } };
+  },
+  // NEW YORK · «Каскадёр»: a film shoot — each gate wants its own speed, no faster, no slower
+  speedgates(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    let gi = 0, strikes = 0, left = c.secs; const kmh = () => Math.abs(pc.vf || 0) * 3.6;
+    const G_ = c.gates.map(([x, z, ax, lo, hi]) => {
+      const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ax === 'z' ? 0 : PI / 2;
+      for (const s of [-1, 1]) { const p = new THREE.Mesh(box1, std(0x1a1a1e)); p.scale.set(0.4, 5.5, 0.4); p.position.set(s * 7.6, 2.75, 0); g.add(p); }
+      const bar = new THREE.Mesh(box1, basic(new THREE.Color(3, 2.6, 0.4))); bar.scale.set(15.2, 0.35, 0.35); bar.position.y = 5.5; g.add(bar);
+      const t = cityText(512, 128, (q, W, H2) => { q.fillStyle = '#111'; q.fillRect(0, 0, W, H2); q.fillStyle = '#ffd23a'; q.font = 'bold 84px Arial'; q.fillText(`${lo}–${hi}`, W / 2, H2 / 2 + 4); });
+      for (const r of [0, PI]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: t, color: new THREE.Color(1.6, 1.6, 1.6) })); pl.position.set(0, 6.6, r ? -0.2 : 0.2); pl.rotation.y = r; g.add(pl); }
+      g.visible = false; ctAdd(g); return { x, z, ax, lo, hi, g, bar };
+    });
+    G_[0].g.visible = true; if (G_[1]) G_[1].g.visible = true;
+    setObjective(`Съёмка трюков: в каждые ворота — на своей скорости (км/ч на табло). Не попал в диапазон — дубль испорчен; можно испортить ${c.strikes}.`);
+    return { title, noFire: true, chase: { max: 0 }, navName: 'Ворота', navGoal: () => { const q = G_[Math.min(gi, G_.length - 1)]; return new V3(q.x, 0, q.z); },
+      update(dt) {
+        left -= dt; if (left <= 0) return failChapter('Съёмочный день кончился', 'Набирай нужную скорость заранее, за полквартала до ворот.');
+        const q = G_[gi]; if (!q) return; const k = kmh(), ok = k >= q.lo && k <= q.hi; q.bar.material.color.setRGB(ok ? 0.4 : 3, ok ? 3 : 2.4, ok ? 0.6 : 0.4); setBeam(new V3(q.x, 0, q.z));
+        if (Math.hypot(pc.pos.x - q.x, pc.pos.z - q.z) < 7.5) {
+          q.g.visible = false; gi++; if (G_[gi + 1]) G_[gi + 1].g.visible = true;
+          if (ok) { addCoins(20); sfx.bell(); toast(`Снято! ${Math.round(k)} км/ч`, 1.2); } else { strikes++; toast(`Дубль испорчен: ${Math.round(k)} км/ч вместо ${q.lo}–${q.hi} (${strikes}/${c.strikes})`, 1.8); if (strikes > c.strikes) return failChapter('Режиссёр недоволен', 'Смотри на табло следующих ворот и подбирай скорость заранее.'); }
+          if (gi >= G_.length) return done();
+        }
+      },
+      hud() { const q = G_[Math.min(gi, G_.length - 1)], k = kmh(); return { bars: [{ label: `Нужно ${q.lo}–${q.hi} км/ч · сейчас ${Math.round(k)}`, frac: clamp(k / (q.hi * 1.3), 0, 1), color: k >= q.lo && k <= q.hi ? '#4dffa6' : '#ffd23a' }], timer: `${fmt(left)} · ворота ${Math.min(gi + 1, G_.length)}/${G_.length} · испорчено ${strikes}/${c.strikes}`, bad: left < 20 }; } };
+  },
+  // NEW YORK · «Паром»: the last ferry leaves on time; be at the end of the pier when it sails, ride across, then drive the witness on
+  ferry(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const C = NYC, F = C.ferry, px = C.P.pierE[0], dock = new V3(px, 0, C.harbour.z0 + 52), land = new V3(C.P.island[0] - 52, 0, C.P.island[1]), goal = new V3(c.goal[0], 0, c.goal[1]);
+    F.position.copy(dock); CT.tmp.push(() => { F.position.copy(dock); pc.ghost = false; if (pc) pc.locked = false; });
+    let left = c.depart, ph = 'drive', t = 0, mk = tMark(px, C.harbour.z0 + 30, 0xf2c21a, 6), mk2 = null; const end = new V3(px, 0, C.harbour.z0 + 30);
+    setObjective(`Последний паром отходит через ${fmt(c.depart)}. Будь на краю пирса к отплытию — паром заберёт машину. Потом довези свидетеля до маяка.`);
+    return { title, chase: { max: c.chase || 0 }, navName: ph === 'drive' ? 'Пирс' : 'Маяк', navGoal: () => (ph === 'drive' ? end : goal),
+      update(dt) {
+        if (ph === 'drive') {
+          left -= dt; setBeam(end);
+          if (left <= 0) { if (Math.abs(pc.pos.x - px) < 8 && pc.pos.z > C.harbour.z0 + 20) { ph = 'sail'; t = 0; scene.remove(mk); pc.locked = true; pc.ghost = true; pc.vel.set(0, 0, 0); pc.vf = 0; toast('Паром отходит — ты на борту!', 1.8); sfx.bell(); } else return failChapter('Паром ушёл', 'Паром не ждёт. Езжай к пирсу сразу и стой у самого края.'); }
+          return;
+        }
+        if (ph === 'sail') {
+          t += dt; const k = Math.min(1, t / (c.sail || 14)), e = k * k * (3 - 2 * k);
+          F.position.set(dock.x + (land.x - dock.x) * e, 0, dock.z); pc.pos.set(F.position.x, 0, F.position.z); pc.h = PI / 2; pc.g.position.copy(pc.pos); pc.g.rotation.y = pc.h; pc.g.position.y = 0.35;
+          setBeam(goal);
+          if (k >= 1) { ph = 'island'; pc.locked = false; pc.ghost = false; pc.pos.set(land.x + 22, 0, land.z); pc.g.position.y = 0; mk2 = tMark(goal.x, goal.z, 0x4dffa6, 8); toast('Причалили. К маяку!', 1.4); left = c.secs || 40; }
+          return;
+        }
+        left -= dt; setBeam(goal); if (left <= 0) return failChapter('Не успели', 'На острове — прямо к маяку.');
+        if (pc.pos.distanceTo(goal) < 9) { if (mk2) scene.remove(mk2); return done(); }
+      },
+      hud() { return { timer: ph === 'drive' ? `Паром через ${fmt(Math.max(0, left))}` : ph === 'sail' ? 'На пароме…' : `${fmt(Math.max(0, left))} · к маяку`, bad: ph !== 'sail' && left < 20 }; } };
+  },
+  // NEW YORK · «Стройка»: steel beams swing on the cranes of an unfinished tower; ride them across, step off at the right moment
+  beams(c, title, done) {
+    const C = NYC, [rx, rz] = C.rooms[c.room || 'crane'];
+    const pads = c.pads.map(([a, b, x1, z1]) => [rx + a, rz + b, rx + x1, rz + z1]);
+    const B_ = c.beams.map(([x, z, ax, amp, per, ph]) => ({ x: rx + x, z: rz + z, ax, amp, per, ph: ph || 0, w: ax === 'x' ? 6 : 2.2, d: ax === 'x' ? 2.2 : 6, cx: rx + x, cz: rz + z }));
+    for (const [x0, z0, x1, z1] of pads) { const m = new THREE.Mesh(box1, std(0x6a6e78, { roughness: 0.7, metalness: 0.4 })); m.scale.set(x1 - x0, 1.2, z1 - z0); m.position.set((x0 + x1) / 2, -0.6, (z0 + z1) / 2); m.receiveShadow = true; ctAdd(m); }
+    for (const b of B_) { const m = new THREE.Mesh(box1, std(0xc8501a, { roughness: 0.6, metalness: 0.5 })); m.scale.set(b.w, 0.5, b.d); m.position.y = -0.25; ctAdd(m); b.m = m; const cab = new THREE.Mesh(box1, std(0x2a2a2e)); cab.scale.set(0.05, 20, 0.05); cab.position.y = 10; ctAdd(cab); b.cab = cab; }
+    { const tw = new THREE.Mesh(box1, std(0xe8b020)); tw.scale.set(1.5, 40, 1.5); tw.position.set(rx, 0, rz - 14); ctAdd(tw); const jib = new THREE.Mesh(box1, std(0xe8b020)); jib.scale.set(70, 1.2, 1.2); jib.position.set(rx, 20.5, rz - 14); ctAdd(jib); }
+    const checks = c.checks.map(([x, z]) => new V3(rx + x, 0, rz + z)); let ci = 0, falls = 0, left = c.secs, fallT = 0, ride = null;
+    beginFoot(checks[0].x, checks[0].z, hdg(c.face || 'E'));
+    const mk = tMark(checks[1].x, checks[1].z, 0x4dffa6, 4);
+    for (const [x, z] of c.guards || []) spawnEnemy(rx + x, rz + z, false, { look: factionLook('kein'), react: 1.3, speed: 0.01 });
+    const inR = (p, x0, z0, x1, z1) => p.x > x0 - 0.35 && p.x < x1 + 0.35 && p.z > z0 - 0.35 && p.z < z1 + 0.35;
+    setObjective('Стройка: перебирайся по качающимся балкам. Встань на балку — она понесёт тебя. Сходи, когда она у следующей площадки.');
+    return { title, update(dt) {
+      left -= dt; if (left <= 0) return failChapter('Не успел', 'Балки ходят по кругу — не жди лишний такт.');
+      for (const b of B_) { const o = Math.sin((state.t + b.ph) * 2 * PI / b.per) * b.amp, nx = b.x + (b.ax === 'x' ? o : 0), nz = b.z + (b.ax === 'z' ? o : 0); b.dx = nx - b.cx; b.dz = nz - b.cz; b.cx = nx; b.cz = nz; b.m.position.set(nx, -0.25, nz); b.cab.position.set(nx, 10, nz); }
+      if (fallT > 0) { fallT -= dt; if (fallT <= 0) { hero.pos.copy(checks[ci]); hero.g.position.copy(hero.pos); } return; }
+      ride = B_.find((b) => inR(hero.pos, b.cx - b.w / 2, b.cz - b.d / 2, b.cx + b.w / 2, b.cz + b.d / 2)) || null;
+      if (ride) { hero.pos.x += ride.dx; hero.pos.z += ride.dz; hero.g.position.copy(hero.pos); }
+      if (!ride && !pads.some(([x0, z0, x1, z1]) => inR(hero.pos, x0, z0, x1, z1))) { falls++; sfx.crash(4); toast(falls > c.falls ? 'Сорвался…' : `Сорвался! Страховка держит (${falls}/${c.falls})`, 1.6); if (falls > c.falls) return failChapter('Падение', 'Вставай на балку, когда она ближе всего к площадке, и сходи так же.'); fallT = 0.7; hero.hp = Math.max(1, hero.hp - 10); return; }
+      const T = checks[ci + 1];
+      if (T && hero.pos.distanceTo(T) < 2.4) { ci++; sfx.bell(); if (ci >= checks.length - 1) { scene.remove(mk); return done(); } mk.position.set(checks[ci + 1].x, 0, checks[ci + 1].z); toast('Площадка', 0.8); }
+      setBeam(checks[Math.min(ci + 1, checks.length - 1)]);
+    }, hud() { return { timer: `${fmt(left)} · падений ${falls}/${c.falls}`, bad: left < 20 }; } };
+  },
+  // NEW YORK · «Хранилище медальонов»: laser fences switch on and off in rhythm; crossing a lit one rings the alarm; the King waits at the safe
+  lasers(c, title, done) {
+    const C = NYC, [rx, rz] = C.rooms[c.room || 'vault'];
+    beginFoot(rx - 25, rz, PI / 2);
+    const F_ = c.fences.map(([x, per, on, ph]) => {
+      const g = new THREE.Group(); g.position.set(rx + x, 0, rz);
+      for (let y = 0.4; y < 2.4; y += 0.45) { const l = new THREE.Mesh(box1, basic(new THREE.Color(5, 0.2, 0.2), { transparent: true, opacity: 0.85 })); l.scale.set(0.05, 0.05, 33); l.position.y = y; g.add(l); }
+      for (const s of [-1, 1]) { const p = new THREE.Mesh(box1, std(0x2a2a30)); p.scale.set(0.3, 2.6, 0.3); p.position.set(0, 1.3, s * 16.6); g.add(p); }
+      ctAdd(g); return { x: rx + x, per, on, ph: ph || 0, g, lit: true, was: 0 };
+    });
+    for (let k = 0; k < 6; k++) { const s = new THREE.Mesh(box1, std(0x8a8a90, { metalness: 0.8, roughness: 0.3 })); s.scale.set(1.2, 2.4, 1.2); s.position.set(rx + 26, 1.2, rz - 12 + k * 4.8); ctAdd(s); }
+    let alarms = 0, boss = null, cool = 0;
+    setObjective(`Лазерные заграждения включаются и гаснут в такт. Проходи, пока погашены. Пересёк горящий — тревога (можно ${c.alarms}). У сейфа ждёт Король Медальонов.`);
+    return { title, update(dt) {
+      cool -= dt;
+      for (const f of F_) {
+        const k = ((state.t + f.ph) % f.per) / f.per; f.lit = k < f.on; f.g.children.forEach((o, i) => { if (i < 5) o.visible = f.lit; });
+        const side = Math.sign(hero.pos.x - f.x);
+        if (f.was && side !== f.was && f.lit && cool <= 0) { alarms++; cool = 1.5; sfx.crash(4); toast(alarms > c.alarms ? 'Тревога! Охрана сбегается' : `Тревога ${alarms}/${c.alarms}: охрана идёт`, 1.6); queueWave([[rx + 20, rz - 14], [rx + 20, rz + 14]], 0.4, () => ({ look: factionLook('kein'), react: 1 })); if (alarms > c.alarms) return failChapter('Хранилище закрыто', 'Смотри на лучи: они гаснут на секунду-две — проходи сразу, как погаснут.'); }
+        f.was = side;
+      }
+      if (!boss && hero.pos.x > rx + 14) { boss = spawnEnemy(rx + 23, rz, true, { look: BOSS_LOOKS[c.boss.look] || undefined, hp: c.boss.hp, name: c.boss.name, burst: 3, dmg: 9, onHalf: () => { toast(`${c.boss.name}: охрана!`, 1.6); queueWave([[rx + 20, rz - 14], [rx + 20, rz + 14]], 0.4, () => ({ look: factionLook('kein'), react: 1 })); } }); setObjective(`${c.boss.name} у сейфа. Возьми его.`); }
+      if (boss && boss.dead && !enemies.some((e) => !e.dead)) return done();
+      setBeam(boss ? null : new V3(rx + 22, 0, rz));
+    }, hud() { return { bars: boss && !boss.dead ? [{ label: c.boss.name, frac: boss.hp / boss.max, color: '#ff5a5a' }] : [], timer: `Тревог ${alarms}/${c.alarms}` }; } };
+  },
+});
+// ---------------- «Города мира» · Париж: «Украденный рассвет» (episode 20) ----------------
+Object.assign(WHO, {
+  amelie: { name: 'Амели, реставратор', color: '#ffb8d8', init: 'А' },
+  luka: { name: 'Лука, хозяин кафе', color: '#ffd28a', init: 'Л' },
+  duval: { name: 'Инспектор Дюваль', color: '#9ab8ff', init: 'Д' },
+  hirond: { name: 'Мадам Ласточка', color: '#7ad8ff', init: 'М' },
+});
+EPS[20] = {
+  title: 'Украденный рассвет', zone: 'paris', faction: 'rats', world: 'paris', chaseMsg: 'Мопеды «Ласточек» на хвосте!',
+  logline: 'Обмен таксистами: неделя ночных смен в Париже. В первую же ночь из музея «Рассвет» крадут картину «Рассвет над Сеной», а реставратор Амели садится именно в твоё такси.',
+  endTitle: 'Рассвет вернулся в музей', endLead: 'Картина снова висит в зале, «Ласточки» больше не летают над набережными, а Лука повесил над стойкой кафе фотографию жёлтого такси. Следующая остановка — Лондон.',
+  teaser: 'Дальше — Лондон: туман, левостороннее движение и счёт, который кто-то очень хочет закрыть.',
+  chapters: [
+    { t: 'Ночной фестиваль', type: 'pool', start: [2440, 160, 'E'], seats: 3, lostMax: 1,
+      riders: [
+        { name: 'Студентка', at: [2560, 169], to: [2920, 649], toName: 'Набережная, кафе «Синий зонт»', t: 170 },
+        { name: 'Турист', at: [2800, 169], to: [2500, 631], toName: 'Площадь с аркой', t: 170 },
+        { name: 'Музыкант', at: [3040, 151], to: [2680, 301], toName: 'Северная набережная', t: 190 },
+      ],
+      about: 'Первая ночная смена в Париже. Город празднует Ночь огней, и такси нужно всем сразу. Три пассажира, три места, у каждого свой адрес.',
+      intro: [['luka', 'Добро пожаловать в Париж! Такси Люмьер дарит тебе машину на неделю. Сегодня фестиваль — бери всех, кто машет.'], ['hero', 'Всех сразу?'], ['luka', 'Три места — три пассажира. Развози, как удобнее. Только не заставляй ждать: парижане уходят пешком.']],
+      outro: [['luka', 'Неплохо для первой ночи. Кстати, слышал? Из музея «Рассвет» что-то украли. Весь квартал в полиции.']] },
+    { t: 'Ласточки', type: 'mopeds', start: [2680, 160, 'E'], n: 5, need: 4, speed: 15, together: 2, every: 7,
+      about: 'Мопедисты в чёрных шлемах вырывают сумки у прохожих и уходят дворами. Местные зовут их «Ласточками».',
+      intro: [['amelie', 'Месье, стойте! Этот мопед… у него моя сумка! Там ключи от реставрационной!'], ['hero', 'Садитесь. Держитесь крепче.']],
+      outro: [['amelie', 'Сумка цела. Я Амели, реставратор музея «Рассвет». Сегодня ночью у нас украли картину. А эти мопедисты крутились у служебного входа неделю.'], ['hero', 'Значит, «Ласточки» не только по сумкам.']] },
+    { t: 'Сена', type: 'boat', start: [2440, 310, 'E'], boat: [2460, 352, 'E'], route: [[2460, 352], [3180, 352], [3180, 448], [2460, 448]], speed: 13, hp: 800, far: 75,
+      name: 'Катер «Ласточек»',
+      about: 'Катер без огней уходит по Сене от музея. На борту — ящик с картиной. По воде не догнать, только с набережной.',
+      intro: [['amelie', 'Вон тот катер! Без огней! Я видела, как с него грузили плоский ящик.'], ['hero', 'По воде мы не умеем. По набережной — умеем.']],
+      outro: [['duval', 'Инспектор Дюваль. Катер ваш, ящик — пустой. Картины там уже нет.'], ['amelie', 'Значит, её перепрятали. Или подменили.']] },
+    { t: 'Галерея', type: 'clues', guards: [[-14, -6], [14, 6]],
+      truth: { sig: 'right', crack: true, frame: 'oak' },
+      paintings: [
+        { name: 'Холст I', sig: 'right', crack: false, frame: 'gilt', sky: '#e8a070' },
+        { name: 'Холст II', sig: 'left', crack: true, frame: 'oak', sky: '#e0a878' },
+        { name: 'Холст III', sig: 'right', crack: true, frame: 'oak', sky: '#e6a272' },
+        { name: 'Холст IV', sig: 'right', crack: true, frame: 'gilt', sky: '#eaa676' },
+        { name: 'Холст V', sig: 'left', crack: false, frame: 'oak', sky: '#e4a474' },
+        { name: 'Холст VI', sig: 'right', crack: false, frame: 'oak', sky: '#e2a070' },
+      ],
+      about: 'Подпольная мастерская «Ласточек» за кафе: шесть одинаковых «Рассветов». Пять — подделки на продажу, один — подлинник.',
+      intro: [['amelie', 'Шесть копий… Они продают подделки как оригинал. Подлинник один, и я знаю приметы.'], ['amelie', 'Подпись автора справа. Краска старая — в трещинах. И рама дубовая, без позолоты.'], ['hero', 'Смотреть буду я. Вы — у двери.']],
+      outro: [['amelie', 'Это он. Настоящий «Рассвет над Сеной». Но рамы для него уже заказаны — они хотели вывезти его сегодня.']] },
+    { t: 'Колокола', type: 'bells', start: [2440, 40, 'S'], secs: 150, period: 6, open: 2.3, pen: 6,
+      gates: [[2440, 100, 'z'], [2500, 160, 'x'], [2560, 240, 'z'], [2560, 400, 'z'], [2620, 490, 'x'], [2680, 565, 'z'], [2740, 640, 'x'], [2800, 700, 'z'], [2860, 760, 'x'], [2920, 700, 'z']],
+      about: 'Ночь огней: улицы к музею перекрыты воротами, и сторожа поднимают шлагбаумы только под удар колокола.',
+      intro: [['luka', 'К музею короче всего через праздничные ворота. Их открывают под колокол — раз в шесть секунд, ненадолго.'], ['hero', 'Значит, ехать в ритм.']],
+      outro: [['amelie', 'Картина в хранилище. Охрана удвоена. Теперь можно выдохнуть… хотя бы до утра.']] },
+    { t: 'Попутчики', type: 'pool', start: [2920, 490, 'W'], seats: 3, lostMax: 1,
+      riders: [
+        { name: 'Пекарь', at: [2800, 481], to: [2440, 151], toName: 'Пекарня у арки', t: 150 },
+        { name: 'Медсестра', at: [3040, 499], to: [3160, 769], toName: 'Госпиталь', t: 140 },
+        { name: 'Журналист', at: [2680, 499], to: [2980, 169], toName: 'Холм с базиликой', t: 160 },
+        { name: 'Повар', at: [2560, 631], to: [2740, 169], toName: 'Кафе Луки', t: 170 },
+        { name: 'Танцовщица', at: [3160, 640], to: [2620, 169], toName: 'Музей «Рассвет»', t: 160 },
+      ],
+      about: 'Лука собрал ночных попутчиков, которые видели «Ласточек» у музея. Каждый расскажет своё — но только в такси.',
+      intro: [['luka', 'Пятеро видели «Ласточек» прошлой ночью. Довезёшь — расскажут. Мест, как всегда, три.']],
+      outro: [['hero', 'Все пятеро говорят одно: «Ласточки» собираются на крышах Монмартра. Там у них голубятня.']] },
+    { t: 'Крыши', type: 'roofs', room: 'roofs', secs: 170, falls: 3, face: 'E',
+      pieces: [[-48, -6, -36, 6], [-36, -0.6, -26, 0.6], [-26, -8, -14, 8], [-14, 4, -4, 5.2], [-4, -2, 8, 10], [2, 10, 3.2, 22], [-4, 22, 10, 32], [10, 26, 22, 27.2], [22, 20, 34, 32], [28, -2, 29.2, 20], [22, -14, 36, -2], [36, -9, 46, -7.8], [46, -16, 58, -2]],
+      checks: [[-42, 0], [-20, 0], [2, 4], [3, 27], [28, 26], [29, -8], [52, -9]], guards: [[-20, 5], [28, 30], [30, -11]],
+      about: 'Голубятня «Ласточек» — на крышах. Доски между кровлями, ветер и трое дозорных.',
+      intro: [['luka', 'По крышам Монмартра ходят только трубочисты и коты. Ты сегодня и то и другое.'], ['hero', 'Главное — не смотреть вниз.']],
+      outro: [['hero', 'Голубятня пустая. На стене — расписание: «Мост, полночь. Башня, рассвет».']] },
+    { t: 'Мост Ласточек', type: 'mopeds', start: [2800, 490, 'N'], n: 7, need: 6, speed: 17, together: 3, every: 5, hp: 30, shoot: true, msg: 'Мопедист с пистолетом — осторожно!',
+      escapes: [[2440, 40], [3160, 40], [2440, 760], [3160, 760]],
+      about: 'Полночь на мосту: «Ласточки» собираются вывезти картину по частям — отвлекают полицию и разлетаются во все стороны.',
+      intro: [['duval', 'Они устроили карусель: семь мопедов, семь направлений. Мои машины не успевают.'], ['hero', 'Моя успеет.']],
+      outro: [['duval', 'Шестерых взяли. Седьмой ушёл к башне. Ваша Мадам Ласточка — бывшая смотрительница музея, между прочим.']] },
+    { t: 'Катер с холстом', type: 'boat', start: [3160, 490, 'W'], boat: [3150, 352, 'W'], route: [[3150, 352], [2450, 352], [2450, 448], [3150, 448]], n: 2, speed: 16, hp: 600, far: 70, shoot: true, chase: 1,
+      name: 'Катер с картиной',
+      about: 'Ночью картину подменили в хранилище. Подлинник уходит по Сене на двух катерах — один из них пустой.',
+      intro: [['amelie', 'В хранилище — копия! Подлинник на реке, два катера, один для отвода глаз.'], ['hero', 'Останавливаем оба. Разберёмся потом.']],
+      outro: [['amelie', 'Ящик… пустой. Опять. Она перехитрила нас.'], ['duval', 'Расписание с голубятни: «Башня, рассвет». У неё покупатель наверху.']] },
+    { t: 'Железная башня', type: 'roofs', room: 'towertop', secs: 150, falls: 3, face: 'E',
+      pieces: [[-30, -6, -20, 6], [-20, -0.6, -8, 0.6], [-8, -8, 8, 8], [8, -0.6, 20, 0.6], [20, -10, 34, 10]], checks: [[-25, 0], [0, 0], [27, 0]],
+      guards: [[0, 5], [0, -5]], boss: { name: 'Мадам Ласточка', look: 'lisa2', hp: 700, at: [28, 0] },
+      obj: 'Вершина башни: по балкам к Мадам Ласточке. Холст у неё.',
+      about: 'Рассвет на вершине железной башни. Покупатель ждёт картину, Мадам Ласточка — вертолёт. Таксист — её.',
+      intro: [['hirond', 'Таксист? Я двадцать лет смотрела на эту картину по ночам. Она должна висеть у того, кто платит, а не у тех, кто смотрит.'], ['hero', 'Она должна висеть там, где её видят все.']],
+      outro: [['amelie', 'Солнце над Сеной… и «Рассвет» снова дома.'], ['luka', 'Такси остаётся за тобой, друг. Возвращайся, когда захочешь.'], ['hero', 'Обязательно. Но сначала — Лондон.']] },
+  ],
+};
+EP_NAMES[20] = 'Париж: украденный рассвет';
+
+// ---------------- «Города мира» · Лондон: «Туманный счёт» (episode 21) ----------------
+Object.assign(WHO, {
+  harry: { name: 'Гарри, кэбмен', color: '#e8d8a8', init: 'Г' },
+  penny: { name: 'Пенни, диспетчер', color: '#ffb0c8', init: 'П' },
+  graves: { name: 'Инспектор Грейвз', color: '#a8c8ff', init: 'И' },
+  zero: { name: 'Мистер Ноль', color: '#c8c8d0', init: 'Н' },
+});
+Object.assign(FACTIONS, { zero: { thug1: { Details: '#c8c8d0' }, thug2: { Shirt: '#2a2a30', Pants: '#18181c', Hair: '#15151a' }, thug3: { Shirt: '#3a3a44', Pants: '#18181c', Hair: '#15151a' }, heavy: { Shirt: '#1a1a20', Pants: '#101014' } } });
+EPS[21] = {
+  title: 'Туманный счёт', zone: 'london', faction: 'zero', world: 'london', chaseMsg: 'Люди Ноля на хвосте!',
+  logline: 'Вторая неделя обмена — Лондон. Старый кэбмен Гарри сорок лет возит людей сквозь туман, но его лицензия теперь у букмекера Мистера Ноля: тот скупает долги таксистов и заставляет их возить свои «посылки». Ты садишься за руль вместо Гарри, чтобы закрыть его счёт.',
+  endTitle: 'Счёт закрыт', endLead: 'Бухгалтерия Ноля у инспектора Грейвза, лицензии вернулись кэбменам, а Гарри снова стоит на своём углу у паба «Старый фонарь».',
+  teaser: 'Дальше — Нью-Йорк: жёлтые такси, снег и город, который никогда не спит.',
+  chapters: [
+    { t: 'Левая сторона', type: 'left', start: [3640, 40, 'E'], secs: 260, fouls: 4,
+      stops: [[3880, 110, 'Паб «Старый фонарь»'], [4180, 170, 'Собор'], [3880, 565, 'Колесо обозрения'], [3820, 760, 'Крытый рынок']],
+      about: 'Первая смена в Лондоне. Гарри показывает свои вызовы — и то, что здесь все ездят по левой стороне.',
+      intro: [['harry', 'Значит, ты и есть тот таксист по обмену. Садись. Правило первое: в Лондоне держатся ЛЕВОЙ стороны.'], ['hero', 'А второе?'], ['harry', 'Второе — не опаздывать. Мои клиенты сорок лет ждут меня минута в минуту.']],
+      outro: [['harry', 'Для первого раза — прилично. Только знаешь… с понедельника я больше не кэбмен. Лицензия у Мистера Ноля.'], ['hero', 'Это кто?'], ['harry', 'Букмекер. Скупает наши долги, а потом мы возим его «посылки». Или не возим вообще.']] },
+    { t: 'Туман', type: 'fog', start: [3760, 630, 'N'], secs: 300,
+      points: [[3640, 500, 'Южная набережная'], [4000, 170, 'Площадь у собора'], [4360, 300, 'Пристань'], [4240, 760, 'Парк']],
+      about: 'Ночью на город лёг такой туман, что навигаторы отказали. Посылки Ноля разносят по маякам — и Пенни хочет знать, куда.',
+      intro: [['penny', 'Это Пенни, диспетчер Гарри. Навигатор не видит ничего — туман. У меня только сигналы маяков, где люди Ноля оставляют посылки.'], ['hero', 'Значит, по звуку.'], ['penny', 'Чем чаще пищит — тем ближе. Удачи.']],
+      outro: [['penny', 'Четыре маяка — четыре тайника Ноля. В каждом — квитанции ставок. Все на скорость кэбов.'], ['hero', 'Он ставит на то, как быстро ездят его же должники?'], ['penny', 'И сам решает, кто приедет первым.']] },
+    { t: 'Ночной автобус', type: 'bus', start: [3640, 170, 'E'], secs: 330, cap: 17, stars: 4,
+      stops: [[3820, 170, 'Паб'], [4000, 240, 'Набережная'], [4180, 300, 'Собор'], [4240, 400, 'Мост'], [4300, 500, 'Южный берег'], [4360, 630, 'Парк']],
+      about: 'Водитель ночного автобуса заболел, а на маршруте едет свидетель — кондуктор, видевший людей Ноля с ящиками.',
+      intro: [['penny', 'Ночной автобус остался без водителя. На нём кондуктор, который видел людей Ноля. Довези всех — и он поговорит.'], ['hero', 'Двухэтажный? Я на таком не ездил.'], ['penny', 'На втором этаже спят люди. Не дёргай.']],
+      outro: [['hero', 'Кондуктор говорит: каждую ночь «посылки» уходят точно по бою часов. Минута в минуту.'], ['harry', 'Значит, у Ноля есть расписание. А где расписание — там бухгалтерия.']] },
+    { t: 'Точно по часам', type: 'clock', start: [3640, 300, 'E'], strikes: 1, win: 12, pace: 13, slack: 5,
+      stops: [[3760, 235, 'Часовая башня'], [4120, 105, 'Собор'], [4300, 170, 'Вокзал'], [4000, 630, 'Колесо обозрения']],
+      about: 'Чтобы выйти на курьеров Ноля, нужно возить их клиентов точно по их же правилам: ни минутой раньше, ни минутой позже.',
+      intro: [['harry', 'Клиенты Ноля выходят из дверей с боем часов. Приедешь раньше — у входа штрафуют. Позже — уйдут.'], ['hero', 'Значит, ехать надо не быстро, а точно.']],
+      outro: [['harry', 'Последний клиент забыл в салоне жетон метро. На обороте — номер платформы и слово «касса».'], ['penny', 'Касса Ноля ездит в метро. Под землёй её не отследить.']] },
+    { t: 'Гонка с метро', type: 'metro', start: [3640, 760, 'N'], dwell: 4, legs: [22, 31, 38, 31, 21],
+      stations: [[3640, 500, 'Набережная'], [3880, 630, 'Колесо'], [4000, 300, 'Мостовая'], [4240, 170, 'Вокзальная'], [4360, 40, 'Северная']],
+      about: 'Курьер с кассой Ноля едет в метро. На каждой станции его встречает человек — нужно оказаться там раньше.',
+      intro: [['penny', 'Курьер в поезде. На каждой станции его встречают. Если ты будешь у входа раньше поезда — увидим, кто.'], ['hero', 'Наперегонки с метро. По пробкам.'], ['penny', 'По ночному Лондону. Пробок почти нет. Почти.']],
+      outro: [['penny', 'Все пятеро встречающих — из долгов Ноля. А сам курьер вышел на Северной и спустился обратно — на платформу.']] },
+    { t: 'Карманник', type: 'pickpocket', n: 5, need: 3, crowd: 12, every: 9, speed: 3.4,
+      about: 'Курьер Ноля — карманник: он забирает у должников «взносы» прямо на платформе, в толпе.',
+      intro: [['graves', 'Инспектор Грейвз. Вы мешаете мне вести дело, таксист. Но раз уж вы здесь — на платформе работает карманник Ноля.'], ['hero', 'Как его узнать?'], ['graves', 'Крик, вспышка — и один человек идёт к лестнице чуть быстрее, чем все.']],
+      outro: [['graves', 'Три кошелька — три расписки Ноля. В каждой — один и тот же адрес: парк с живым лабиринтом.'], ['harry', 'Ноль играет там в гольф по утрам. И прячет то, что не доверяет сейфу.']] },
+    { t: 'Лабиринт', type: 'maze', secs: 210, pages: 3, guards: 2,
+      about: 'Бухгалтерию Ноля разорвали на листы и спрятали в тупиках живого лабиринта. Сторожа ходят по аллеям.',
+      intro: [['harry', 'Лабиринт старый, я в нём ребёнком терялся. Держись правой рукой за изгородь — выйдешь.'], ['hero', 'А листы?'], ['harry', 'В тупиках. Ноль любит тупики.']],
+      outro: [['hero', 'Три листа. Имена должников, суммы — и ставки на каждый их рейс.'], ['graves', 'Этого хватит для ордера. Если довезёте бумаги до участка на южном берегу. Целыми.']] },
+    { t: 'Разводной мост', type: 'bascule', start: [4000, 40, 'S'], goal: [4000, 630], goalName: 'Участок на южном берегу', secs: 90, chase: 2, rate: 0.05, near: 150, jumpV: 22,
+      obj: 'Довези бухгалтерию в участок на южном берегу.', failText: 'Не успели к участку. Через мост — и сразу на юг.',
+      about: 'Ноль узнал о бумагах и приказал развести мост — единственный короткий путь к участку.',
+      intro: [['penny', 'Люди Ноля у моста! Они дали сигнал разводить пролёты.'], ['hero', 'Значит, через мост — пока не развели.'], ['harry', 'Или над ним. Я в шестьдесят восьмом видел, как один кэб перепрыгнул. Нужна скорость — под восемьдесят.']],
+      outro: [['graves', 'Ордер подписан. Но сам Ноль в своём пабе принимает последние ставки — на вас, таксист.'], ['hero', 'И какие шансы?'], ['graves', 'Он говорит — ноль.']] },
+    { t: 'Тир Ноля', type: 'popup', n: 10, need: 8, shots: 14, friends: 4, friendMax: 1, show: 1.7,
+      about: 'В подвале паба Ноль держит тир: должники стреляют по картонным «должникам» на интерес. Сегодня ставка — его бухгалтерия.',
+      intro: [['zero', 'Таксист. Сыграем? Восемь попаданий из десяти — и я отдам остальное сам. Промах по прохожему — и вы уедете из Лондона.'], ['hero', 'По рукам.'], ['zero', 'Красные — должники. Синие с зонтом — прохожие. Не перепутайте.']],
+      outro: [['zero', 'Восемь. Ну что ж… ставки сделаны.'], ['penny', 'Он уходит через чёрный ход! Броневик у паба!']] },
+    { t: 'Таран', type: 'ram', start: [3640, 40, 'E'], boss: [3720, 40, 'E'], route: [[4240, 40], [4240, 630], [3760, 630], [3760, 40]], speed: 16, hp: 130, escorts: 2, far: 130, name: 'Броневик Ноля',
+      about: 'Мистер Ноль уходит на бронированной машине с последней книгой долгов. Пули её не берут.',
+      intro: [['graves', 'Броня, стёкла в три пальца. Мои ребята бессильны.'], ['harry', 'Кэб старый, но крепкий. Бей в бок, сынок, — как я учил.']],
+      outro: [['graves', 'Мистер Ноль, вы арестованы. Книга долгов — у нас.'], ['zero', 'Ставка… не сыграла.'], ['harry', 'Лицензия! Моя лицензия!'], ['penny', 'Спасибо, таксист. Ты научился держаться левой стороны быстрее любого новичка.'], ['hero', 'А теперь — Нью-Йорк. Там, говорят, правая.']] },
+  ],
+};
+EP_NAMES[21] = 'Лондон: туманный счёт';
+
+// ---------------- «Города мира» · Нью-Йорк: «Жёлтая лихорадка» (episode 22) ----------------
+Object.assign(WHO, {
+  rita: { name: 'Рита Маркони, «Жёлтый парк»', color: '#ffd23a', init: 'Р' },
+  sal: { name: 'Сэл, механик', color: '#9ad8a8', init: 'С' },
+  okafor: { name: 'Детектив Окафор', color: '#a8b8ff', init: 'Д' },
+  kein: { name: 'Виктор Кейн', color: '#e0c890', init: 'К' },
+});
+Object.assign(FACTIONS, { kein: { thug1: { Details: '#e0c890' }, thug2: { Shirt: '#1a1a22', Pants: '#101016', Hair: '#15151a' }, thug3: { Shirt: '#2a2418', Pants: '#101016', Hair: '#15151a' }, heavy: { Shirt: '#14141a', Pants: '#0e0e12' } } });
+EPS[22] = {
+  title: 'Жёлтая лихорадка', zone: 'ny', faction: 'kein', world: 'ny', chaseMsg: 'Люди Кейна на хвосте!',
+  logline: 'Третья неделя обмена — Нью-Йорк. Рита Маркони держит «Жёлтый парк», последний независимый таксопарк в городе. Виктор Кейн, «Король Медальонов», скупает лицензии такси, а тех, кто не продаёт, ломает: пробки, лёд, порванные тросы. Рита даёт тебе машину и просит продержаться неделю.',
+  endTitle: 'Медальоны свободны', endLead: 'Палата медальонов вскрыла сделки Кейна, лицензии вернулись водителям, а над воротами «Жёлтого парка» снова горит неон.',
+  teaser: 'Мировое турне закончено. Порт-Северный ждёт своего таксиста, а у Луки, Гарри и Риты теперь есть твой номер.',
+  chapters: [
+    { t: 'Счётчик', type: 'meter', start: [5440, 540, 'W'], secs: 360, target: 100, tip: 12, melt: 0.25,
+      about: 'Первая смена в Нью-Йорке. Рите нужна выручка, чтобы заплатить за медальоны, — иначе парк уйдёт Кейну.',
+      intro: [['rita', 'Ты — тот таксист по обмену? Отлично. Здесь всё просто: машут — подбирай, чаевые тают быстрее мороженого.'], ['hero', 'Сколько нужно?'], ['rita', 'Сотня за смену. Тогда я заплачу за медальоны в этом месяце.']],
+      outro: [['rita', 'Сотня. Неплохо для новичка. Кейн бы сказал: мало.'], ['hero', 'Кто такой Кейн?'], ['rita', 'Человек, который хочет, чтобы все такси в городе были его. Почти добился.']] },
+    { t: 'Пробка', type: 'gridlock', start: [4840, 40, 'E'], secs: 300, n: 9, every: 45,
+      stops: [[5320, 190, 'Офис медальонов'], [5560, 440, 'Набережная'], [4960, 600, 'Под эстакадой'], [5200, 590, 'Неоновая площадь']],
+      about: 'Кто-то перекрыл кварталы фургонами «на ремонт». Навигаторы ведут прямо в заторы, и такси Риты опаздывают.',
+      intro: [['sal', 'Сэл, механик. Слушай: фургоны с конусами стоят по всему району. Ремонта там нет. Это люди Кейна.'], ['hero', 'А навигатор?'], ['sal', 'Навигатор о них не знает. Смотри на красные огни — и объезжай.']],
+      outro: [['sal', 'На одном фургоне — наклейка «Кейн Логистикс». Даже не прячутся.'], ['rita', 'И пока мы стоим в пробках, его машины — на всех вызовах.']] },
+    { t: 'Эвакуатор', type: 'tow', start: [4840, 540, 'N'], goal: [5500, 58], goalName: '«Жёлтый парк»', secs: 240, rope: 7.5,
+      obj: 'Отбуксируй разбитое такси Риты в «Жёлтый парк».',
+      about: 'Ночью у трёх машин парка перерезали тормозные шланги. Одна стоит посреди района — её надо дотащить до гаража.',
+      intro: [['sal', 'Машина стоит на углу, тормоза перерезаны. Цепляй на трос, тащи в гараж.'], ['hero', 'Трос длинный?'], ['sal', 'Семь с половиной метров. В поворотах её будет заносить — поворачивай шире.']],
+      outro: [['sal', 'Смотри: шланг не перетёрся, его перерезали. Ровно, ножом.'], ['rita', 'Значит, война. Ладно. Мы тоже умеем.']] },
+    { t: 'Гололёд', type: 'ice', start: [5560, 640, 'N'], secs: 300, hits: 3, grip: 0.18,
+      stops: [[5080, 440, 'Госпиталь Святой Анны'], [4840, 140, 'Детская больница'], [5440, 240, 'Медцентр']],
+      about: 'Снежная буря. Город встал, машины скорой — в заносах. Рита отправляет своих водителей возить донорскую кровь.',
+      intro: [['rita', 'Буря, всё обледенело. Скорые не справляются — у нас кровь для трёх больниц.'], ['hero', 'На такси?'], ['rita', 'На такси. Только машину будет нести, как шайбу. Тормози заранее.']],
+      outro: [['okafor', 'Детектив Окафор. Видел вас на льду. Хорошая езда. А у меня к вам вопрос про Виктора Кейна.'], ['hero', 'Спрашивайте.'], ['okafor', 'Не здесь. Завтра, под эстакадой. И приезжайте вовремя.']] },
+    { t: 'Эстакада', type: 'elrun', need: 25, runs: 2, speed: 14, dwell: 3, window: 6, stops: [140, 340, 540],
+      about: 'Окафор не может прийти в парк открыто: Кейн следит. Папку с делом спустят на шнуре из окна поезда на эстакаде.',
+      intro: [['okafor', 'Я в среднем вагоне. Папку спущу на шнуре. Держись прямо под окном, пока не заберёшь.'], ['hero', 'А опоры?'], ['okafor', 'Опоры стоят. Поезд едет. Ты — между ними.']],
+      outro: [['hero', 'В папке — список: кто продал медальоны Кейну и за сколько. Половина — под угрозами.'], ['okafor', 'Свидетели есть. Но они боятся. Один будет на параде — завтра.']] },
+    { t: 'Парад', type: 'parade', start: [5200, 40, 'S'], secs: 260, floats: 16, gap: 18, speed: 5, touches: 2,
+      route: [[5080, 240], [5320, 240], [5320, 540], [5080, 540]],
+      stops: [[5200, 390, 'Трибуна свидетеля'], [5560, 340, 'Отель'], [5080, 440, 'Пресс-центр'], [4840, 640, 'Причал']],
+      about: 'День парада. Колонна платформ кружит по кварталам, а свидетель Окафора ждёт внутри кольца.',
+      intro: [['okafor', 'Свидетель на трибуне, внутри кольца парада. Колонна не остановится ни для кого.'], ['hero', 'Значит, в просвет.'], ['rita', 'Только не задень платформу с надувным котом. Это любимец города.']],
+      outro: [['okafor', 'Свидетель всё подтвердил. Но Кейн узнал: его люди ищут нашего человека.'], ['rita', 'Кейн снимает рекламу на своей площадке. Туда пускают только каскадёров — и я знаю режиссёра.']] },
+    { t: 'Каскадёр', type: 'speedgates', start: [4840, 40, 'E'], secs: 150, strikes: 3,
+      gates: [[4900, 40, 'x', 40, 60], [5020, 40, 'x', 70, 90], [5080, 90, 'z', 30, 50], [5080, 190, 'z', 60, 80], [5140, 240, 'x', 40, 60], [5260, 240, 'x', 80, 100], [5320, 290, 'z', 50, 70], [5320, 390, 'z', 85, 105], [5380, 440, 'x', 30, 50], [5500, 440, 'x', 60, 80]],
+      about: 'Кейн снимает рекламу «Такси будущего». Ты — каскадёр на съёмке, и у тебя десять дублей, чтобы попасть на площадку и в доверие.',
+      intro: [['rita', 'Режиссёр — мой старый клиент. Ворота с табло: в каждые — ровно на своей скорости.'], ['hero', 'А если быстрее?'], ['rita', 'Дубль испорчен. Три испорченных — и тебя выгонят со съёмки.']],
+      outro: [['hero', 'Пока снимали, я видел сейф в трейлере Кейна. И расписание: свидетеля повезут на остров, последним паромом.'], ['okafor', 'Тогда нам нужно быть на этом пароме раньше.']] },
+    { t: 'Паром', type: 'ferry', start: [5200, 440, 'E'], depart: 70, sail: 14, secs: 40, goal: [5712, 735], chase: 1,
+      about: 'Свидетеля Окафора нужно спрятать на острове с маяком. Последний паром отходит через минуту с небольшим.',
+      intro: [['okafor', 'Свидетель у тебя в машине. Паром на восточном пирсе, отходит ровно по расписанию.'], ['hero', 'А люди Кейна?'], ['okafor', 'Уже едут. Не останавливайся.']],
+      outro: [['okafor', 'На маяке он в безопасности. А у меня ордер — на стройку Кейна. Там, на кранах, он хранит то, что не доверяет сейфам.'], ['sal', 'На кранах? Я там работал. Балки ходят по кругу — главное, не смотреть вниз.']] },
+    { t: 'Стройка', type: 'beams', room: 'crane', secs: 120, falls: 3, face: 'E',
+      pads: [[-28, -4, -22, 4], [-8, -3, -2, 3], [12, -3, 18, 3], [26, -5, 30, 5]],
+      beams: [[-15, 0, 'x', 5.5, 6, 0], [5, 0, 'x', 5.5, 5, 1.3], [22, 0, 'x', 4, 4.5, 0.6]],
+      checks: [[-25, 0], [-5, 0], [15, 0], [28, 0]], guards: [[15, 2]],
+      about: 'Недостроенная башня Кейна. На вершине — ящик с документами медальонов, а дорога туда — по балкам, которые носят краны.',
+      intro: [['sal', 'Балки качаются туда-обратно. Встал — она тебя везёт. Сошёл у площадки — молодец.'], ['hero', 'А если не у площадки?'], ['sal', 'Страховка держит. Три раза.']],
+      outro: [['hero', 'Ящик пустой. Только записка: «Хранилище медальонов. Приходи, таксист».'], ['okafor', 'Он ждёт тебя. Значит, будет ловушка. Хорошо, что мы тоже придём.']] },
+    { t: 'Хранилище медальонов', type: 'lasers', room: 'vault', alarms: 2,
+      fences: [[-16, 3, 0.55, 0], [-8, 2.4, 0.6, 1], [0, 2, 0.5, 0.4], [8, 2.8, 0.65, 1.3], [14, 1.8, 0.45, 0.2]],
+      boss: { name: 'Виктор Кейн', look: 'baron', hp: 650 },
+      obj: 'Пройди лазеры и возьми Кейна у сейфа.',
+      about: 'Хранилище, где Кейн держит выкупленные медальоны. Лазерные заграждения включаются в такт, а сам Король ждёт у сейфа.',
+      intro: [['kein', 'Таксист из Порт-Северного. В Париже тебя хвалили, в Лондоне боялись. Здесь ты просто ещё один водитель без медальона.'], ['hero', 'Медальоны вернутся к водителям.'], ['kein', 'Тогда пройди лучи. Они гаснут на секунду. Иногда.']],
+      outro: [['okafor', 'Виктор Кейн, вы арестованы. Медальоны — улика.'], ['rita', 'Ты сделал это. «Жёлтый парк» живёт!'], ['sal', 'Я сварю тебе медальон из жести. Почётный.'], ['hero', 'Повесьте его над воротами. А я — домой, в Порт-Северный.']] },
+  ],
+};
+EP_NAMES[22] = 'Нью-Йорк: жёлтая лихорадка';
 // local activities in the suburbs: the same missions as in episodes 15 and 16, repeatable for coins
 function zoneTasks() {
   if (!pc) return [];
@@ -11123,7 +12557,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') updateDrive(dt); else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
