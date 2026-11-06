@@ -713,7 +713,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 </div>
 
 <script>
-window.APP_VER = 'v57'; window.__errs = [];
+window.APP_VER = 'v58'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -759,7 +759,11 @@ const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'h
 // hardware anti-aliasing, sharper shadows and the detailed models on phones too
 // a tab the browser killed (iOS: «на странице повторно возникла проблема» — out of memory) leaves nf-run behind: the next start goes lighter
 let CRASH_CRUMB = null;
-const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') || 0; if (localStorage.getItem('nf-run') === '1') { CRASH_CRUMB = localStorage.getItem('nf-crumb'); n++; localStorage.setItem('nf-crash', String(n)); } localStorage.setItem('nf-run', '1'); } catch (e) { /* storage unavailable */ } return n; })();
+const crumbStage = (st) => { try { const o = JSON.parse(localStorage.getItem('nf-crumb') || '{}'); o.stage = st; o.v = window.APP_VER; o.at = Date.now(); localStorage.setItem('nf-crumb', JSON.stringify(o)); } catch (e) { /* storage unavailable */ } };
+function crashReport(msg) {   // straight to the error table, right now (the page that sends it may itself die a few seconds later)
+  try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER, platform: 'boot', browser: navigator.userAgent.slice(0, 200), msg: String(msg).slice(0, 300), place: 'crash' }]) }).catch(() => {}); } catch (e) { /* no fetch */ }
+}
+const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') || 0; if (localStorage.getItem('nf-run') === '1') { CRASH_CRUMB = localStorage.getItem('nf-crumb'); n++; crashReport('crash x' + n + ': ' + (CRASH_CRUMB || 'no note')); localStorage.setItem('nf-crash', String(n)); } localStorage.setItem('nf-run', '1'); } catch (e) { /* storage unavailable */ } crumbStage('boot'); return n; })();
 { const mark = (on) => { try { if (on) localStorage.setItem('nf-run', '1'); else localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } };
   addEventListener('pagehide', () => mark(false)); addEventListener('pageshow', () => mark(true)); document.addEventListener('visibilitychange', () => mark(!document.hidden));
   setTimeout(() => { try { localStorage.setItem('nf-crash', '0'); } catch (e) { /* storage unavailable */ } }, 120000); }   // two minutes without a crash: the count starts over
@@ -9136,10 +9140,10 @@ let crumbAct = '';
 document.addEventListener('pointerdown', (e) => { const t = e.target && e.target.closest && e.target.closest('button,a,[id]'); crumbAct = t ? (t.id || t.className || t.tagName).toString().slice(0, 40) : ''; }, true);
 function crumbNow() {
   let mem = ''; try { const i = renderer.info.memory; mem = i.geometries + 'g/' + i.textures + 't'; } catch (e) { /* not yet */ }
-  return JSON.stringify({ v: APP_VER, m: state.mode, ep: state.ep, ch: state.ch, city: CITY ? CITY.id : '', gate: !$('gate').hidden, prof: !$('prof').hidden, modal: !$('modal').hidden, gfx: GFX.pref, pr: renderer.getPixelRatio(), mem, act: crumbAct, up: Math.round(performance.now() / 1000), dpr: window.devicePixelRatio, scr: screen.width + 'x' + screen.height, sa: !!(window.navigator.standalone || matchMedia('(display-mode: standalone)').matches), plat: PLATFORM });
+  return JSON.stringify({ v: APP_VER, stage: 'run', m: state.mode, ep: state.ep, ch: state.ch, city: CITY ? CITY.id : '', gate: !$('gate').hidden, prof: !$('prof').hidden, modal: !$('modal').hidden, gfx: GFX.pref, pr: renderer.getPixelRatio(), mem, act: crumbAct, up: Math.round(performance.now() / 1000), dpr: window.devicePixelRatio, scr: screen.width + 'x' + screen.height, sa: !!(window.navigator.standalone || matchMedia('(display-mode: standalone)').matches), plat: PLATFORM });
 }
 setInterval(() => { try { localStorage.setItem('nf-crumb', crumbNow()); } catch (e) { /* storage unavailable */ } }, 2000);
-if (CRASH_CRUMB) { window.__errs.push({ m: 'crash: the tab was killed; last note: ' + CRASH_CRUMB.slice(0, 260), p: 'crash x' + CRASH }); setTimeout(() => window.__errFlush(), 4000); }
+
 
 // ---------------- entry: «install the game» banner, then registration ----------------
 let deferredInstall = null;
@@ -9155,7 +9159,7 @@ const fsApi = () => document.documentElement.requestFullscreen || document.docum
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
 const isIPhone = /iPhone|iPod/.test(navigator.userAgent);
 function fsTry() {
-  if (PLATFORM !== 'web' || isStandalone() || !isTouch || !fsLand() || FS.declined || fsEl()) return;
+  if (PLATFORM !== 'web' || isIPhone || isStandalone() || !isTouch || !fsLand() || FS.declined || fsEl()) return;   // iPhone: Safari 26 may expose the API; we do not touch it there
   const el = document.documentElement, f = el.requestFullscreen || el.webkitRequestFullscreen;
   if (!f) return;
   try { const r = f.call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) { /* not allowed here */ }
@@ -12748,12 +12752,13 @@ function loop(now) {
 }
 
 $('loading').textContent = 'Загрузка города… 0%';
+crumbStage('assets');
 loadAssets((k) => { $('loading').textContent = 'Загрузка города… ' + Math.round(k * 80) + '%'; }).then(() => nrLoad((k) => { $('loading').textContent = 'Загрузка героев… ' + Math.round(80 + k * 20) + '%'; })).then(() => {
-  buildWorld();
-  loadProfile();   // a guest until the server session (if any) is restored
+  crumbStage('world'); buildWorld();
+  crumbStage('profile'); loadProfile();   // a guest until the server session (if any) is restored
   initLife();
   buildRoster();
-  renderPortraits();
+  crumbStage('portraits'); renderPortraits(); crumbStage('menu');
   pc = Object.assign(makeCar(0xffb703, true), { pos: new V3(-165, 0, 4), vel: new V3(), h: PI / 2, hp: 100, vf: 0 });
   pvEnemy = Object.assign(makeCar(0x2b2b33, false), { pos: new V3(), h: PI / 2 });
   applyChar(); updateProfChip(); updateBoostsHud();
