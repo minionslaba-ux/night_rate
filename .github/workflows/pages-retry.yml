@@ -1,14 +1,15 @@
 # Автоповтор выкладки на GitHub Pages.
-# Иногда выкладка GitHub зависает на «syncing_files» и падает по таймауту — тогда сайт может отдавать
-# смесь старых и новых файлов. Этот процесс ждёт окончания выкладки и, если она упала,
-# через минуту заказывает новую сборку того же коммита. Не больше 3 повторов на один коммит.
+# Иногда выкладка GitHub зависает или падает («Deployment failed, try again later», таймаут на «syncing_files») —
+# тогда сайт может отдавать смесь старых и новых файлов или старую версию.
+# Этот процесс запускается на каждую заливку в main, ждёт, чем кончится выкладка этого коммита,
+# и если она упала — заказывает новую сборку. До 3 повторов на коммит.
+# (Событие «выкладка завершилась» GitHub другим процессам не передаёт — поэтому следим сами.)
 # Вручную: Actions → «Повтор выкладки Pages» → Run workflow (просто закажет сборку заново).
 name: Повтор выкладки Pages
 
 on:
-  workflow_run:
-    workflows: ["pages build and deployment"]
-    types: [completed]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,35 +19,40 @@ permissions:
 
 concurrency:
   group: pages-retry
-  cancel-in-progress: false
+  cancel-in-progress: true   # новый коммит — следим уже за ним
 
 jobs:
-  retry:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
+  watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
-      - name: Заказать новую сборку
+      - name: Следить за выкладкой и повторить при сбое
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
-          WF: ${{ github.event.workflow_run.workflow_id }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -e
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            fails=$(gh api "repos/$REPO/actions/workflows/$WF/runs?head_sha=$SHA&per_page=30" \
-              --jq '[.workflow_runs[] | select(.conclusion == "failure")] | length')
-            echo "Неудачных выкладок коммита $SHA: $fails"
-            if [ "$fails" -gt 3 ]; then
-              echo "::warning::Уже было 3 повтора для этого коммита — больше не повторяю. Проверьте GitHub Status."
-              exit 0
-            fi
-            latest=$(gh api "repos/$REPO/commits/${{ github.event.repository.default_branch }}" --jq .sha)
-            if [ "$latest" != "$SHA" ]; then
-              echo "В ветке уже новый коммит ($latest) — его выкладка идёт своим ходом, повтор не нужен."
-              exit 0
-            fi
-            sleep 60
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            gh api -X POST "repos/$REPO/pages/builds" --jq '"Сборка заказана: " + .status'
+            exit 0
           fi
-          gh api -X POST "repos/$REPO/pages/builds" --jq '"Сборка заказана: " + .status'
+          WF=$(gh api "repos/$REPO/actions/workflows" --jq '.workflows[] | select(.path | endswith("pages-build-deployment")) | .id')
+          echo "Выкладка Pages: процесс $WF, коммит $SHA"
+          state() { gh api "repos/$REPO/actions/workflows/$WF/runs?head_sha=$SHA&per_page=10" \
+            --jq '[.workflow_runs[] | {s: .status, c: (.conclusion // "")}] | if length == 0 then "none" elif (map(select(.s != "completed")) | length) > 0 then "running" elif (map(select(.c == "success")) | length) > 0 then "success" else "failed:" + (map(select(.c == "failure")) | length | tostring) end'; }
+          for i in $(seq 1 110); do
+            st=$(state); echo "$(date +%H:%M:%S) $st"
+            case "$st" in
+              success) echo "Выкладка прошла."; exit 0 ;;
+              failed:*)
+                n=${st#failed:}
+                if [ "$n" -gt 3 ]; then echo "::warning::Выкладка упала $n раз — больше не повторяю. Проверьте GitHub Status."; exit 1; fi
+                sleep 30
+                gh api -X POST "repos/$REPO/pages/builds" --jq '"Повтор " + "'"$n"'" + ": сборка заказана (" + .status + ")"'
+                sleep 60 ;;
+              *) sleep 30 ;;
+            esac
+          done
+          echo "::warning::Выкладка не закончилась за отведённое время."
