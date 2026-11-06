@@ -1585,6 +1585,11 @@ function vilNavPts(pos, goal, out) {
   const row = (p, tol) => { let b = null, bd = tol; for (const z of VIL.lanes) { const d = Math.abs(p.z - z); if (d < bd && Math.abs(p.x) < laneEnd(z) + 8) { bd = d; b = z; } } return b; };
   const onMain = (p) => Math.abs(p.x) < 9, b = row(goal, 9) !== null ? row(goal, 9) : onMain(goal) ? null : row(goal, 48);
   let a = row(pos, 9);
+  // a goal between the gate and the first lane (the guard post, its car park) is reached from the main road, not through the yards
+  if (goal.z > VIL.lanes[0] + 12 && !onMain(goal)) {
+    if (!(Math.abs(pos.z - goal.z) < 10 && Math.sign(pos.x) === Math.sign(goal.x))) { if (a !== null && !onMain(pos)) out.push(new V3(0, 0, a)); out.push(new V3(0, 0, goal.z)); }
+    out.push(new V3(goal.x, 0, goal.z)); return;
+  }
   // in a yard or on the grass: first back out onto the nearest lane
   if (a === null && !onMain(pos)) { const r = row(pos, 48); if (r !== null) { out.push(new V3(pos.x, 0, r)); a = r; } }
   if (Math.hypot(goal.x - pos.x, goal.z - pos.z) < 26 || (a !== null && a === b) || (onMain(pos) && onMain(goal))) { out.push(new V3(goal.x, 0, goal.z)); return; }
@@ -6350,7 +6355,7 @@ const EPS = {
         about: 'Стюарды «нашли нарушение» и отправили такси на старт с пит-лейна, последним. Обогнать шесть машин — и вернуть место в финале.',
         intro: [['comment', 'Решение стюардов: такси наказано и стартует с пит-лейна! Странное решение, но…'], ['lanskaya', 'Двое из трёх стюардов вчера ужинали с Глянцевым. Ничего. Обгоняй — это ему труднее всего купить.']],
         outro: [['comment', 'Шесть обгонов! Такси снова в первой линии!'], ['glyantsev', 'Тамара Павловна, моё предложение по земле всё ещё в силе.'], ['lanskaya', 'А моё — встретиться в финале.']] },
-      { t: 'Финал', type: 'circuit', laps: 5, place: 1, grid: 4, skill: 0.88,
+      { t: 'Финал', type: 'circuit', laps: 5, place: 1, grid: 4, skill: 0.86,
         about: 'Финал Ночного кубка: пять кругов, восемь машин. Только победа покрывает долг таксопарка, а Блеск будет толкаться до последнего метра.',
         intro: [['comment', 'Финал! Пять кругов, восемь машин и призовой фонд, о котором говорит весь город.'], ['lanskaya', 'Блеск будет толкаться. Не ввязывайся. Его машина тяжёлая на выходе из поворотов — там и бери.'], ['host', 'Давай. Весь парк смотрит.']],
         outro: [['comment', 'Победа! Жёлтое такси выигрывает Ночной кубок!'], ['glyantsev', 'Поздравляю. Призовые выплачивает организатор кубка. А организатор… уже уехал.'], ['lanskaya', 'Он увёз кассу кубка! Деньги в его чёрной машине!'], ['orlova', 'Таксист, это капитан Орлова. Не трогай его. Мне нужен адрес, куда он едет, — тогда возьмём с поличным.']] },
@@ -9728,7 +9733,7 @@ Object.assign(GEN, {
       setObjective(`Парковка ${i + 1} из ${S.length}: ${q.name}. Встань ровно в рамку${q.rev ? ' задним ходом' : ''} и остановись.`);
     };
     show();
-    return { title, noFire: true, noFireMsg: 'Тут не стреляют', chase: { max: 0 }, get navName() { return S[i] ? S[i].name : ''; }, navGoal: () => (S[i] ? S[i].v : pc.pos),
+    return { title, noFire: true, noFireMsg: 'Тут не стреляют', chase: { max: 0 }, get spot() { return S[i]; }, get navName() { return S[i] ? S[i].name : ''; }, navGoal: () => (S[i] ? S[i].v : pc.pos),
       update(dt) {
         left -= dt; if (left <= 0) return failChapter('Не успел', 'Время вышло. Подъезжай медленно, выравнивай машину заранее, а в рамке — тормози.');
         const q = S[i], f = new V3(Math.sin(q.hh), 0, Math.cos(q.hh)), r = new V3(Math.cos(q.hh), 0, -Math.sin(q.hh)), d = pc.pos.clone().sub(q.v);
