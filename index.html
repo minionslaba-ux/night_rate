@@ -737,7 +737,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v74'; window.__errs = [];
+window.APP_VER = 'v75'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -8485,7 +8485,7 @@ const ITEMS = {
   medkit: { name: 'Аптечка', price: 150, desc: 'Сама лечит героя, когда здоровье падает ниже 30%.' },
   revive: { name: 'Второй шанс', price: 400, desc: 'Продолжить с места гибели без рекламы.' },
   x2: { name: 'Двойные монеты', price: 600, desc: 'Все монеты ×2 в следующем эпизоде.' },
-  auto: { name: 'Автопилот', price: 90, desc: 'Сам довезёт до цели навигатора: заказы такси и доставки без погони. Клавиша J. Отмена — руль, газ или кнопка. Чаевых за поездку на автопилоте нет.' },
+  auto: { name: 'Автопилот', price: 320, desc: 'Сам довезёт до цели навигатора: заказы такси и доставки без погони. Клавиша J. Отмена — руль, газ или кнопка. Чаевых за поездку на автопилоте нет.' },
 };
 const PACKS = {
   starter: { name: 'Стартовый набор', rub: 99, desc: 'Хэтч «Шустрик», 3 нитро, 3 аптечки и 2000 монет', grant: (p) => { if (!p.cars.includes('hatch')) { p.cars.push('hatch'); p.paints.hatch = ['red']; p.paint.hatch = 'red'; } p.inv.nitro += 3; p.inv.medkit += 3; p.coins += 2000; } },
