@@ -522,7 +522,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .note.good { border-left-color: #4dffa6; background: rgba(77,255,166,.08); }
 @media (max-width: 560px) { .btn.s3new { margin: 10px 0 0; } }
 .card-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; cursor: pointer; }
-#modalCard { position: relative; }
+#modalCard { position: relative; } #modal.over { z-index: 50; } .topup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; } .topup-row.best { border-color: var(--taxi); } .topup-row b { font-size: 15px; } .topup-row small { opacity: .7; } .topup { display: grid; gap: 8px; margin: 10px 0; }
 .chip { border: 1px solid var(--hair-2); background: transparent; color: var(--muted); border-radius: 2px; font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; }
 .chip.active { background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); }
 .hud-chip { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -737,7 +737,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v75'; window.__errs = [];
+window.APP_VER = 'v76'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5683,7 +5683,7 @@ function toast(text, sec) { const el = $('toast'); el.textContent = text; el.hid
 let objT = 0;   // когда (performance.now)  свернуть подсказку задания в одну строку (в открытом городе)
 function setObjective(t) { $('objText').textContent = t; $('objective').classList.remove('min'); objT = performance.now() + 8000; }
 function showModal(html, handlers) {
-  $('modalCard').innerHTML = html; $('modal').hidden = false;
+  $('modalCard').innerHTML = html; $('modal').hidden = false; $('modal').classList.remove('over');
   for (const id in handlers) { const b = $(id); if (b) b.addEventListener('click', handlers[id]); }
   const first = $('modalCard').querySelector('button:not(:disabled)'); if (first) first.focus();
 }
@@ -8557,7 +8557,29 @@ async function profLogout() { try { if (CLOUD.sb) await CLOUD.sb.auth.signOut();
 let achBusy = false;
 function walletAdd(n) { if (!n) return; PROF.coins += n; PROF.st.earned += Math.max(0, n); saveProfile(); checkAch(); }
 function canPay(price) { return PROF.god || PROF.coins >= price; }
-function pay(price) { if (!canPay(price)) return false; if (!PROF.god) PROF.coins -= price; saveProfile(); return true; }
+// not enough coins for a purchase: say how many are missing and offer the coin packs (roubles → Robokassa) right there
+function pay(price, what) { if (!canPay(price)) { needCoins(price, what); return false; } if (!PROF.god) PROF.coins -= price; saveProfile(); return true; }
+function needCoins(price, what, alt) {
+  const lack = Math.max(1, price - PROF.coins), web = PLATFORM === 'web';
+  // in the middle of a ride the game waits while the offer is open, and goes on when it closes
+  let held = null; if (state.mode === 'drive' || state.mode === 'foot') { held = state.mode; pausedFrom = held; state.mode = 'paused'; setEngine(0, false); }
+  const back = () => { if (held && state.mode === 'paused') { state.mode = held; state.fireLock = true; } held = null; };
+  const draw = () => {
+    const ok = web && PAY.ready && (!PAY.test || PROF.god), best = (COIN_PACKS.find(([, , c]) => c >= lack) || COIN_PACKS[COIN_PACKS.length - 1])[0];
+    const rate = COIN_PACKS[0][2] / COIN_PACKS[0][1], rubLack = Math.ceil(lack / rate);
+    const rows = COIN_PACKS.map(([id, rub, coins, bonus]) => `<div class="topup-row${id === best ? ' best' : ''}"><span><b>${coins.toLocaleString('ru-RU')} монет</b>${bonus ? ` <small>+${bonus}%</small>` : ''}${coins < lack ? ' <small>· не хватит</small>' : id === best ? ' <small>· хватит</small>' : ''}</span>${ok ? `<button id="tu_${id}" class="btn sm${id === best ? ' primary' : ''}" type="button">${rub} ₽</button>` : `<small>${rub} ₽</small>`}</div>`).join('');
+    const inGame = state.mode === 'drive' || state.mode === 'foot' || state.mode === 'paused';
+    const h = {}; COIN_PACKS.forEach(([id]) => { h['tu_' + id] = () => { hideModal(); back(); payBuy(id); }; }); h.tuClose = () => { hideModal(); back(); }; if (alt) h.tuAlt = () => { hideModal(); back(); alt.fn(); };
+    showModal(`<div class="kicker">Не хватает монет</div><h2 class="h2">Нужно ещё ${lack.toLocaleString('ru-RU')} монет</h2>
+      <p class="lead">${what ? esc(what) + ': ' : ''}${price.toLocaleString('ru-RU')} монет, у тебя ${PROF.coins.toLocaleString('ru-RU')}. Это примерно ${rubLack} ₽.</p>
+      <div class="topup">${rows}</div>
+      <p class="note">${ok ? 'Оплата через Робокассу: карта или СБП. Монеты придут в профиль сразу после оплаты.' + (inGame ? ' Миссия прервётся: после оплаты начни её заново.' : '') : web ? 'Пополнение через Робокассу скоро появится. Пока монеты дают миссии, заказы такси и задания в «Открытом городе».' : 'Монеты дают миссии, заказы такси и задания в «Открытом городе».'}</p>
+      <div class="btns">${alt ? `<button id="tuAlt" class="btn" type="button">${esc(alt.label)}</button>` : ''}<button id="tuClose" class="btn" type="button">${ok ? 'Не сейчас' : 'Понятно'}</button></div>`, h);
+    $('modal').classList.add('over');
+  };
+  draw();
+  if (web && !PAY.checked) payCheck().then(() => { if (!$('modal').hidden && $('modal').classList.contains('over')) draw(); });
+}
 function profStat(k, n) { if (k === 'chapters') runEnd('win'); PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(loginNudge, 3000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
@@ -8752,8 +8774,8 @@ function apAllowed() { return state.mode === 'drive' && !!MIS && MIS.apOk === tr
 function apChase() { return typeof enemyCars !== 'undefined' && enemyCars.some((e) => !e.dead && !e.script); }
 function apStart() {
   if (!apAllowed()) { toast('Здесь автопилот нельзя: только заказы такси и доставки без погони', 2.2); return; }
-  if (!PROF.inv.auto && !PROF.god) { toast('Автопилот: нет в запасе. Купи в магазине (Расходники).', 2); return; }
-  if (!PROF.god) PROF.inv.auto--; saveProfile();
+  if (!PROF.inv.auto && !PROF.god) { if (!pay(ITEMS.auto.price, 'Автопилот')) return; toast(`Автопилот куплен: −${ITEMS.auto.price} монет`, 1.6); } else if (!PROF.god) PROF.inv.auto--;
+  saveProfile();
   Object.assign(APL, { on: true, paused: false, used: true, slowT: 0, revT: 0, hard: 0, hardT: 0, lpT: 0 }); APL.lp.copy(pc.pos);
   toast('Автопилот включён. Руль или газ — и он отдаст управление.', 2); apHud();
 }
@@ -8962,9 +8984,9 @@ function useAmmo() {
 function buyAmmo() {
   if (PROF.god) return;
   const it = ITEMS.ammo;
-  if (pay(it.price)) { PROF.inv.ammo = (PROF.inv.ammo || 0) + it.pack; saveProfile(); toast(`+${it.pack} патронов · −${it.price} монет`, 1.4); sfx.bell(); }
-  // no coins: a short ad gives half a set, so a fight is never a dead end
-  else showAd(() => { PROF.inv.ammo = (PROF.inv.ammo || 0) + Math.round(it.pack / 2); saveProfile(); toast(`+${Math.round(it.pack / 2)} патронов`, 1.4); updateAmmoHud(); });
+  if (canPay(it.price)) { pay(it.price); PROF.inv.ammo = (PROF.inv.ammo || 0) + it.pack; saveProfile(); toast(`+${it.pack} патронов · −${it.price} монет`, 1.4); sfx.bell(); }
+  // no coins: the top-up offer, and a short ad for half a set, so a fight is never a dead end
+  else needCoins(it.price, 'Патроны', { label: `Реклама: +${Math.round(it.pack / 2)} патронов`, fn: () => showAd(() => { PROF.inv.ammo = (PROF.inv.ammo || 0) + Math.round(it.pack / 2); saveProfile(); toast(`+${Math.round(it.pack / 2)} патронов`, 1.4); updateAmmoHud(); }) });
   updateAmmoHud(); updateProfChip();
 }
 function updateAmmoHud() {
@@ -8992,7 +9014,7 @@ function openProfile(tab) { profTab = tab || profTab; profMsg = ''; $('prof').hi
 function closeProfile() { $('prof').hidden = true; if (state.mode === 'select') selectChar(curIdx); updateProfChip(); }
 function priceBtn(act, id, price, owned, label) {
   if (owned) return `<button class="btn sm" data-act="${act}" data-id="${id}" type="button">${label || 'Выбрать'}</button>`;
-  return `<button class="btn sm primary" data-act="buy-${act}" data-id="${id}" type="button" ${canPay(price) ? '' : 'disabled'}>${PROF.god ? 'Взять' : price.toLocaleString('ru-RU') + ' монет'}</button>`;
+  return `<button class="btn sm primary" data-act="buy-${act}" data-id="${id}" type="button">${PROF.god ? 'Взять' : price.toLocaleString('ru-RU') + ' монет'}</button>`;
 }
 function bar(v, max) { return `<div class="pbar"><i style="width:${Math.round(Math.min(1, v / max) * 100)}%"></i></div>`; }
 // «Способы входа»: what is linked to this profile, and buttons to add the rest
@@ -9068,11 +9090,11 @@ function renderProfile() {
     if (PLATFORM === 'web' && !PAY.checked) payCheck();
     const payShow = PLATFORM === 'web' && PAY.ready && (!PAY.test || PROF.god);
     h = `${payShow ? `<div class="plabel">Монеты${PAY.test ? ' · тестовый режим' : ''}</div><div class="pitems">${COIN_PACKS.map(([id, rub, coins, bonus]) => `<div class="pitem shop coin-pack"><b>${coins.toLocaleString('ru-RU')} монет${bonus ? ` <em>+${bonus}%</em>` : ''}</b><span>${bonus ? 'Выгоднее, чем по 3 монеты за рубль' : '3 монеты за рубль'}</span><button class="btn sm primary" data-act="buy-coins" data-id="${id}" type="button">${rub} ₽</button></div>`).join('')}</div><div class="note">Оплата через Робокассу. Монеты придут в профиль после оплаты — на всех устройствах.${PROF.cloud ? '' : ' Чтобы купить, войди в профиль.'}</div>` : ''}
-    <div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button" ${canPay(it.price) ? '' : 'disabled'}>${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
+    <div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button">${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
     <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
     <div class="pmsg">${esc(profMsg)}</div>`;
   } else if (profTab === 'up') {
-    h = '<div class="pitems">' + UPGRADES.map((u) => { const l = PROF.up[u.id]; return `<div class="pitem shop">${pimg('up', u.id, 1000 * (l + 1))}<b>${u.name}</b><span>${u.desc}</span><div class="pips">${[0, 1, 2, 3, 4].map((j) => `<i class="${j < l ? 'on' : ''}"></i>`).join('')}</div>${l >= UP_MAX ? '<button class="btn sm" disabled type="button">Максимум</button>' : `<button class="btn sm primary" data-act="buy-up" data-id="${u.id}" type="button" ${canPay(upPrice(l)) ? '' : 'disabled'}>${PROF.god ? 'Улучшить' : upPrice(l) + ' монет'}</button>`}</div>`; }).join('') + '</div>';
+    h = '<div class="pitems">' + UPGRADES.map((u) => { const l = PROF.up[u.id]; return `<div class="pitem shop">${pimg('up', u.id, 1000 * (l + 1))}<b>${u.name}</b><span>${u.desc}</span><div class="pips">${[0, 1, 2, 3, 4].map((j) => `<i class="${j < l ? 'on' : ''}"></i>`).join('')}</div>${l >= UP_MAX ? '<button class="btn sm" disabled type="button">Максимум</button>' : `<button class="btn sm primary" data-act="buy-up" data-id="${u.id}" type="button">${PROF.god ? 'Улучшить' : upPrice(l) + ' монет'}</button>`}</div>`; }).join('') + '</div>';
   } else {
     h = '<div class="pitems">' + ACH.map(([id, name, desc, reward, prog]) => { const [c, m] = prog(PROF), got = !!PROF.ach[id]; return `<div class="pitem ach${got ? ' on' : ''}"><b>${got ? '★ ' : ''}${name}</b><span>${desc} · награда ${reward}</span>${bar(got ? m : c, m)}<small>${got ? 'получено' : `${Math.min(c, m)} / ${m}`}</small></div>`; }).join('') + '</div>';
   }
@@ -9097,18 +9119,18 @@ function profAction(act, id) {
   }
   else if (act === 'logout') { CLOUD.links = null; profLogout().then(() => { gateMode = 'login'; gateAgain('Вы вышли из профиля. Войди снова, чтобы играть.'); }); return; }
   else if (act === 'outfit') { PROF.outfit = id || null; saveProfile(); applyLoadout(); }
-  else if (act === 'buy-outfit') { if (pay(OUTFITS[id].price)) { PROF.outfits.push(id); PROF.outfit = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'buy-outfit') { if (pay(OUTFITS[id].price, 'Костюм: ' + OUTFITS[id].name)) { PROF.outfits.push(id); PROF.outfit = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'car') { PROF.car = id; saveProfile(); applyLoadout(); }
   else if (act === 'wpn') { if (wpnOwned(id)) { PROF.weapon = id; saveProfile(); updateAmmoHud(); } }
-  else if (act === 'buy-wpn') { const w = WPN_BY[id]; if (w && wpnOpen(w) && !wpnOwned(id) && pay(w.price)) { PROF.weapons = (PROF.weapons || ['shmel']).concat([id]); PROF.weapon = id; saveProfile(); updateAmmoHud(); profMsg = `${w.name} теперь в руках.`; } }
-  else if (act === 'buy-car') { if (pay(CARS[id].price) && !has(PROF.cars, id)) { PROF.cars.push(id); PROF.paints[id] = [CARS[id].paint]; PROF.paint[id] = CARS[id].paint; PROF.car = id; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'buy-wpn') { const w = WPN_BY[id]; if (w && wpnOpen(w) && !wpnOwned(id) && pay(w.price, 'Оружие: ' + w.name)) { PROF.weapons = (PROF.weapons || ['shmel']).concat([id]); PROF.weapon = id; saveProfile(); updateAmmoHud(); profMsg = `${w.name} теперь в руках.`; } }
+  else if (act === 'buy-car') { if (!has(PROF.cars, id) && pay(CARS[id].price, 'Машина: ' + CARS[id].name)) { PROF.cars.push(id); PROF.paints[id] = [CARS[id].paint]; PROF.paint[id] = CARS[id].paint; PROF.car = id; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'paint') { const [c, p] = id.split(':'); PROF.paint[c] = p; saveProfile(); applyLoadout(); }
-  else if (act === 'buy-paint') { const [c, p] = id.split(':'); if (pay(300)) { (PROF.paints[c] = PROF.paints[c] || []).push(p); PROF.paint[c] = p; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'buy-paint') { const [c, p] = id.split(':'); if (pay(300, 'Краска')) { (PROF.paints[c] = PROF.paints[c] || []).push(p); PROF.paint[c] = p; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'nopass') profMsg = 'Этот цвет — из сезонного пропуска (вкладка «Магазин»).';
   else if (act === 'neon') { PROF.neon = id || null; saveProfile(); applyLoadout(); }
   else if (act === 'buy-neon') { if (pay(500)) { PROF.neons.push(id); PROF.neon = id; PROF.st.style = 1; saveProfile(); applyLoadout(); checkAch(); } }
-  else if (act === 'buy-item') { if (pay(ITEMS[id].price)) { PROF.inv[id] = (PROF.inv[id] || 0) + (ITEMS[id].pack || 1); saveProfile(); updateAmmoHud(); } }
-  else if (act === 'buy-up') { const l = PROF.up[id]; if (l < UP_MAX && pay(upPrice(l))) { PROF.up[id]++; saveProfile(); applyLoadout(); checkAch(); } }
+  else if (act === 'buy-item') { if (pay(ITEMS[id].price, ITEMS[id].name)) { PROF.inv[id] = (PROF.inv[id] || 0) + (ITEMS[id].pack || 1); saveProfile(); updateAmmoHud(); } }
+  else if (act === 'buy-up') { const l = PROF.up[id]; if (l < UP_MAX && pay(upPrice(l), 'Улучшение')) { PROF.up[id]++; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'buy-coins') { payBuy(id); return; }
   else if (act === 'buy-pack') {
     if (PROF.god) { PACKS[id].grant(PROF); saveProfile(); applyLoadout(); checkAch(); profMsg = `«${PACKS[id].name}» выдан (тестовый профиль).`; }
@@ -10375,11 +10397,11 @@ function careRender() {
   if (site.kind === 'fuel') {
     const need = Math.ceil(100 - s.f), full = Math.ceil(need * CARE_PRICE.fuel), part = Math.ceil(Math.min(25, need) * CARE_PRICE.fuel);
     h += `<div>Бак: <b>${Math.round(s.f)}%</b>. Полный бак хватает примерно на 12–15 поездок.</div>`;
-    h += need < 1 ? '<div class="note">Бак полный.</div>' : `<div class="btns">${btn('fill', 'Полный бак', full, !canPay(full))}${need > 25 ? btn('fill25', '+25%', part, !canPay(part)) : ''}</div>`;
+    h += need < 1 ? '<div class="note">Бак полный.</div>' : `<div class="btns">${btn('fill', 'Полный бак', full, false)}${need > 25 ? btn('fill25', '+25%', part, false) : ''}</div>`;
   } else if (site.kind === 'service') {
     const k = ins ? 0.2 : 1, need = Math.ceil(100 - s.c), full = Math.ceil(need * CARE_PRICE.repair * k), pneed = Math.max(0, Math.ceil(60 - s.c)), patch = Math.ceil(pneed * CARE_PRICE.patch * k);
     h += `<div>Кузов: <b>${Math.round(s.c)}%</b>. ${s.c < 50 ? 'Побитая машина едет медленнее.' : 'Машина в порядке.'}</div>`;
-    h += need < 1 ? '<div class="note">Ремонт не нужен.</div>' : `<div class="btns">${btn('repair', 'Полный ремонт', full, !canPay(full))}${pneed > 0 && pneed < need ? btn('patch', 'Подлатать до 60%', patch, !canPay(patch)) : ''}</div>`;
+    h += need < 1 ? '<div class="note">Ремонт не нужен.</div>' : `<div class="btns">${btn('repair', 'Полный ремонт', full, false)}${pneed > 0 && pneed < need ? btn('patch', 'Подлатать до 60%', patch, !canPay(patch)) : ''}</div>`;
     if (ins) h += `<div class="note">Страховка действует ещё ${Math.max(1, Math.round((ins.until - Date.now()) / 3600000))} ч: ремонт за 20% цены, эвакуатор раз в сутки бесплатно.</div>`;
     else h += `<div>Страховка на сутки: ремонт за 20% цены и бесплатный эвакуатор раз в сутки.</div><div class="btns">${btn('ins', 'Купить страховку', CARE_PRICE.ins, !canPay(CARE_PRICE.ins))}</div>`;
   } else {
@@ -10393,17 +10415,17 @@ function careAct(a) {
   const s = careState(), ins = careIns();
   if (a === 'fill' || a === 'fill25') {
     const add = a === 'fill' ? 100 - s.f : Math.min(25, 100 - s.f), price = Math.ceil(add * CARE_PRICE.fuel);
-    if (!pay(price)) { toast('Не хватает монет', 1.6); return; }
+    if (!pay(price, 'Сервис')) return;
     s.f = Math.min(100, s.f + add); sfx.bell(); toast(`Заправлено: бак ${Math.round(s.f)}%`, 1.8);
   } else if (a === 'repair' || a === 'patch') {
     const to = a === 'repair' ? 100 : 60, price = Math.ceil((to - s.c) * (a === 'repair' ? CARE_PRICE.repair : CARE_PRICE.patch) * (ins ? 0.2 : 1));
-    if (!pay(price)) { toast('Не хватает монет', 1.6); return; }
+    if (!pay(price, 'Сервис')) return;
     s.c = to; sfx.key(); toast(a === 'repair' ? 'Машина как новая' : 'Подлатали до 60%', 1.8);
   } else if (a === 'ins') {
-    if (!pay(CARE_PRICE.ins)) { toast('Не хватает монет', 1.6); return; }
+    if (!pay(CARE_PRICE.ins, 'Страховка')) return;
     PROF.ins = { until: Date.now() + 24 * 3600000, tow: (PROF.ins && PROF.ins.tow) || '' }; toast('Страховка на сутки оформлена', 2);
   } else if (a === 'wash') {
-    if (!canPay(CARE_PRICE.wash)) { toast('Не хватает монет', 1.6); return; }
+    if (!canPay(CARE_PRICE.wash)) { needCoins(CARE_PRICE.wash, 'Мойка'); return; }
     CARE.washT = 3; CARE.washSite = CARE.open; pc.vel.set(0, 0, 0); toast('Моем… стой на месте 3 секунды', 1.6);
   }
   careSave(true); careRender();
