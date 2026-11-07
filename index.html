@@ -757,7 +757,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v88'; window.__errs = [];
+window.APP_VER = 'v89'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5814,7 +5814,7 @@ function carPhysics(c, dt, throttle, steer, drift, maxF, keepSpeed) {
   const sp = clamp(Math.abs(vf) / 9, 0, 1);
   // in a drift, steering further into the slide fades past ~30° of slip (so the car holds an angle instead of spinning); countersteer always works
   const slip = Math.atan2(Math.abs(vr), Math.abs(vf) + 0.1), into = drift && -steer * vf * vr > 0 && slip > 0.55 ? clamp(1 - (slip - 0.55) / 0.5, 0.15, 1) : 1;
-  const turn = into * (drift ? (c.dOn < 0.25 && Math.abs(vf) > 12 ? 3.6 : 2.85) : 2.1) * sp * (vf < -0.5 ? -1 : 1) * (1 - (c === pc && !drift ? 0.5 : 0.3) * clamp(Math.abs(vf) / maxF, 0, 1));   // the player: the faster, the gentler (no weaving at top speed)
+  const turn = (c === pc && !drift ? 1.15 : 1) * into * (drift ? (c.dOn < 0.25 && Math.abs(vf) > 12 ? 3.6 : 2.85) : 2.1) * sp * (vf < -0.5 ? -1 : 1) * (1 - (c === pc && !drift ? 0.5 : 0.3) * clamp(Math.abs(vf) / maxF, 0, 1));   // the player: the faster, the gentler (no weaving at top speed)
   c.h = wrapA(c.h - steer * turn * dt);
   c.pos.addScaledVector(c.vel, dt);
   const imp = c.ghost ? 0 : collideCircle(c.pos, c.vel, 2.1);
@@ -12737,12 +12737,44 @@ Object.assign(GEN, {
     const route = c.route.map(([x, z]) => new V3(x, 0, z)), seg = [], n = c.floats || 10, gap = c.gap || 22, sp = c.speed || 5;
     let total = 0; for (let i = 0; i < route.length; i++) { const a = route[i], b = route[(i + 1) % route.length], l = a.distanceTo(b); seg.push({ a, b, l, s: total }); total += l; }
     const at = (s) => { s = ((s % total) + total) % total; const q = seg.find((g) => s >= g.s && s < g.s + g.l) || seg[0]; const k = (s - q.s) / q.l; return { p: new V3(q.a.x + (q.b.x - q.a.x) * k, 0, q.a.z + (q.b.z - q.a.z) * k), h: Math.atan2(q.b.x - q.a.x, q.b.z - q.a.z) }; };
+    // parade floats: a low platform on wheels pulled by a small tractor, a fringe skirt, garland lights and one of four decorations —
+    // an inflatable cat on strings, a tiered stage with a star, a pile of gift boxes, an arch of balloons (no masts: they read as boats)
+    const PG = { wheel: new THREE.CylinderGeometry(0.48, 0.48, 0.4, 12).rotateZ(Math.PI / 2), sph: new THREE.SphereGeometry(1, 14, 10), cone: new THREE.ConeGeometry(1, 1, 8),
+      cyl: new THREE.CylinderGeometry(1, 1, 1, 18), star: new THREE.OctahedronGeometry(1, 0), arch: new THREE.TorusGeometry(2.3, 0.32, 8, 20, Math.PI) };
     const F = []; for (let k = 0; k < n; k++) {
-      const g = new THREE.Group(), cl = pick([0xe83a5a, 0x3a8ae8, 0xf2c21a, 0x4ad87a, 0xb45ae8]);
-      const base = new THREE.Mesh(box1, std(cl, { roughness: 0.5 })); base.scale.set(5, 1.6, 9); base.position.y = 0.8; g.add(base);
-      const top = new THREE.Mesh(k % 3 === 0 ? new THREE.SphereGeometry(2.6, 14, 10) : new THREE.ConeGeometry(2.4, 4.5, 8), std(pick([0xffffff, 0xffd23a, 0xff8ac8]), { roughness: 0.4, emissive: new THREE.Color(cl).multiplyScalar(0.25) })); top.position.y = 4; g.add(top);
-      if (k % 2) { const bal = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 8), std(pick([0xff5a7a, 0x7ad0ff, 0xffe07a]), { roughness: 0.3 })); bal.scale.set(1, 1.3, 1); bal.position.y = 12; g.add(bal); const st = new THREE.Mesh(box1, std(0xdddddd)); st.scale.set(0.05, 6, 0.05); st.position.y = 7; g.add(st); }
-      for (const s of [-1, 1]) { const l = new THREE.Mesh(box1, basic(new THREE.Color(3, 2.6, 1.4))); l.scale.set(0.1, 0.3, 8.6); l.position.set(s * 2.55, 1.7, 0); g.add(l); }
+      const g = new THREE.Group(), cl = pick([0xe83a5a, 0x3a8ae8, 0xf2c21a, 0x4ad87a, 0xb45ae8]), kind = k % 4;
+      const part = (geo, mat, sx, sy, sz, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); g.add(m); return m; };
+      const dark = std(0x1c1c22, { roughness: 0.8 }), deckM = std(cl, { roughness: 0.5 }), fringe = std(0xffffff, { roughness: 0.6, emissive: new THREE.Color(cl).multiplyScalar(0.35) });
+      part(box1, dark, 4.4, 0.5, 8.2, 0, 0.55, -0.4);                                   // chassis
+      for (const [x, z] of [[-1.9, 2.4], [1.9, 2.4], [-1.9, -3.2], [1.9, -3.2]]) part(PG.wheel, dark, 1, 1, 1, x, 0.48, z);
+      part(box1, deckM, 5, 0.45, 8.4, 0, 1.05, -0.4);                                    // deck
+      part(box1, fringe, 5.15, 0.5, 8.55, 0, 0.62, -0.4);                                // fringe skirt
+      const cab = std(0xf4f4f0, { roughness: 0.45 }); part(box1, cab, 2.3, 1.5, 1.6, 0, 1.15, 4.6); part(box1, std(0x223040, { roughness: 0.2, metalness: 0.3 }), 2.1, 0.6, 0.05, 0, 1.55, 5.41);   // tractor + windscreen
+      for (const x of [-0.75, 0.75]) part(PG.wheel, dark, 0.8, 0.8, 0.8, x * 1.4, 0.4, 4.6);
+      for (const sx of [-1, 1]) part(box1, basic(new THREE.Color(3, 2.6, 1.4)), 0.1, 0.12, 8.3, sx * 2.55, 1.32, -0.4);   // garland lights
+      const pc2 = () => std(pick([0xff5a7a, 0x7ad0ff, 0xffe07a, 0x9aff7a, 0xff9a3a]), { roughness: 0.3 });
+      if (kind === 0) {                                // a big inflatable cat sitting on the deck, lit for the night
+        const col = pick([0xff8a2a, 0xffb04a, 0xf4f4f4]), fur = std(col, { roughness: 0.35, emissive: new THREE.Color(col).multiplyScalar(0.28) });
+        part(PG.sph, fur, 1.8, 2.1, 1.7, 0, 3.3, -0.8);                                      // body
+        part(PG.sph, fur, 1.35, 1.2, 1.25, 0, 5.9, -0.3);                                    // head
+        for (const x of [-0.75, 0.75]) part(PG.cone, fur, 0.5, 1.0, 0.45, x, 7.2, -0.3);     // ears
+        for (const x of [-0.55, 0.55]) part(PG.sph, basic(0x14141a), 0.2, 0.26, 0.12, x, 6.05, 0.92);   // eyes
+        part(PG.sph, std(0xffffff, { roughness: 0.4, emissive: new THREE.Color(0x444444) }), 0.55, 0.38, 0.35, 0, 5.55, 0.88);   // muzzle
+        part(PG.sph, std(0xff7a9a), 0.14, 0.1, 0.1, 0, 5.75, 1.2);                            // nose
+        for (const x of [-0.75, 0.75]) part(PG.sph, fur, 0.5, 0.45, 0.75, x, 1.65, 0.9);     // front paws
+        const tail = part(PG.sph, fur, 0.35, 1.9, 0.35, 0, 3.6, -2.8); tail.rotation.x = -0.5;
+      } else if (kind === 1) {                         // tiered stage with a star
+        part(PG.cyl, pc2(), 2.2, 1.1, 2.2, 0, 1.8, -0.6); part(PG.cyl, pc2(), 1.5, 1.1, 1.5, 0, 2.9, -0.6); part(PG.cyl, pc2(), 0.9, 1.0, 0.9, 0, 3.95, -0.6);
+        part(PG.star, std(0xffd23a, { roughness: 0.3, emissive: new THREE.Color(0xffb000).multiplyScalar(0.6) }), 0.9, 1.2, 0.35, 0, 5.4, -0.6);
+      } else if (kind === 2) {                         // gift boxes with ribbons
+        for (const [x, z, w, h] of [[-1.1, -2.2, 2, 2], [1.0, -1.6, 1.7, 1.5], [0, 0.9, 2.4, 2.6], [-0.9, 2.6, 1.3, 1.2]]) {
+          const b = part(box1, pc2(), w, h, w, x, 1.28 + h / 2, z), rib = std(0xffffff, { roughness: 0.4 });
+          part(box1, rib, w + 0.04, h + 0.04, 0.22, x, b.position.y, z); part(box1, rib, 0.22, h + 0.04, w + 0.04, x, b.position.y, z);
+        }
+      } else {                                         // arch of balloons across the deck
+        const ar = new THREE.Mesh(PG.arch, std(pick([0xff5a7a, 0x7ad0ff, 0xffe07a]), { roughness: 0.3 })); ar.position.set(0, 1.3, -0.6); g.add(ar);
+        for (let i = 0; i < 9; i++) { const a = Math.PI * i / 8; part(PG.sph, pc2(), 0.55, 0.65, 0.55, Math.cos(a) * 2.3, 1.3 + Math.sin(a) * 2.3, -0.6); }
+      }
       ctAdd(g); F.push({ g, s: k * (9 + gap) });
     }
     const S = c.stops.map(([x, z, nm]) => ({ v: new V3(x, 0, z), n: nm })); let si = 0, left = c.secs, touches = 0, cd = 0, mk = tMark(S[0].v.x, S[0].v.z, 0x4dffa6, 8);
