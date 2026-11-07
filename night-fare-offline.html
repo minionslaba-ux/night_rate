@@ -757,7 +757,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v89'; window.__errs = [];
+window.APP_VER = 'v90'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5886,8 +5886,26 @@ function diffMult() { const s = DIFF.srv[diffKey()]; return Math.max(0.2, (state
 // чем легче миссия, тем чаще враги пешком промахиваются: дополнительный разброс выстрела (рад)
 const diffSpread = () => (state.act === 2 ? Math.min(0.2, (1 - diffMult()) * 0.22) : 0);
 function diffLoad() { try { if (cloudInit()) CLOUD.sb.from('nf_diff').select('ch_key, mult').then(({ data }) => { for (const r of data || []) DIFF.srv[r.ch_key] = r.mult; }); } catch (e) { /* offline: no server multipliers */ } }
+// ---- mission journal (table nf_missions): start / win / fail / death / quit for every player, guests too —
+// which missions people abandon, fail or rush through (bot: /missions). One end per start.
+const MLOG = { sid: (() => { try { let v = localStorage.getItem('nf-sid'); if (!v) { v = Math.random().toString(36).slice(2, 12); localStorage.setItem('nf-sid', v); } return v; } catch (e) { return 'x'; } })(), t0: 0, open: false, type: '', title: '' };
+function missionLog(ev, reason, extra) {
+  try {
+    if (MIS && MIS.online) return;
+    if (ev === 'start') { MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey(); }
+    else { if (!MLOG.open) return; MLOG.open = false; }
+    const all = store.get('nf-tries') || {};
+    const row = { ver: window.APP_VER, sid: MLOG.sid, ep: MLOG.ep, ch: MLOG.ch, title: String(MLOG.title).slice(0, 90), mtype: String(MLOG.type).slice(0, 20), ev,
+      reason: reason ? String(reason).slice(0, 70) : null, secs: ev === 'start' ? 0 : Math.round((performance.now() - MLOG.t0) / 1000), tries: all[MLOG.key] || 0,
+      device: uaInfo().device, mods: (extra && extra.mods) || (MIS && MIS.modsTxt) || null, stars: (extra && extra.stars) || null, tester: !!PROF.god };
+    fetch(SB_URL + '/rest/v1/nf_missions', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([row]) }).catch(() => {});
+  } catch (e) { /* no journal */ }
+}
+// closing the game in the middle of a mission counts as quitting it
+addEventListener('pagehide', () => { if (MLOG.open) missionLog('quit', 'закрыл игру'); });
 function runEnd(result, reason) {
   if (MIS && MIS.online) return;
+  missionLog(result === 'win' ? 'win' : result === 'death' ? 'death' : 'fail', reason);
   DIFF.last = { key: diffKey(), result, reason };
   const key = diffKey(), all = store.get('nf-tries') || {}, tries = all[key] || 0, mult = Math.round(diffMult() * 100) / 100;
   if (result === 'win') delete all[key]; else all[key] = Math.min(9, tries + 1);
@@ -6537,7 +6555,7 @@ function failChapter(title, text) {
     mMenu: () => { hideModal(); showSelect(); },
   });
 }
-function startChapter(n) { saveLast(state.ep, n); state.fireLock = true; setMood('night'); if (state.ep === 2) [null, ch1, ch2, ch3, ch4, ch5, ch6][n](false); else startGen(state.ep, n - 1, false); }
+function startChapter(n) { saveLast(state.ep, n); state.fireLock = true; setMood('night'); if (state.ep === 2) { [null, ch1, ch2, ch3, ch4, ch5, ch6][n](false); if (MLOG.open) missionLog('quit', 'перезапуск'); missionLog('start', null, { type: 'ep2', title: 'Эпизод 2 · миссия ' + n }); } else startGen(state.ep, n - 1, false); }
 
 // ---- prologue + chapter 1: tail the courier ----
 function ch1(intro) {
@@ -6826,7 +6844,7 @@ function startEpisode(ep, ch) {
   if (hero) { scene.remove(hero.g); hero = null; }
   state.ep = ep; state.coins = 0; state.carKills = 0; state.footKills = 0; state.time = 0; state.reviveUsed = {}; state.doubled = false;
   state.x2 = false; state.nitroT = 0; state.shieldT = 0; if (PROF.inv.x2 > 0) { PROF.inv.x2--; state.x2 = true; saveProfile(); }
-  if (ep === 2) { if (ch === 1) ch1(true); else startChapter(ch); }
+  if (ep === 2) { if (ch === 1) { ch1(true); missionLog('start', null, { type: 'ep2', title: 'Эпизод 2 · миссия 1' }); } else startChapter(ch); }
   else startGen(ep, ch - 1, true);
 }
 function startSelected() { if (selEp >= 2) startEpisode(selEp, ep2Pick); else startMission(); }
@@ -7869,6 +7887,7 @@ function startGen(ep, i, withIntro) {
   const mode0 = state.mode;
   const intro = () => { if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; }); };
   if (E.season3 && c.type !== 'choice' && state.mode !== 'dialog') s3Trunk(intro); else intro();
+  if (MLOG.open) missionLog('quit', 'перезапуск'); missionLog('start', null, { type: c.type, title: c.t });
 }
 
 // the business jet: parked in hangar 3, or set down where a chapter needs it
@@ -13197,7 +13216,7 @@ function pauseGame() {
     pFlip: () => { if (ROTF) ROTF.flip(); },
     pGfx: () => { setGfx(HD() ? 'auto' : 'hd'); $('pGfx').textContent = 'Графика: ' + (HD() ? 'HD' : 'Авто'); },
     pProf: () => openProfile('garage'),
-    pMenu: () => { hideModal(); showSelect(); },
+    pMenu: () => { hideModal(); missionLog('quit', 'вышел в меню'); showSelect(); },
   });
 }
 // the «Профиль» button next to «Занос»: pause and open the garage (change the car, shop, or leave to the menu from the pause)
@@ -13391,7 +13410,7 @@ function startMission() {
   for (const e of enemies) scene.remove(e.g); enemies.length = 0;
   if (medkit) { scene.remove(medkit); medkit = null; }
   state.ep = 1; MIS = null; setMood('night');
-  setupAct1();
+  setupAct1(); state.act = state.act || 1; missionLog('start', null, { type: 'ep1', title: 'Эпизод 1 · Кейс' });
   state.mode = 'drive';
   playDialog([
     ['mark', `${CH.name}, приём. Кейс у тебя в багажнике. Довези его до склада номер семь на Северной. Без остановок.`],

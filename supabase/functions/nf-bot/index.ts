@@ -65,6 +65,7 @@ const ADMIN_COMMANDS = [
   { command: 'help', description: 'Все команды' },
   { command: 'reload', description: 'Перезагрузить игру у всех (очистить кэш)' },
   { command: 'loads', description: 'Загрузка игры по устройствам за сутки' },
+  { command: 'missions', description: 'Миссии: где бросают и где проваливают' },
   { command: 'stats', description: 'Отчёт за сегодня' },
   { command: 'yesterday', description: 'Отчёт за вчера' },
   { command: 'week', description: 'Отчёт за 7 дней' },
@@ -97,6 +98,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 
 🔄 /reload — перезагрузить игру у всех: очистить кэш и загрузить свежую версию
 ⏱ /loads — как грузится игра: устройства, браузеры, время до меню, сбои (сводка приходит сама каждое утро)
+🎯 /missions — миссии за 7 дней: сколько начали, прошли, провалили, бросили; где скучно и где сложно (/missions 1 — за сутки)
 🚨 О сбоях бот пишет сам (проверка раз в 2 минуты, не чаще раза в 5 минут) — с кнопкой перезагрузки
 
 📊 <b>Статистика</b>
@@ -328,6 +330,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
     }
     case 'reload': await say(await reloadAll()); return true;
     case 'loads': await say(await loadsReport(Number(rest) || 24)); return true;
+    case 'missions': await say(await missionsReport(Number(rest) || 7)); return true;
     case 'health': {
       const t0 = Date.now();
       const site = await fetch(SITE, { headers: { 'cache-control': 'no-cache' } }).then(async (r) => ({ ok: r.ok, code: r.status, body: await r.text() })).catch((e) => ({ ok: false, code: 0, body: String(e) }));
@@ -432,8 +435,40 @@ async function loadsReport(hours: number) {
   return `⏱ <b>Загрузка игры за ${hours} ч</b>: ${L.length} запусков, сбоев ${fails.length}, медиана до меню ${sec(med(all))}\n\n${rows.join('\n')}`
     + (slow.length ? `\n\n🐢 <b>Дольше 20 с</b>\n${slow.join('\n')}` : '') + (fl.length ? `\n\n❌ <b>Не загрузились</b>\n${fl.join('\n')}` : '');
 }
+// журнал миссий (таблица nf_missions): по каждой миссии — начали, прошли, провалили (провал + гибель), бросили (вышел в меню, закрыл игру,
+// начал заново), медианное время прохождения. Тестеры не считаются.
+async function missionsReport(days: number, short = false) {
+  const since = new Date(Date.now() - days * 864e5).toISOString();
+  const { data } = await db.from('nf_missions').select('sid, ep, ch, title, mtype, ev, reason, secs, stars').eq('tester', false).gte('created_at', since).limit(20000);
+  const L = data || [];
+  if (!L.length) return short ? '' : `🎯 Миссии за ${days} дн.: записей пока нет.`;
+  const M = new Map<string, any>();
+  for (const r of L) { const k = `${r.ep}:${r.ch}`; let m = M.get(k); if (!m) M.set(k, m = { k, ep: r.ep, ch: r.ch, title: r.title || '', type: r.mtype || '', start: 0, win: 0, fail: 0, quit: 0, sids: new Set(), t: [] as number[], why: new Map<string, number>() });
+    if (r.title) m.title = r.title;
+    if (r.ev === 'start') { m.start++; m.sids.add(r.sid); } else if (r.ev === 'win') { m.win++; if (r.secs) m.t.push(r.secs); } else if (r.ev === 'quit') m.quit++; else { m.fail++; if (r.reason) m.why.set(r.reason, (m.why.get(r.reason) || 0) + 1); } }
+  const med = (a: number[]) => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
+  const mm = (s: number) => s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '—';
+  const name = (m: any) => `${m.ep}-${m.ch} «${esc(String(m.title).replace(/^Миссия \d+ · /, '').slice(0, 30))}»`;
+  const all = [...M.values()], ok = all.filter((m) => m.start >= 3);
+  const quitR = ok.map((m) => ({ m, r: m.quit / m.start })).filter((x) => x.r > 0).sort((a, b) => b.r - a.r).slice(0, short ? 3 : 8);
+  const failR = ok.map((m) => ({ m, r: m.fail / Math.max(1, m.fail + m.win) })).filter((x) => x.r > 0).sort((a, b) => b.r - a.r).slice(0, short ? 3 : 8);
+  const players = new Set(L.filter((r) => r.ev === 'start').map((r) => r.sid)).size, starts = L.filter((r) => r.ev === 'start').length, wins = L.filter((r) => r.ev === 'win').length;
+  const qLines = quitR.map(({ m, r }) => `• ${name(m)} — бросили ${Math.round(r * 100)}% (${m.quit} из ${m.start})`);
+  const fLines = failR.map(({ m, r }) => { const w = [...m.why.entries()].sort((a, b) => b[1] - a[1])[0]; return `• ${name(m)} — провал ${Math.round(r * 100)}% (${m.fail} пров., ${m.win} прош.)${w ? ` · чаще: ${esc(w[0])}` : ''}`; });
+  if (short) return (qLines.length || fLines.length) ? `\n\n🎯 <b>Миссии за сутки</b>: ${starts} начато, ${wins} пройдено, игроков ${players}${qLines.length ? '\nБросают: ' + qLines.join(' ') : ''}${fLines.length ? '\nПроваливают: ' + fLines.join(' ') : ''}` : `\n\n🎯 Миссии за сутки: ${starts} начато, ${wins} пройдено, игроков ${players}.`;
+  // воронка: сколько разных игроков начинали каждый эпизод
+  const E = new Map<number, Set<string>>(); for (const r of L) if (r.ev === 'start') { if (!E.has(r.ep)) E.set(r.ep, new Set()); E.get(r.ep)!.add(r.sid); }
+  const funnel = [...E.entries()].sort((a, b) => a[0] - b[0]).map(([e, set]) => `${e}: ${set.size}`).join(' · ');
+  const fast = all.filter((m) => m.t.length >= 2).sort((a, b) => med(b.t) - med(a.t)).slice(0, 5).map((m) => `• ${name(m)} — ${mm(med(m.t))}`);
+  return `🎯 <b>Миссии за ${days} дн.</b>: начато ${starts}, пройдено ${wins}, игроков ${players}`
+    + `\n\n🚪 <b>Где бросают</b> (вышел, закрыл игру, начал заново)\n${qLines.join('\n') || '—'}`
+    + `\n\n💀 <b>Где проваливают</b>\n${fLines.join('\n') || '—'}`
+    + `\n\n⏳ <b>Самые долгие</b> (медиана прохождения)\n${fast.join('\n') || '—'}`
+    + `\n\n👥 <b>Игроков по эпизодам</b>\n${funnel}`
+    + `\n\n<i>В расчёт идут миссии, которые начали хотя бы 3 раза. Тестеры не считаются.</i>`;
+}
 async function loadsDaily() {
-  const text = await loadsReport(24); const { data: admins } = await db.from('nf_admins').select('tg_id');
+  const text = (await loadsReport(24)) + (await missionsReport(1, true).catch(() => '')); const { data: admins } = await db.from('nf_admins').select('tg_id');
   for (const a of admins || []) await api('sendMessage', { chat_id: a.tg_id, text, parse_mode: 'HTML' });
   return { sent: true };
 }
