@@ -66,6 +66,7 @@ const ADMIN_COMMANDS = [
   { command: 'reload', description: 'Перезагрузить игру у всех (очистить кэш)' },
   { command: 'loads', description: 'Загрузка игры по устройствам за сутки' },
   { command: 'missions', description: 'Миссии: где бросают и где проваливают' },
+  { command: 'dailytask', description: 'Пост о задании дня: превью (/dailytask now — опубликовать)' },
   { command: 'stats', description: 'Отчёт за сегодня' },
   { command: 'yesterday', description: 'Отчёт за вчера' },
   { command: 'week', description: 'Отчёт за 7 дней' },
@@ -98,6 +99,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 
 🔄 /reload — перезагрузить игру у всех: очистить кэш и загрузить свежую версию
 ⏱ /loads — как грузится игра: устройства, браузеры, время до меню, сбои (сводка приходит сама каждое утро)
+📅 /dailytask — пост о задании дня (сам выходит раз в 5 дней в 15:00 МСК): превью · /dailytask now — опубликовать сейчас
 🎯 /missions — миссии за 7 дней: сколько начали, прошли, провалили, бросили; где скучно и где сложно (/missions 1 — за сутки)
 🚨 О сбоях бот пишет сам (проверка раз в 2 минуты, не чаще раза в 5 минут) — с кнопкой перезагрузки
 
@@ -331,6 +333,10 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
     case 'reload': await say(await reloadAll()); return true;
     case 'loads': await say(await loadsReport(Number(rest) || 24)); return true;
     case 'missions': await say(await missionsReport(Number(rest) || 7)); return true;
+    case 'dailytask': {
+      if (arg === 'now') { const r = await dtaskRun(true); await say(r.ok ? `✅ Пост о задании дня опубликован.\n${r.vk}\n${r.max}` : `Не вышло: ${esc(r.error || r.skipped || '')}`); return true; }
+      await say(`📅 <b>Превью поста о задании дня</b> (обычно выходит сам раз в 5 дней в 15:00 МСК; опубликовать сейчас — /dailytask now):\n\n${await dtaskText()}`); return true;
+    }
     case 'health': {
       const t0 = Date.now();
       const site = await fetch(SITE, { headers: { 'cache-control': 'no-cache' } }).then(async (r) => ({ ok: r.ok, code: r.status, body: await r.text() })).catch((e) => ({ ok: false, code: 0, body: String(e) }));
@@ -467,6 +473,32 @@ async function missionsReport(days: number, short = false) {
     + `\n\n👥 <b>Игроков по эпизодам</b>\n${funnel}`
     + `\n\n<i>В расчёт идут миссии, которые начали хотя бы 3 раза. Тестеры не считаются.</i>`;
 }
+// пост о задании дня: в канал Telegram, на стену ВК и в канал MAX. Расписание (pg_cron) зовёт каждый день в 15:00 МСК,
+// а публикуется пост не чаще раза в 5 дней (метка dtask_last в nf_settings). Вид задания считается так же, как в игре.
+const DT_KINDS = ['race', 'collect', 'smash', 'photo', 'drift'];
+const DT_NAMES: Record<string, string> = { race: 'гонка по точкам', collect: 'сбор по району', smash: 'тараны на скорости', photo: 'фотоохота', drift: 'дрифт-шоу' };
+async function dtaskText() {
+  const n = Math.floor((Date.now() + MSK) / 864e5), kind = DT_KINDS[n % DT_KINDS.length], y = new Date(Date.now() + MSK - 864e5).toISOString().slice(0, 10);
+  const { data } = await db.from('nf_daily').select('user_id, secs, updated_at').eq('day', y).order('secs').order('updated_at').limit(10);
+  const ids = (data || []).map((r: any) => r.user_id), { data: ps } = ids.length ? await db.from('profiles').select('id, name, is_tester').in('id', ids) : { data: [] };
+  const P = new Map((ps || []).map((p: any) => [p.id, p]));
+  const top = (data || []).map((r: any) => ({ secs: r.secs, profiles: P.get(r.user_id) || {} })).filter((r: any) => !r.profiles.is_tester).slice(0, 3);
+  const nm = (s: string) => { const p = String(s || 'Таксист').trim().split(/\s+/); return esc(p[0].slice(0, 16) + (p[1] ? ' ' + p[1][0] + '.' : '')); };
+  const mm = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const winners = top.length ? `\n\n🏆 <b>Вчерашние лучшие</b>\n${top.map((r: any, i: number) => `${['🥇', '🥈', '🥉'][i]} ${nm(r.profiles.name)} — ${mm(r.secs)}`).join('\n')}` : '';
+  return `📅 <b>Задание дня</b> в «Ночном тарифе»\n\nКаждый день — одно задание для всех водителей города. Сегодня: <b>${DT_NAMES[kind]}</b>. Кто быстрее — тот выше в рейтинге дня.\n\n🎁 Первое прохождение за день — 150 монет, тройке лучших в полночь — 500, 300 и 200 монет.${winners}\n\nКнопка «Задание дня» — в главном меню игры.`;
+}
+async function dtaskRun(force = false) {
+  const today = mskNow().toISOString().slice(0, 10), last = await setting('dtask_last');
+  if (!force && last && (Date.parse(today) - Date.parse(last)) / 864e5 < 5) return { skipped: 'interval' };
+  const text = await dtaskText();
+  const r = await toChannel(text);
+  if (!r.ok) return { ok: false, error: r.description };
+  await setSetting('dtask_last', today);
+  const v = await toVk(text);
+  const mx = await maxBroadcast(db, text).catch((e) => ({ ok: 0, note: String(e) }));
+  return { ok: true, vk: vkNote(v), max: mx.note };
+}
 async function loadsDaily() {
   const text = (await loadsReport(24)) + (await missionsReport(1, true).catch(() => '')); const { data: admins } = await db.from('nf_admins').select('tg_id');
   for (const a of admins || []) await api('sendMessage', { chat_id: a.tg_id, text, parse_mode: 'HTML' });
@@ -590,7 +622,8 @@ Deno.serve(async (req) => {
     const key = await setting('cron_key');
     if (b && key && b.daily === key && b.max_test === true) return json({ max: await maxTest() });   // тот же ключ расписания: тестовый пост в MAX
     if (b && key && b.alerts === key) return json(await alertsRun());
-    if (b && key && b.loads === key) return json(await loadsDaily());   // каждое утро: сводка загрузок владельцу   // раз в 2 минуты: сбои игры → владельцу
+    if (b && key && b.loads === key) return json(await loadsDaily());
+    if (b && key && b.dtask === key) return json(await dtaskRun());   // каждый день в 15:00 МСК; пост — раз в 5 дней   // каждое утро: сводка загрузок владельцу   // раз в 2 минуты: сбои игры → владельцу
     if (b && key && b.daily === key) return json(await dailyRun());
     return json({ error: 'forbidden' }, 403);
   }
