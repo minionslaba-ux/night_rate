@@ -757,7 +757,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v87'; window.__errs = [];
+window.APP_VER = 'v88'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -837,6 +837,9 @@ const HD = () => GFX.pref === 'hd';
 if (CRASH >= 1) setTimeout(() => toast('Игра перезапустилась после сбоя: включена облегчённая графика. Вернуть HD можно в паузе.', 5), 6000);
 renderer.setPixelRatio(HD() ? PR_HD : PR_BASE);
 renderer.outputEncoding = THREE.sRGBEncoding;
+// no synchronous error check after every shader link: with it the page waited for each of ~60 shaders in turn before the first
+// frame (≈10 s frozen on a Mali-G57 phone). Without it the browser's GPU process compiles them in the background (see warmShaders)
+renderer.debug.checkShaderErrors = false;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
@@ -906,6 +909,17 @@ setupPost();
 // iPhone Safari killed the tab while the profile scrolled over a live WebGL scene (out of memory)
 const coverOpen = () => !$('prof').hidden || !$('gate').hidden || !$('modal').hidden;
 let coverDrawn = 0;
+// hand all of the scene's shaders to the GPU at once (they compile in the GPU process while the page goes on);
+// the first frame then mostly finds them ready instead of building each one in turn
+function warmShaders() {
+  const odd = [];   // helper objects that carry a material but no geometry would break renderer.compile: set aside for the call
+  scene.traverse((o) => { if (o.material && !o.geometry && !o.isScene) { odd.push([o, o.material]); o.material = undefined; } });
+  // the scene is drawn into the post-processing buffer (linear, no tone mapping) — compile for that target, or the keys will not match
+  const prev = renderer.getRenderTarget();
+  try { const t = performance.now(); if (composer) renderer.setRenderTarget(composer.renderTarget1); renderer.compile(scene, camera); window.__warm = Math.round(performance.now() - t); } catch (e) { /* the first frame compiles whatever is left */ }
+  renderer.setRenderTarget(prev);
+  for (const [o, m] of odd) o.material = m;
+}
 function render() {
   if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else { coverDrawn = 0; if (RS.pending) resize(); }
   if (perf.shadowSkip) { renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = (perf.fn++ & 1) === 0; }
@@ -5800,7 +5814,7 @@ function carPhysics(c, dt, throttle, steer, drift, maxF, keepSpeed) {
   const sp = clamp(Math.abs(vf) / 9, 0, 1);
   // in a drift, steering further into the slide fades past ~30° of slip (so the car holds an angle instead of spinning); countersteer always works
   const slip = Math.atan2(Math.abs(vr), Math.abs(vf) + 0.1), into = drift && -steer * vf * vr > 0 && slip > 0.55 ? clamp(1 - (slip - 0.55) / 0.5, 0.15, 1) : 1;
-  const turn = into * (drift ? (c.dOn < 0.25 && Math.abs(vf) > 12 ? 3.6 : 2.85) : 2.1) * sp * (vf < -0.5 ? -1 : 1) * (1 - 0.3 * clamp(Math.abs(vf) / maxF, 0, 1));
+  const turn = into * (drift ? (c.dOn < 0.25 && Math.abs(vf) > 12 ? 3.6 : 2.85) : 2.1) * sp * (vf < -0.5 ? -1 : 1) * (1 - (c === pc && !drift ? 0.5 : 0.3) * clamp(Math.abs(vf) / maxF, 0, 1));   // the player: the faster, the gentler (no weaving at top speed)
   c.h = wrapA(c.h - steer * turn * dt);
   c.pos.addScaledVector(c.vel, dt);
   const imp = c.ghost ? 0 : collideCircle(c.pos, c.vel, 2.1);
@@ -6045,11 +6059,12 @@ function updateDrive(dt) {
   let jt = 0, js = 0; const jl = Math.hypot(joy.x, joy.y);
   if (jl > 0.16) {
     const mag = Math.min(1, (jl - 0.16) / 0.7), a = Math.atan2(joy.x, -joy.y);
-    if (Math.abs(a) < 2.2) { jt = mag; const k = clamp(a / 1.15, -1, 1); js = Math.sign(k) * Math.pow(Math.abs(k), 1.35); }
+    if (Math.abs(a) < 2.2) { jt = mag; const aa = Math.max(0, Math.abs(a) - 0.14), k = clamp(aa / 1.01, 0, 1); js = Math.sign(a) * Math.pow(k, 1.6); }   // ±8° around «straight ahead» is straight
     else { jt = -mag * 0.85; js = clamp(joy.x * 1.2, -1, 1); }
   }
   if (APL.on && !APL.paused) { const a = apControl(dt); steerKey = 0; thrKey = a.t; js = a.s; jt = 0; }
-  pc.steerSm = (pc.steerSm || 0) + (clamp(steerKey + js, -1, 1) - (pc.steerSm || 0)) * Math.min(1, dt * (steerKey ? 14 : 9));
+  { const tgt = clamp(steerKey + js, -1, 1), cur = pc.steerSm || 0, fast = clamp(Math.abs(pc.vf || 0) / 30, 0, 1), turnIn = Math.abs(tgt) > Math.abs(cur) && Math.sign(tgt || cur) === Math.sign(cur || tgt);
+    pc.steerSm = cur + (tgt - cur) * Math.min(1, dt * (steerKey ? (turnIn ? 14 - 8 * fast : 16) : 9)); }
   const throttle = clamp(thrKey + jt, -1, 1), steer = pc.steerSm;
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
   { const sp = Math.hypot(pc.vel.x, pc.vel.z), side = Math.abs(pc.vr || 0);
@@ -13564,6 +13579,7 @@ BOOT_LOAD.then(() => {
   applyChar(); updateProfChip(); updateBoostsHud();
   $('loading').hidden = true;
   showPreview(); $('ageBadge').hidden = PLATFORM !== 'vk';
+  warmShaders();   // every shader of the menu scene handed to the GPU at once (after the cars: their lights change the shaders)
   requestAnimationFrame(() => requestAnimationFrame(() => { crumbStage('first'); loadReport(true, 'menu'); setTimeout(() => { if (state.mode === 'preview' || state.mode === 'select') renderPortraits(); }, 1200); }));
   // a signed-in player skips the entry screen; wait for the server at most 4 s
   diffLoad();
