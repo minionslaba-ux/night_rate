@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v93'; window.__errs = [];
+window.APP_VER = 'v94'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -11062,6 +11062,41 @@ function genTask2(id, near) {
   }
   const title = pk(T2_TITLES[type]).replace('{n}', cnt).replace('{s}', stuff).replace('{c}', client);
   return { id, group, tier, type: type === 'rush' ? 'deliver' : type === 'fragile' ? 'fragile' : type, kind: type, c, title, brief: brief + (group ? ' Засчитывается всей группе.' : ''), reward: Math.round(base * mult) };
+}
+// ---- episodes 3–12 remixed: about half of the mid-episode shootouts became driving missions (finales and key scenes stay).
+// The parameters come from the open-city task generator (points on the real roads), the story text is written for each one.
+function pickT2(kind, near, salt) {
+  for (let k = 0; k < 4000; k++) { const t = genTask2(T2_FROM + 4000 + salt * 37 + k, near); if (t.kind === kind) return t.c; }
+  return null;
+}
+const EP_REMIX = [
+  { ep: 3, ch: 2, kind: 'collect', start: [-80, -60, 'N'], t: 'Чистые номера',
+    about: 'Марку нужны заготовки, краска и трафареты, чтобы перебить номера. Всё это у знакомых по всему району — объехать точки, пока «Ночные» не вычислили гараж.',
+    intro: [['mark', 'Номера перебить — полдела. Нужны заготовки, краска и трафареты, а они у моих знакомых по всему району.'], ['hero', 'Сколько точек?'], ['mark', 'Все горят на карте. Проезжай прямо через метки — ребята закинут всё в окно.']] },
+  { ep: 4, ch: 4, kind: 'escort', start: [0, -60, 'N'], t: 'Фургон с сервером', name: 'Фургон Лёвы',
+    about: 'Лёва угнал фургон гастролёров вместе с их сервером и ведёт его к себе. Держаться рядом и не дать бирюзовым машинам отбить фургон.',
+    intro: [['leva', 'Я угнал их фургон вместе с сервером! Расшифрую по дороге.'], ['hero', 'Гастролёры это так не оставят.'], ['leva', 'Поэтому ты едешь рядом. Не отставай!']] },
+  { ep: 5, ch: 3, kind: 'photo', start: [0, 0, 'N'], t: 'Камеры города',
+    about: 'Пульт диспетчерской сгорел, но городские камеры успели засечь лимузин Хозяина. Объехать места и снять записи — Лёва сложит маршрут.',
+    intro: [['leva', 'Пульт сгорел, когда я подключился. Но камеры на перекрёстках пишут запись прямо на месте.'], ['leva', 'Подъезжай к каждой и стой пару секунд — я скачаю запись по воздуху.'], ['hero', 'Фотоохота на собственного начальника. Прекрасно.']] },
+  { ep: 7, ch: 4, kind: 'smash', start: [-80, -40, 'N'], t: 'Баррикады',
+    about: 'Последний резерв Веры перегородил подъезды к складу №7. Снести заграждения на скорости, пока охрана не опомнилась.',
+    intro: [['mark', 'Все улицы к складу перекрыты заграждениями.'], ['hero', 'Значит, останавливаться не будем.'], ['mark', 'Только разгонись как следует: на малой скорости их не пробить.']] },
+  { ep: 8, ch: 6, kind: 'race', start: [0, -80, 'N'], t: 'Вышки связи',
+    about: 'Сервер «Гранита» выходит в сеть только через городские вышки связи. Соня ловит его на ходу — проехать вышки по порядку, пока не сменили канал.',
+    intro: [['sonya', 'Их сервер не в сети, он ходит через городские вышки. Мне нужно проехать рядом с каждой, по порядку.'], ['hero', 'Сколько у нас времени?'], ['sonya', 'Пока они не поменяли канал. Гони.']] },
+  { ep: 9, ch: 2, kind: 'collect', start: [-80, -60, 'S'], t: 'Будки',
+    about: 'Чтобы обесточить квартал банка, не трогая охраняемую подстанцию, нужно проехать через трансформаторные будки на улицах — Соня отключает их по сигналу.',
+    intro: [['sonya', 'Подстанцию охраняют, но квартал питается ещё и от будок на улицах. Проезжай через каждую — я отключаю их по сигналу с твоего телефона.'], ['hero', 'А охрана?'], ['sonya', 'Охрана сидит на подстанции. Будки никто не стережёт.']] },
+  { ep: 11, ch: 4, kind: 'smash', start: [0, -60, 'N'], t: 'Топливо',
+    about: 'Подъезды к вертолётной площадке «Сокола» перекрыты заграждениями, за каждым — бочки с топливом. Снести их на скорости, пока вертолёт не заправился.',
+    intro: [['hero', 'Заграждения на всех подъездах, а за ними бочки с топливом.'], ['mark', 'Стрелять бесполезно, их там десятки. Тарань на скорости — бочки вспыхнут сами.']] },
+];
+for (const R of EP_REMIX) {
+  const E = EPS[R.ep], old = E && E.chapters[R.ch - 1]; if (!old || old.type !== 'arena') continue;
+  const cfg = pickT2(R.kind, { x: R.start[0], z: R.start[1], h: hdg(R.start[2]) }, R.ep * 10 + R.ch); if (!cfg) continue;
+  if (R.name) cfg.name = R.name;
+  E.chapters[R.ch - 1] = Object.assign(cfg, { t: R.t, type: R.kind, start: R.start, about: R.about, intro: R.intro, outro: old.outro, coins: old.coins, mood: old.mood, remix: true });
 }
 // glowing markers for several targets at once
 function tMark(x, z, color, tall) {
