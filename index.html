@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
+<!-- the heaviest files of the first screen start downloading at once, before the big game script is read -->
+<link rel="preload" href="lib/three/build/three.min.js" as="script">
+<link rel="preload" href="assets/models/car.glb" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="assets/city.glb" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="assets/anims.glb" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="assets/models/woman.glb" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="assets/models/michelle.glb" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="assets/models/man.glb" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="assets/models/anims.glb" as="fetch" crossorigin="anonymous">
 <meta name="theme-color" content="#0b0d1f">
 <link rel="icon" href="favicon.ico" sizes="48x48">
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
@@ -619,6 +628,7 @@ setTimeout(function () {
   var l = document.getElementById('loading'); if (!l || l.hidden || window.__nfMsg) return;
   var st = ''; try { st = localStorage.getItem('nf-crumb') || ''; } catch (e) { /* storage unavailable */ }
   try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER || 'pre', platform: 'stuck', browser: navigator.userAgent.slice(0, 200), msg: ('stuck 30s: «' + l.textContent + '» three=' + !!window.THREE + ' sb=' + !!window.supabase + ' err=' + ((window.__errs || []).map(function (e) { return e.m + ' @' + e.p; }).join(' | ').slice(0, 160) || '-') + ' ' + st).slice(0, 300), place: 'boot' }]) }).catch(function () {}); } catch (e) { /* offline */ }
+  try { var ua = navigator.userAgent, dev = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android-телефон' : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : 'другое'; fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/nf_loads', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER || 'pre', device: dev, browser: ua.slice(0, 40), ok: false, stage: 'stuck', note: ('«' + l.textContent + '» three=' + !!window.THREE + ' ' + st).slice(0, 300) }]) }).catch(function () {}); } catch (e) { /* offline */ }
   l.innerHTML = 'Загрузка затянулась.<br><button type="button" style="margin-top:14px;padding:12px 22px;font:700 15px sans-serif;border-radius:8px;border:0;background:#ffc43d;color:#111" onclick="nfHardReload()">Перезапустить игру</button>';
 }, 30000);
 </script>
@@ -745,7 +755,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v83'; window.__errs = [];
+window.APP_VER = 'v85'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -805,7 +815,7 @@ const renderer = (() => {
 // hardware anti-aliasing, sharper shadows and the detailed models on phones too
 // a tab the browser killed (iOS: «на странице повторно возникла проблема» — out of memory) leaves nf-run behind: the next start goes lighter
 let CRASH_CRUMB = null;
-const crumbStage = (st) => { try { const o = JSON.parse(localStorage.getItem('nf-crumb') || '{}'); o.stage = st; o.v = window.APP_VER; o.at = Date.now(); localStorage.setItem('nf-crumb', JSON.stringify(o)); } catch (e) { /* storage unavailable */ } };
+const crumbStage = (st) => { try { (window.__boot = window.__boot || {})[st] = Math.round(performance.now()); } catch (e) { /* old browser */ } try { const o = JSON.parse(localStorage.getItem('nf-crumb') || '{}'); o.stage = st; o.v = window.APP_VER; o.at = Date.now(); localStorage.setItem('nf-crumb', JSON.stringify(o)); } catch (e) { /* storage unavailable */ } };
 function crashReport(msg) {   // straight to the error table, right now (the page that sends it may itself die a few seconds later)
   try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER, platform: 'boot', browser: navigator.userAgent.slice(0, 200), msg: String(msg).slice(0, 300), place: 'crash' }]) }).catch(() => {}); } catch (e) { /* no fetch */ }
 }
@@ -4840,11 +4850,12 @@ function texCap(root, gl) {
   root.traverse((o) => { const ms = o.material ? [].concat(o.material) : []; for (const m of ms) for (const k in m) { const t = m[k]; if (!t || !t.isTexture || texCapDone.has(t)) continue; texCapDone.add(t); const im = t.image, w = im && im.width, h = im && im.height; if (!w || !h || Math.max(w, h) <= TEX_CAP) continue;
     try { const f = TEX_CAP / Math.max(w, h), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * f)); c.height = Math.max(1, Math.round(h * f)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); if (im.close) im.close(); t.image = c; t.needsUpdate = true; } catch (e) { /* keep the original */ } } });
 }
-function nrLoad(onProgress) {
+function nrLoad(onProgress, after) {
   if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') return Promise.resolve(false);
   const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
   let done = 0;
   return Promise.all(NR_SRC.map((k) => new Promise((res, rej) => loader.load('assets/models/' + k + '.glb', (g) => { texCap(g.scene, g); NR.G[k] = g; done++; if (onProgress) onProgress(done / NR_SRC.length); res(); }, undefined, rej))))
+    .then(() => after)
     .then(() => {
       for (const c of NR.G.anims.animations) if (/Idle|Walk|Run/.test(c.name)) NR.clips[c.name.replace(/.*\|/, '')] = c;
       // the car keeps only positions in the file: rebuild its normals
@@ -13089,7 +13100,9 @@ function drawPortrait(cv, ch) {
   g.fillStyle = 'rgba(255,225,160,.45)'; for (let i = 0; i < 14; i++) g.fillRect(((i * 37) % 96 + 2) * W / 100, (36 + ((i * 23) % 50)) * H / 120, 3, 3);
 }
 // head-and-shoulders renders of the real 3D models for the roster cards
+let portraitsDone = false;
 function renderPortraits() {
+  if (portraitsDone) return; portraitsDone = true;
   let pr;
   try { pr = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); } catch (e) { return; }
   pr.setPixelRatio(1); pr.setSize(200, 240, false); pr.outputEncoding = THREE.sRGBEncoding; pr.toneMapping = THREE.ACESFilmicToneMapping; pr.setClearColor(0x000000, 0);
@@ -13160,6 +13173,7 @@ function updateSelect(dt) {
   poseHuman(showFig, { idle: true, t: state.t });
 }
 function showSelect() {
+  renderPortraits();   // drawn after the first screen; here at the latest
   // journal: who sends a player to the garage in the middle of a mission
   if (['drive', 'foot', 'dialog', 'paused', 'cine', 'end'].includes(state.mode)) trace('to garage from ' + state.mode + ' ep' + state.ep + ':' + state.ch + ' modal=' + !$('modal').hidden + ' | ' + String((new Error().stack || '')).split('\n').slice(2, 5).map((l) => l.trim().replace(/^at /, '').replace(/\(?https?:[^)]*:(\d+):\d+\)?/, ':$1')).join(' < '));
   s3VikBack(); S3.kitW = null;
@@ -13423,17 +13437,40 @@ function loop(now) {
 
 $('loading').textContent = 'Загрузка города… 0%';
 crumbStage('assets');
-loadAssets((k) => { $('loading').textContent = 'Загрузка города… ' + Math.round(k * 80) + '%'; }).then(() => nrLoad((k) => { $('loading').textContent = 'Загрузка героев… ' + Math.round(80 + k * 20) + '%'; })).then(() => {
+{ const LP = { a: 0, n: 0 }, show = () => { $('loading').textContent = 'Загрузка города… ' + Math.round(LP.a * 70 + LP.n * 30) + '%'; };
+  const kit = loadAssets((k) => { LP.a = k; show(); }); window.__bootT = { kitStart: performance.now() };
+  var BOOT_LOAD = Promise.all([kit, nrLoad((k) => { LP.n = k; show(); }, kit)]); }
+// ---------------- load timings from real devices (table nf_loads): what device and browser, how long each stage took ----------------
+function uaInfo() {
+  const ua = navigator.userAgent || '', m = (re) => (ua.match(re) || [])[1] || '';
+  const ipad = /iPad/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+  const device = /iPhone/.test(ua) ? 'iPhone' : ipad ? 'iPad' : /Android/.test(ua) ? (/Mobile/.test(ua) ? 'Android-телефон' : 'Android-планшет') : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'другое';
+  const os = /iPhone|iPad/.test(ua) || ipad ? 'iOS ' + (m(/OS (\d+)[_.]/) || m(/Version\/(\d+)/)) : /Android/.test(ua) ? 'Android ' + m(/Android (\d+)/) : /Windows NT/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : '';
+  const browser = /VKAndroidApp|vkclient|VKApp/i.test(ua) ? 'ВК-приложение' : /Telegram/i.test(ua) ? 'Telegram' : /YaBrowser|YaApp/.test(ua) ? 'Яндекс ' + m(/YaBrowser\/(\d+)/) : /SamsungBrowser/.test(ua) ? 'Samsung ' + m(/SamsungBrowser\/(\d+)/) : /EdgA?\//.test(ua) ? 'Edge ' + m(/EdgA?\/(\d+)/) : /OPR\/|Opera/.test(ua) ? 'Opera' : /Firefox|FxiOS/.test(ua) ? 'Firefox ' + m(/(?:Firefox|FxiOS)\/(\d+)/) : /CriOS/.test(ua) ? 'Chrome iOS ' + m(/CriOS\/(\d+)/) : /Chrome\//.test(ua) ? 'Chrome ' + m(/Chrome\/(\d+)/) : /Safari/.test(ua) ? 'Safari ' + m(/Version\/(\d+)/) : 'другой';
+  return { device, os, browser };
+}
+function loadReport(ok, stage, note) {
+  if (window.__loadSent) return; window.__loadSent = true;
+  try {
+    const B = window.__boot || {}, nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {}, U = uaInfo(), c = navigator.connection || {};
+    const sa = !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
+    const row = { ver: window.APP_VER, device: U.device, os: U.os, browser: U.browser, app: (typeof PLATFORM !== 'undefined' ? PLATFORM : '?') + (sa ? '·экран «Домой»' : ''), net: c.effectiveType || '', mem: navigator.deviceMemory || null, cores: navigator.hardwareConcurrency || null, dpr: window.devicePixelRatio || 1, scr: screen.width + 'x' + screen.height,
+      cached: !!(navigator.serviceWorker && navigator.serviceWorker.controller) || nav.transferSize === 0, ok, stage: stage || '', t_html: Math.round(nav.responseEnd || 0), t_kit: B.world || null, t_world: B.profile || null, t_menu: B.menu || null, t_first: B.first || null, note: note || null };
+    fetch(SB_URL + '/rest/v1/nf_loads', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([row]) }).catch(() => {});
+  } catch (e) { /* no report */ }
+}
+BOOT_LOAD.then(() => {
   crumbStage('world'); buildWorld();
   crumbStage('profile'); loadProfile();   // a guest until the server session (if any) is restored
   initLife();
   buildRoster();
-  crumbStage('portraits'); renderPortraits(); crumbStage('menu');
+  crumbStage('menu');
   pc = Object.assign(makeCar(0xffb703, true), { pos: new V3(-165, 0, 4), vel: new V3(), h: PI / 2, hp: 100, vf: 0 });
   pvEnemy = Object.assign(makeCar(0x2b2b33, false), { pos: new V3(), h: PI / 2 });
   applyChar(); updateProfChip(); updateBoostsHud();
   $('loading').hidden = true;
   showPreview(); $('ageBadge').hidden = PLATFORM !== 'vk';
+  requestAnimationFrame(() => requestAnimationFrame(() => { crumbStage('first'); loadReport(true, 'menu'); setTimeout(() => { if (state.mode === 'preview' || state.mode === 'select') renderPortraits(); }, 1200); }));
   // a signed-in player skips the entry screen; wait for the server at most 4 s
   diffLoad();
   const restoring = cloudRestore();

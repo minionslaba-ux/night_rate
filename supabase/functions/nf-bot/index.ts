@@ -64,6 +64,7 @@ const PUBLIC_COMMANDS = [{ command: 'start', description: 'Открыть игр
 const ADMIN_COMMANDS = [
   { command: 'help', description: 'Все команды' },
   { command: 'reload', description: 'Перезагрузить игру у всех (очистить кэш)' },
+  { command: 'loads', description: 'Загрузка игры по устройствам за сутки' },
   { command: 'stats', description: 'Отчёт за сегодня' },
   { command: 'yesterday', description: 'Отчёт за вчера' },
   { command: 'week', description: 'Отчёт за 7 дней' },
@@ -95,6 +96,7 @@ const ADMIN_COMMANDS = [
 const HELP = `🛠 <b>Команды владельца «Ночного тарифа»</b>
 
 🔄 /reload — перезагрузить игру у всех: очистить кэш и загрузить свежую версию
+⏱ /loads — как грузится игра: устройства, браузеры, время до меню, сбои (сводка приходит сама каждое утро)
 🚨 О сбоях бот пишет сам (проверка раз в 2 минуты, не чаще раза в 5 минут) — с кнопкой перезагрузки
 
 📊 <b>Статистика</b>
@@ -325,6 +327,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
       return true;
     }
     case 'reload': await say(await reloadAll()); return true;
+    case 'loads': await say(await loadsReport(Number(rest) || 24)); return true;
     case 'health': {
       const t0 = Date.now();
       const site = await fetch(SITE, { headers: { 'cache-control': 'no-cache' } }).then(async (r) => ({ ok: r.ok, code: r.status, body: await r.text() })).catch((e) => ({ ok: false, code: 0, body: String(e) }));
@@ -409,6 +412,31 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
   return false;
 }
 
+// загрузка игры с настоящих устройств (таблица nf_loads): по устройствам и браузерам — сколько запусков, медиана и худшее время
+// до первого кадра меню, сколько из кэша, сколько зависло; самые медленные запуски
+async function loadsReport(hours: number) {
+  const since = new Date(Date.now() - hours * 3600e3).toISOString();
+  const { data } = await db.from('nf_loads').select('*').gte('created_at', since).order('created_at', { ascending: false }).limit(2000);
+  const L = data || [];
+  if (!L.length) return `⏱ Загрузка за ${hours} ч: запусков нет.`;
+  const sec = (ms: number | null) => (ms ? (ms / 1000).toFixed(1) + ' с' : '—');
+  const med = (a: number[]) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
+  const g = new Map<string, any[]>(); for (const r of L) { const k = `${r.device} · ${r.browser || '?'}`; if (!g.has(k)) g.set(k, []); g.get(k)!.push(r); }
+  const rows = [...g.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 12).map(([k, a]) => {
+    const okA = a.filter((r) => r.ok && r.t_first), t = okA.map((r) => r.t_first), bad = a.filter((r) => !r.ok).length, cold = okA.filter((r) => !r.cached).map((r) => r.t_first);
+    return `• <b>${esc(k)}</b>: ${a.length} зап.${bad ? `, <b>сбоев ${bad}</b>` : ''} · меню за ${sec(med(t))} (первый раз ${sec(med(cold))}, худшее ${sec(t.length ? Math.max(...t) : null)})`;
+  });
+  const all = L.filter((r) => r.ok && r.t_first).map((r) => r.t_first), fails = L.filter((r) => !r.ok);
+  const slow = L.filter((r) => r.ok && r.t_first > 20000).slice(0, 5).map((r) => `• ${sec(r.t_first)} · ${esc(r.device)} ${esc(r.os || '')} · ${esc(r.browser || '')} · ${esc(r.net || '')} · ${r.cached ? 'из кэша' : 'первый раз'} · ${esc(r.ver || '')}`);
+  const fl = fails.slice(0, 5).map((r) => `• ${esc(r.device)} · ${esc(r.stage || '')} · ${esc(String(r.note || '').slice(0, 90))} · ${esc(r.ver || '')}`);
+  return `⏱ <b>Загрузка игры за ${hours} ч</b>: ${L.length} запусков, сбоев ${fails.length}, медиана до меню ${sec(med(all))}\n\n${rows.join('\n')}`
+    + (slow.length ? `\n\n🐢 <b>Дольше 20 с</b>\n${slow.join('\n')}` : '') + (fl.length ? `\n\n❌ <b>Не загрузились</b>\n${fl.join('\n')}` : '');
+}
+async function loadsDaily() {
+  const text = await loadsReport(24); const { data: admins } = await db.from('nf_admins').select('tg_id');
+  for (const a of admins || []) await api('sendMessage', { chat_id: a.tg_id, text, parse_mode: 'HTML' });
+  return { sent: true };
+}
 // перезагрузка игры у всех: новая метка в nf_public.reload (игра проверяет её при запуске, раз в минуту и при возврате)
 async function reloadAll() {
   const { error } = await db.from('nf_public').upsert({ k: 'reload', v: String(Date.now()), updated_at: new Date().toISOString() });
@@ -526,7 +554,8 @@ Deno.serve(async (req) => {
     const b = await req.clone().json().catch(() => null);
     const key = await setting('cron_key');
     if (b && key && b.daily === key && b.max_test === true) return json({ max: await maxTest() });   // тот же ключ расписания: тестовый пост в MAX
-    if (b && key && b.alerts === key) return json(await alertsRun());   // раз в 2 минуты: сбои игры → владельцу
+    if (b && key && b.alerts === key) return json(await alertsRun());
+    if (b && key && b.loads === key) return json(await loadsDaily());   // каждое утро: сводка загрузок владельцу   // раз в 2 минуты: сбои игры → владельцу
     if (b && key && b.daily === key) return json(await dailyRun());
     return json({ error: 'forbidden' }, 403);
   }
