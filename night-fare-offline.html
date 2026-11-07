@@ -178,7 +178,7 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 .tbtn.aim.held { background: rgba(77,255,166,.5); }
 .touch.on-foot .tbtn.aim { display: grid; } .touch.on-foot .tbtn.drift { display: none; }
 .tbtn.melee { display: none; --c: #ff8a3a; right: calc(128px + var(--sar)); bottom: calc(122px + var(--sab)); width: 62px; height: 62px; }
-.touch.on-foot .tbtn.melee { display: grid; }
+.touch.on-foot .tbtn.melee { display: grid; } .touch.on-foot .tbtn.nitro { display: none; }
 .tbtn.tprof { --c: #c9c8cf; right: calc(208px + var(--sar)); bottom: calc(48px + var(--sab)); width: 56px; height: 56px; } body.online .tbtn.tprof { bottom: calc(124px + var(--sab)); } .tbtn.tprof span { font-size: 9px; }
 .tbtn.horn { display: none; --c: #ffd23a; right: calc(194px + var(--sar)); bottom: calc(40px + var(--sab)); width: 62px; height: 62px; }
 body.online .tbtn.horn { display: grid; } body.online:not(.task) .tbtn.nitro, body.online:not(.task) .tbtn.shield, body.online:not(.task) .tbtn.fire, body.online:not(.job):not(.task) #nav, body.online:not(.task) .boosts { display: none; }
@@ -510,9 +510,17 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .sel-title { font: 800 26px/1 var(--font-display); text-transform: uppercase; letter-spacing: -.01em; }
 .ep-season { flex-basis: 100%; margin: 8px 0 2px; color: #ffd23a; font: 700 10.5px/1.2 var(--font-body); letter-spacing: .14em; text-transform: uppercase; }
 .chip.s3 { border-color: rgba(255,210,58,.55); color: #ffd23a; }
+.sel-panel > .go-row { position: sticky; bottom: calc(-18px - var(--sab)); z-index: 2; padding: 10px 0 calc(12px + var(--sab)); margin-top: -6px; background: linear-gradient(180deg, rgba(11,13,31,0), rgba(11,13,31,.97) 32%); }
 .btn.s3new { margin-left: 10px; border: 1px solid #ffd23a; color: #ffd23a; background: rgba(0,0,0,.35); }
 .btn.s3new.cities { border-color: #5ad1ff; color: #5ad1ff; }
 .btn.s3new.locked { opacity: .62; border-style: dashed; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .pv-content { bottom: calc(72px + var(--sab)); gap: 8px; max-width: calc(100% - 48px - var(--sal) - var(--sar)); }
+  .pv-path { display: none; } .letterbox { max-height: 14px; } .pv-content #btnPlay { padding: 12px 22px; font-size: 14px; }
+  .pv-logo { font-size: clamp(30px, 9vh, 50px) !important; } .pv-logo span { font-size: 12px; margin-top: 4px; }
+  .pv-k { font-size: 10px; } .pv-tag { font-size: 12.5px; line-height: 1.35; max-width: 460px; } .pv-path { font-size: 11px; margin: 0; }
+  .pv-content .btns { gap: 6px; align-items: center; flex-wrap: nowrap; } .btn.big.s3new { font-size: 9.5px; padding: 6px 9px; margin: 0; letter-spacing: .04em; max-width: 250px; white-space: normal; line-height: 1.25; }
+}
 .mrg-box { position: absolute; z-index: 3; transform-origin: 100% 100%; pointer-events: auto; }
 .mrg-label { color: rgba(255,255,255,.45); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 4px; text-align: right; }
 #mrgSlot { width: 950px; height: 300px; overflow: hidden; }
@@ -522,7 +530,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .note.good { border-left-color: #4dffa6; background: rgba(77,255,166,.08); }
 @media (max-width: 560px) { .btn.s3new { margin: 10px 0 0; } }
 .card-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; cursor: pointer; }
-#modalCard { position: relative; } .toptab { width: 100%; border-collapse: collapse; font-size: 13px; } .toptab th { text-align: left; opacity: .6; font-weight: 600; padding: 4px 6px; } .toptab td { padding: 6px; border-top: 1px solid var(--line); vertical-align: top; } .toptab td small { display: block; opacity: .6; font-size: 11px; } .toptab tr.me td { background: rgba(255,196,61,.12); } .toptab td:nth-child(3), .toptab td:nth-child(4) { font-family: var(--font-mono); } #modal.over { z-index: 50; } .topup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; } .topup-row.best { border-color: var(--taxi); } .topup-row b { font-size: 15px; } .topup-row small { opacity: .7; } .topup { display: grid; gap: 8px; margin: 10px 0; }
+#modalCard { position: relative; } #modalCard #mDouble { order: 9; } .toptab { width: 100%; border-collapse: collapse; font-size: 13px; } .toptab th { text-align: left; opacity: .6; font-weight: 600; padding: 4px 6px; } .toptab td { padding: 6px; border-top: 1px solid var(--line); vertical-align: top; } .toptab td small { display: block; opacity: .6; font-size: 11px; } .toptab tr.me td { background: rgba(255,196,61,.12); } .toptab td:nth-child(3), .toptab td:nth-child(4) { font-family: var(--font-mono); } #modal.over { z-index: 50; } .topup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; } .topup-row.best { border-color: var(--taxi); } .topup-row b { font-size: 15px; } .topup-row small { opacity: .7; } .topup { display: grid; gap: 8px; margin: 10px 0; }
 .chip { border: 1px solid var(--hair-2); background: transparent; color: var(--muted); border-radius: 2px; font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; }
 .chip.active { background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); }
 .hud-chip { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -737,7 +745,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v77'; window.__errs = [];
+window.APP_VER = 'v78'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -778,7 +786,7 @@ const pick = (arr) => arr[Math.floor(srand() * arr.length)];
 
 const isTouch = window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
 if (/iPhone|iPod/.test(navigator.userAgent)) document.documentElement.classList.add('ios');
-if (isTouch) document.documentElement.classList.add('tch');   // not 'touch': that is the class of the on-screen controls
+if (isTouch) { document.documentElement.classList.add('tch'); const dn = document.querySelector('.dlg-next'); if (dn) dn.textContent = 'Нажми — дальше'; }   // not 'touch': that is the class of the on-screen controls
 
 // ---------------- renderer / scene ----------------
 THREE.ColorManagement.legacyMode = false;
@@ -6696,7 +6704,7 @@ function showEnd2() {
       <div><small>Монеты</small><b>${state.coins}</b></div>
     </div>
     <div class="btns">
-      <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mDouble" class="btn" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
       <button id="mNext" class="btn primary" type="button">Эпизод 3 →</button>
       <button id="mAgain" class="btn" type="button">В меню</button>
     </div>
@@ -7947,7 +7955,7 @@ function showEndGen(ep) {
       <div><small>Монеты</small><b>${state.coins}</b></div>
     </div>
     <div class="btns">
-      <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mDouble" class="btn" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
       ${endPathBtns(ep)}
       <button id="mAgain" class="btn" type="button">В меню</button>
     </div>
@@ -9647,7 +9655,9 @@ function fsIosCheck() {
   const was = document.documentElement.classList.contains('fs-scroll');
   document.documentElement.classList.toggle('fs-scroll', ios);
   if (was && !ios) window.scrollTo(0, 0);
-  el.hidden = !(ios && fsBarShown() && !FS.iosHid);
+  // not over the first screen: a newcomer sees the game first, the hint comes after the first «Играть»
+  const past = typeof state !== 'undefined' && state.mode !== 'boot' && state.mode !== 'preview';
+  el.hidden = !(ios && past && fsBarShown() && !FS.iosHid);
 }
 (function fsInit() {
   const h = document.createElement('div'); h.id = 'fsHint'; h.className = 'fs-hint'; h.hidden = true;
@@ -13008,7 +13018,7 @@ function showSelect() {
   s3VikBack(); S3.kitW = null;
   if (ONL.on) leaveRoom();
   initAudio();
-  state.mode = 'select'; hideModal();
+  state.mode = 'select'; hideModal(); if (typeof fsIosCheck === 'function') setTimeout(fsIosCheck, 0);
   $('preview').hidden = true; $('select').hidden = false; $('hud').hidden = true; $('touch').hidden = true;
   pvEnemy.g.visible = false; arrow.visible = false; setBeam(null);
   if (hero) hero.g.visible = false;
@@ -13135,7 +13145,7 @@ function showEnd() {
       <div><small>Монеты</small><b>${state.coins}</b></div>
     </div>
     <div class="btns">
-      <button id="mDouble" class="btn primary" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mDouble" class="btn" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
       <button id="mEp2" class="btn primary" type="button">Эпизод 2 →</button>
       <button id="mAgain" class="btn" type="button">Сменить водителя</button>
     </div>
