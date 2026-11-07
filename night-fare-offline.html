@@ -745,7 +745,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v79'; window.__errs = [];
+window.APP_VER = 'v80'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5248,6 +5248,7 @@ function rebuildAudio(old) {
   initAudio();
 }
 ['pointerdown', 'touchend', 'keydown'].forEach((ev) => document.addEventListener(ev, wakeAudio, true));
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('.btn, .chip'); if (b && !b.disabled && typeof sfx !== 'undefined' && sfx.click) sfx.click(); }, true);
 // master -> a compressor (loud shots without clipping) -> speakers; a street echo (convolution reverb) on a send
 function buildMix(ctx) {
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 6; comp.attack.value = 0.002; comp.release.value = 0.18; comp.connect(ctx.destination);
@@ -5325,6 +5326,51 @@ function skid(k, kick) {
   else S.out.gain.setTargetAtTime(v * 0.85, t, v > S.k ? 0.03 : 0.09);
   const pitch = 1 + v * 0.18; S.s1.frequency.setTargetAtTime(1250 * pitch, t, 0.1); S.s2.frequency.setTargetAtTime(2550 * pitch, t, 0.1);
   S.k = v;
+}
+// ---- more sounds, all made here (no files): nitro, shield, coins, a mission won / lost, steps, reload, a car door, UI taps
+// a noise burst whose filter sweeps (a whoosh) and a tone that glides (a chirp)
+function sweep(dur, f0, f1, vol, type, q) {
+  if (!audio.ctx || muted) return;
+  const c = audio.ctx, t = c.currentTime, n = c.createBufferSource(); n.buffer = audio.nb;
+  const f = c.createBiquadFilter(); f.type = type || 'bandpass'; f.Q.value = q || 1.2; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = c.createGain(); g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.25); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  n.connect(f); f.connect(g); g.connect(audio.master); n.start(t, Math.random() * 0.4); n.stop(t + dur + 0.05);
+}
+function glide(f0, f1, dur, vol, type, at) {
+  if (!audio.ctx || muted) return;
+  const c = audio.ctx, t = c.currentTime + (at || 0), o = c.createOscillator(), g = c.createGain(); o.type = type || 'sine';
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(audio.master); o.start(t); o.stop(t + dur + 0.03);
+}
+Object.assign(sfx, {
+  // nitro: a jet whoosh rising, a low roar under it
+  nitro: () => { sweep(0.9, 400, 4200, 0.5, 'bandpass', 0.9); glide(70, 140, 0.9, 0.35, 'sawtooth'); },
+  // shield: a bright shimmering chord going up
+  shield: () => { [523, 659, 784, 1046].forEach((f, i) => glide(f, f * 1.5, 0.5, 0.06, 'triangle', i * 0.04)); sweep(0.5, 2000, 8000, 0.08, 'highpass'); },
+  // coins: two quick metal clinks
+  coin: () => { glide(1980, 2100, 0.09, 0.07, 'square'); glide(2640, 2800, 0.16, 0.06, 'square', 0.07); },
+  // a mission won: a short rising fanfare
+  win: () => { [523, 659, 784].forEach((f, i) => glide(f, f, 0.2, 0.09, 'triangle', i * 0.11)); glide(1046, 1046, 0.55, 0.1, 'triangle', 0.33); glide(523, 523, 0.55, 0.05, 'sine', 0.33); },
+  // a mission lost: a falling minor sting
+  fail: () => { glide(392, 196, 0.6, 0.1, 'sawtooth'); glide(311, 155, 0.7, 0.07, 'triangle', 0.08); noise(0.5, 120, 0.25, 'lowpass'); },
+  // a footstep: a dull thud with a little grit; wet when it rains
+  step: () => { noise(0.07, 140 + Math.random() * 60, 0.2, 'lowpass'); noise(0.04, 2200 + Math.random() * 800, WX.rain > 0.3 ? 0.06 : 0.025); },
+  // reload: the magazine out, a beat, in and the slide
+  reload: () => { noise(0.05, 900, 0.12); setTimeout(() => { noise(0.04, 1500, 0.14); noise(0.06, 3000, 0.08); }, 260); },
+  // out of ammo: a dry click
+  empty: () => noise(0.03, 3600, 0.1),
+  // a car door: the handle, the slam
+  door: () => { noise(0.04, 2500, 0.05); setTimeout(() => { noise(0.18, 160, 0.35, 'lowpass'); noise(0.06, 900, 0.08); }, 120); },
+  // a tap on a button
+  click: () => noise(0.018, 4200, 0.035),
+});
+// rain on the roof and the road: a soft loop that follows the weather
+function rainSound(k) {
+  if (!audio.ctx || audioSaved) return;
+  const c = audio.ctx, t = c.currentTime;
+  if (!audio.rn) { if (k < 0.03) return; const src = c.createBufferSource(); src.buffer = audio.nb; src.loop = true; const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7000; const g = c.createGain(); g.gain.value = 0; src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(audio.master); src.start(); audio.rn = { g }; }
+  audio.rn.g.gain.setTargetAtTime(muted ? 0 : Math.min(1, k) * 0.12, t, 0.6);
 }
 function setEngine(speed, on) {
   if (!audio.ctx) return;
@@ -5705,7 +5751,7 @@ function damageEnemy(e, d) {
     for (let i = 0; i < 6; i++) spawnP(e.pos.clone().add(new V3(0, 1.2, 0)), { color: 0xffd060, size: 0.15, vel: rv().multiplyScalar(5), life: 0.4, add: true });
   }
 }
-function addCoins(n) { n = Math.round(n * P.coins * (state.x2 ? 2 : 1)); state.coins += n; walletAdd(n); toast('+' + n + ' монет'); }
+function addCoins(n) { n = Math.round(n * P.coins * (state.x2 ? 2 : 1)); state.coins += n; walletAdd(n); toast('+' + n + ' монет'); if (n > 0) sfx.coin(); }
 
 // ---------------- UI helpers ----------------
 let toastT = 0;
@@ -5848,7 +5894,8 @@ function updateDrive(dt) {
   const throttle = clamp(thrKey + jt, -1, 1), steer = pc.steerSm;
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
   { const sp = Math.hypot(pc.vel.x, pc.vel.z), side = Math.abs(pc.vr || 0);
-    const k = sp < 4 || pc.locked ? 0 : drift ? Math.min(1, 0.55 + side / 12 + sp / 80) : side > 6 ? Math.min(0.7, (side - 6) / 8) : 0;
+    const brake = (thrKey + jt) < -0.3 && (pc.vf || 0) > 13 ? Math.min(0.55, ((pc.vf || 0) - 13) / 18 + 0.25) : 0;
+    const k = sp < 4 || pc.locked ? 0 : drift ? Math.min(1, 0.55 + side / 12 + sp / 80) : Math.max(brake, side > 6 ? Math.min(0.7, (side - 6) / 8) : 0);
     skid(k, drift && !pc.driftWas); pc.driftWas = drift; }
   pc.steerIn = steer;
   const ck = careK(), nitro = state.nitroT > 0 && ck > 0.5 && !pc.locked, cap = MIS && MIS.speedCap ? MIS.speedCap : 1e9, imp = carPhysics(pc, dt, pc.locked ? 0 : nitro ? 1 : throttle, steer, drift, Math.min(cap, (P.maxSpeed + (nitro ? 16 : 0)) * ck), P.drift);
@@ -6009,6 +6056,7 @@ function updateFoot(dt) {
   // the body always turns where the hero goes — people turn round and walk or run, they do not walk backwards;
   // the torso twists towards the target (up to ~100 degrees), and the gun only fires within that twist
   const moving = mv.lengthSq() > 0.01;
+  if (moving) { hero.stepT = (hero.stepT || 0) - dt * Math.min(1, mv.length()); if (hero.stepT <= 0) { hero.stepT = 0.34; sfx.step(); } } else hero.stepT = 0.05;
   const moveAng = moving ? Math.atan2(mv.x, mv.z) : hero.face;
   let aimAng = aim ? Math.atan2(aim.x - hero.pos.x, aim.z - hero.pos.z) : moveAng;
   const bodyAng = moving ? moveAng : aimAng, back = false;
@@ -6172,12 +6220,14 @@ function placeCar(x, z, h) {
   pc.g.visible = true; pc.g.position.copy(pc.pos); pc.g.rotation.set(0, h, 0);
 }
 function beginDrive(x, z, h) {
+  if (state.mode === 'foot') sfx.door();
   state.act = 1; placeCar(x, z, h); trail.length = 0; trail.push(pc.pos.clone());
   if (hero) hero.g.visible = false; heroLight.intensity = 0;
   arrow.visible = true; $('hpLabel').textContent = 'Машина';
   camYaw = h; snapCam = true; state.spawnT = 6; state.firstChase = false; state.mode = 'drive';
 }
 function beginFoot(x, z, face) {
+  if (state.mode === 'drive') sfx.door();
   state.act = 2;
   if (!hero) hero = Object.assign(makeHuman(heroLook(), 1), { pos: new V3(), face });
   hero.pos.set(x, 0, z); hero.face = face; hero.hp = P.footMax; hero.dead = false; hero.fireCd = 0; hero.walk = 0; hero.twist = 0;
@@ -6297,6 +6347,7 @@ function finishChapter(n, coins, lines, next) {
 }
 function failChapter(title, text) {
   if (MIS && MIS.online) { taskFail(title); return; }
+  sfx.fail(); skid(0);
   runEnd('fail', title);
   state.mode = 'dead'; setEngine(0, false);
   showModal(`
@@ -8699,7 +8750,7 @@ function needCoins(price, what, alt) {
   draw();
   if (web && !PAY.checked) payCheck().then(() => { if (!$('modal').hidden && $('modal').classList.contains('over')) draw(); });
 }
-function profStat(k, n) { if (k === 'chapters') runEnd('win'); PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(loginNudge, 3000); if (k === 'chapters' && store.get('nf-ref') && PROF.st.chapters >= 3) setTimeout(() => refTry(false), 6000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
+function profStat(k, n) { if (k === 'chapters') { runEnd('win'); sfx.win(); } PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(loginNudge, 3000); if (k === 'chapters' && store.get('nf-ref') && PROF.st.chapters >= 3) setTimeout(() => refTry(false), 6000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
 const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: 'https://t.me/nightfaregame', maxUrl: '' };
@@ -8880,8 +8931,8 @@ function useBoost(id) {
   if (!PROF.inv[id]) { toast(`${ITEMS[id].name}: нет в запасе. Загляни в магазин.`, 1.6); return; }
   if (id === 'nitro' && state.nitroT > 0) return;
   PROF.inv[id]--; saveProfile();
-  if (id === 'nitro') { state.nitroT = 3; profStat('nitro'); toast('Нитро!', 1); }
-  if (id === 'shield') { state.shieldT = 6; state.invuln = Math.max(state.invuln, 6); toast('Щит: 6 секунд', 1.2); }
+  if (id === 'nitro') { state.nitroT = 3; profStat('nitro'); toast('Нитро!', 1); sfx.nitro(); }
+  if (id === 'shield') { state.shieldT = 6; state.invuln = Math.max(state.invuln, 6); toast('Щит: 6 секунд', 1.2); sfx.shield(); }
   updateBoostsHud();
 }
 // ---------------- the autopilot: bought with coins, drives to the navigator's goal by itself ----------------
@@ -8979,14 +9030,14 @@ function wpnOwned(id) { return id === 'shmel' || PROF.god || (PROF.weapons || []
 function wpnOpen(w) { return PROF.god || (PROF.st.eps || []).length >= w.need; }
 function wpnTick(dt) {
   const w = curW(); if (WPN.id !== w.id) { WPN.id = w.id; WPN.left = w.mag; WPN.rel = 0; }
-  if (WPN.rel > 0) { WPN.rel -= dt; if (WPN.rel <= 0) { WPN.rel = 0; WPN.left = w.mag; sfx.key(); updateAmmoHud(); } }
+  if (WPN.rel > 0) { WPN.rel -= dt; if (WPN.rel <= 0) { WPN.rel = 0; WPN.left = w.mag; updateAmmoHud(); } }
 }
 // one pull of the trigger: false while reloading or with no cartridges left. From the car the driver fires
 // from the window as before, without magazine changes; on foot the magazine runs out and needs a reload.
 function wpnTrigger(car) {
   const w = curW(); if (!car && WPN.rel > 0) return false;
   if (!useAmmo()) return false;
-  if (!car && --WPN.left <= 0) WPN.rel = w.reload;
+  if (!car && --WPN.left <= 0) { WPN.rel = w.reload; sfx.reload(); }
   updateAmmoHud();
   return true;
 }
@@ -9097,7 +9148,7 @@ function useAmmo() {
   if (PROF.god) return true;
   if ((PROF.inv.ammo || 0) > 0) { PROF.inv.ammo--; ammoSave(); updateAmmoHud(); return true; }
   // empty: a dry click and a reminder, at most once a second and a half
-  if (state.t - AMMO.warnT > 1.5) { AMMO.warnT = state.t; sfx.key(); toast(canPay(ITEMS.ammo.price) ? `Патроны кончились! Новый комплект — ${ITEMS.ammo.price} монет (кнопка или R)` : 'Патроны кончились, а монет на комплект не хватает', 1.6); }
+  if (state.t - AMMO.warnT > 1.5) { AMMO.warnT = state.t; sfx.empty(); toast(canPay(ITEMS.ammo.price) ? `Патроны кончились! Новый комплект — ${ITEMS.ammo.price} монет (кнопка или R)` : 'Патроны кончились, а монет на комплект не хватает', 1.6); }
   updateAmmoHud(); return false;
 }
 function buyAmmo() {
@@ -13272,10 +13323,11 @@ function loop(now) {
   let dt = Math.min(0.05, (now - last) / 1000); last = now; dt = cineTime(dt); state.t += dt;
   if (state.invuln > 0) state.invuln -= dt;
   if (state.mode === 'preview' || state.mode === 'drive') checkPerf(dt);
+  if (state.mode !== 'drive' && audio.sk && audio.sk.k > 0) skid(0);   // out of the car (dialog, foot, pause): the screech stops
+  rainSound(rain.visible ? WX.rain : 0);
   if (state.mode === 'preview') updatePreview(dt);
   else if (state.mode === 'select') updateSelect(dt);
   else if (state.mode === 'drive') { updateDrive(dt); state.time += dt; }
-  if (state.mode !== 'drive' && audio.sk && audio.sk.k > 0) skid(0);   // out of the car (dialog, foot, pause): the screech stops
   else if (state.mode === 'foot') { updateFoot(dt); state.time += dt; }
   else if (state.mode === 'dialog') updateDialog(dt);
   else if (state.mode === 'dying') {
