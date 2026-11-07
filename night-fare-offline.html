@@ -522,7 +522,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .note.good { border-left-color: #4dffa6; background: rgba(77,255,166,.08); }
 @media (max-width: 560px) { .btn.s3new { margin: 10px 0 0; } }
 .card-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; cursor: pointer; }
-#modalCard { position: relative; } #modal.over { z-index: 50; } .topup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; } .topup-row.best { border-color: var(--taxi); } .topup-row b { font-size: 15px; } .topup-row small { opacity: .7; } .topup { display: grid; gap: 8px; margin: 10px 0; }
+#modalCard { position: relative; } .toptab { width: 100%; border-collapse: collapse; font-size: 13px; } .toptab th { text-align: left; opacity: .6; font-weight: 600; padding: 4px 6px; } .toptab td { padding: 6px; border-top: 1px solid var(--line); vertical-align: top; } .toptab td small { display: block; opacity: .6; font-size: 11px; } .toptab tr.me td { background: rgba(255,196,61,.12); } .toptab td:nth-child(3), .toptab td:nth-child(4) { font-family: var(--font-mono); } #modal.over { z-index: 50; } .topup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; } .topup-row.best { border-color: var(--taxi); } .topup-row b { font-size: 15px; } .topup-row small { opacity: .7; } .topup { display: grid; gap: 8px; margin: 10px 0; }
 .chip { border: 1px solid var(--hair-2); background: transparent; color: var(--muted); border-radius: 2px; font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; }
 .chip.active { background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); }
 .hud-chip { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -737,7 +737,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v76'; window.__errs = [];
+window.APP_VER = 'v77'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -8405,6 +8405,91 @@ async function payClaim() {
     if (r.coins > 0) { PROF.coins += r.coins; saveProfile(); cloudSave(); updateProfChip(); toast(`Оплата прошла: +${r.coins.toLocaleString('ru-RU')} монет`, 3); sfx.bell(); if (!$('prof').hidden) renderProfile(); }
   } catch (e) { /* will try at the next start */ }
 }
+// ---------------- invitations and the rating ----------------
+// A signed-in player has a 6-letter code and a link nightfaregame.com/?ref=CODE. A newcomer who comes with it (or types the code
+// in «Друзья»), signs in and finishes 3 missions gets 500 coins, and so does the friend who invited him (the server checks
+// and pays: nf_ref_claim → nf_gifts → nf_gift_claim). Up to 50 friends; only new profiles (14 days) count.
+const REF = { code: '', invited: 0, coins: 0, busy: false, msg: '' }, TOP = { rows: null, t: 0, busy: false, err: '' };
+function refFromLocation() {   // called once at start, after the storage and platform helpers exist
+  try {
+    const q = new URLSearchParams(location.search), h = location.hash.match(/ref[_=]([A-Za-z0-9]{6})/), sp = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.start_param) || q.get('tgWebAppStartParam') || '';
+    const code = (q.get('ref') || (h && h[1]) || (/^ref_([A-Za-z0-9]{6})$/.exec(sp) || [])[1] || '').toUpperCase();
+    if (/^[A-Z0-9]{6}$/.test(code) && !store.get('nf-ref-done')) store.set('nf-ref', { code, t: Date.now() });
+    if (q.get('ref')) { q.delete('ref'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); }
+  } catch (e) { /* old browser */ }
+}
+const refLink = () => (REF.code ? 'https://nightfaregame.com/?ref=' + REF.code : '');
+async function refLoad() {
+  if (!PROF.cloud || !cloudInit()) return; REF.busy = true;
+  try {
+    const a = await CLOUD.sb.rpc('nf_ref_code'); if (a.data) REF.code = a.data;
+    const b = await CLOUD.sb.rpc('nf_ref_stats'); if (b.data) { REF.invited = b.data.invited || 0; REF.coins = b.data.coins || 0; }
+    if (a.error) REF.msg = 'Не удалось получить код. Попробуй позже.';
+  } catch (e) { REF.msg = NO_SERVER; }
+  REF.busy = false; if (!$('prof').hidden && profTab === 'friends') renderProfile();
+}
+async function refTry(loud) {
+  const S = store.get('nf-ref'); if (!S || !S.code) return;
+  if (!PROF.cloud || !cloudInit()) { if (loud) { profMsg = 'Код сохранён. Войди и пройди 3 миссии — подарок придёт вам обоим.'; renderProfile(); } return; }
+  await cloudSave().catch(() => {});   // the server counts the missions from the saved profile
+  let r = {}; try { const q = await CLOUD.sb.rpc('nf_ref_claim', { p_code: S.code }); r = q.data || { error: q.error ? 'server' : '?' }; } catch (e) { r = { error: 'network' }; }
+  const say = (m) => { if (loud || r.ok) { profMsg = m; if (!$('prof').hidden) renderProfile(); else toast(m, 3.5); } };
+  if (r.ok) { try { localStorage.removeItem('nf-ref'); } catch (e) { /* storage unavailable */ } store.set('nf-ref-done', 1); say(`Приглашение засчитано${r.by ? ': тебя позвал ' + r.by : ''}! Вам обоим по ${r.coins} монет.`); giftClaim(); return; }
+  if (r.error === 'not_yet') { say(`Код принят. Пройди ещё ${Math.max(1, (r.need || 3) - (r.have || 0))} мисс. — и вам обоим придёт по 500 монет.`); return; }
+  if (r.error === 'network' || r.error === 'server' || r.error === 'no_session') { say('Нет связи с сервером. Попробуем позже.'); return; }
+  try { localStorage.removeItem('nf-ref'); } catch (e) { /* storage unavailable */ }
+  say({ bad_code: 'Такого кода нет. Проверь буквы.', self: 'Это твой собственный код.', already: 'Приглашение уже засчитано раньше.', not_new: 'Приглашения работают только для новых игроков.', limit: 'У этого друга уже 50 приглашённых.' }[r.error] || 'Не удалось засчитать приглашение.');
+}
+async function giftClaim() {
+  if (!PROF.cloud || !cloudInit()) return;
+  try {
+    const { data } = await CLOUD.sb.rpc('nf_gift_claim'); if (!data || !data.length) return;
+    let sum = 0, out = 0; for (const g of data) { sum += g.coins; if (g.reason === 'ref_out') out++; }
+    PROF.coins += sum; saveProfile(); cloudSave().catch(() => {}); updateProfChip(); sfx.bell();
+    toast(out ? `Друг по твоей ссылке прошёл 3 миссии: +${sum.toLocaleString('ru-RU')} монет` : `Подарок: +${sum.toLocaleString('ru-RU')} монет`, 3.5);
+    if (!$('prof').hidden) renderProfile();
+  } catch (e) { /* next time */ }
+}
+function refShare() {
+  const url = refLink(), text = 'Ночной тариф — такси, погони и ночной город прямо в браузере. Заходи по моей ссылке: нам обоим дадут по 500 монет.';
+  if (!url) return;
+  if (navigator.share && PLATFORM === 'web') { navigator.share({ title: 'Ночной тариф', text, url }).catch(() => {}); return; }
+  if (PLATFORM === 'tg' && window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) { Telegram.WebApp.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text)); return; }
+  refCopy();
+}
+function refCopy() {
+  const t = PLATFORM === 'web' ? refLink() : REF.code; if (!t) return;
+  const ok = () => { profMsg = PLATFORM === 'web' ? 'Ссылка скопирована — отправь её другу.' : 'Код скопирован — отправь его другу.'; renderProfile(); };
+  try { navigator.clipboard.writeText(t).then(ok, () => { profMsg = t; renderProfile(); }); } catch (e) { profMsg = t; renderProfile(); }
+}
+function friendsHtml() {
+  const S = store.get('nf-ref'), how = '<p class="note">Друг заходит по твоей ссылке (или вводит твой код здесь, во вкладке «Друзья»), входит в профиль и проходит 3 миссии — вам обоим по <b>500 монет</b>. До 50 друзей.</p>';
+  let mine;
+  if (!PROF.cloud) mine = `<div class="pbox"><div class="plabel">Твоя ссылка</div><small>Ссылка-приглашение есть у вошедших игроков: так подарок найдёт тебя на любом устройстве.</small><button class="btn sm primary" data-act="gologin" type="button">Войти</button></div>`;
+  else if (!REF.code) mine = `<div class="pbox"><div class="plabel">Твоя ссылка</div><small>${REF.msg ? esc(REF.msg) : 'Получаю код…'}</small></div>`;
+  else mine = `<div class="pbox"><div class="plabel">${PLATFORM === 'web' ? 'Твоя ссылка' : 'Твой код'}</div><b style="font-size:20px;letter-spacing:.12em">${REF.code}</b>${PLATFORM === 'web' ? `<small style="word-break:break-all">${esc(refLink())}</small>` : ''}
+    <div class="btns"><button class="btn sm primary" data-act="refshare" type="button">Пригласить</button><button class="btn sm" data-act="refcopy" type="button">Скопировать</button></div>
+    <small>Приглашено: ${REF.invited} · получено ${REF.coins.toLocaleString('ru-RU')} монет</small></div>`;
+  const enter = store.get('nf-ref-done') ? '<div class="pbox"><small>Ты уже пришёл по приглашению — подарок получен.</small></div>'
+    : `<div class="pbox"><div class="plabel">Меня пригласили</div>${S ? `<small>Код друга: <b>${esc(S.code)}</b>. Войди и пройди 3 миссии (сейчас: ${Math.min(3, PROF.st.chapters)}) — подарок придёт сам.</small>` : '<small>Есть код от друга? Введи его:</small>'}
+      <div class="gate-code"><input id="refIn" type="text" maxlength="6" placeholder="Код друга" value="${S ? esc(S.code) : ''}" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase"><button class="btn sm" data-act="refenter" type="button">Ввести</button></div></div>`;
+  return `<div class="pgrid2">${mine}${enter}</div>${how}<div class="pmsg">${esc(profMsg)}</div>`;
+}
+async function topLoad() {
+  if (!cloudInit()) { TOP.err = NO_SERVER; return; } TOP.busy = true;
+  try { const { data, error } = await CLOUD.sb.rpc('nf_top', { lim: 50 }); if (error) TOP.err = 'Рейтинг сейчас недоступен.'; else { TOP.rows = data || []; TOP.err = ''; } } catch (e) { TOP.err = NO_SERVER; }
+  TOP.t = Date.now(); TOP.busy = false; if (!$('prof').hidden && profTab === 'top') renderProfile();
+}
+function topHtml() {
+  if (!TOP.rows) return `<div class="pbox"><small>${TOP.err ? esc(TOP.err) : 'Загружаю рейтинг…'}</small></div>`;
+  const rk = (r) => (RANKS[r] ? RANKS[r][1] : RANKS[0][1]);
+  const rows = TOP.rows.map((r) => `<tr class="${r.me ? 'me' : ''}"><td>${r.place <= 3 ? ['🥇', '🥈', '🥉'][r.place - 1] : r.place}</td><td>${esc(r.name)}${r.me ? ' (ты)' : ''}<small>${esc(rk(r.rank))}</small></td><td>${Number(r.earned).toLocaleString('ru-RU')}</td><td>${r.missions}</td></tr>`).join('');
+  const meIn = TOP.rows.some((r) => r.me);
+  return `<div class="plabel">Лучшие таксисты · по заработанным монетам</div>
+    ${TOP.rows.length ? `<table class="toptab"><thead><tr><th>#</th><th>Игрок</th><th>Заработано</th><th>Миссий</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="pbox"><small>Рейтинг пока пуст — стань первым!</small></div>'}
+    ${PROF.cloud ? (meIn ? '' : '<p class="note">Тебя здесь пока нет: рейтинг обновится после твоей следующей миссии.</p>') : '<div class="pbox"><small>Гости в рейтинг не попадают.</small><button class="btn sm primary" data-act="gologin" type="button">Войти и попасть в рейтинг</button></div>'}
+    <p class="note">Друзья, приглашённые по твоей ссылке, приносят по 500 монет — вкладка «Друзья».</p>`;
+}
 async function cloudLoadProfile(user) {
   CLOUD.links = null;
   const { data: row, error } = await CLOUD.sb.from('profiles').select('login, name, data, progress, is_tester').eq('id', user.id).maybeSingle();
@@ -8422,6 +8507,7 @@ async function cloudLoadProfile(user) {
     if (src === guest) { try { localStorage.removeItem(profKey(null)); } catch (e) { /* storage unavailable */ } saveProfile(); }
     cloudSaveSoon();   // story progress from this device (episodes, «Continue») goes up right away, even for a fresh profile
     setTimeout(payClaim, 1500);   // coins paid for on the website (also right after the return from the payment page)
+    setTimeout(giftClaim, 2200); setTimeout(() => refTry(false), 4000);   // gifts from the server (invitations) and an invitation this player came with
   };
   if (gs > 0 && cs === 0) { finish(guest); toast('Прогресс гостя перенесён в профиль', 2); }
   else if (gs > 0 && cs > 0 && Math.abs(gs - cs) > 50) {
@@ -8581,7 +8667,7 @@ function needCoins(price, what, alt) {
   draw();
   if (web && !PAY.checked) payCheck().then(() => { if (!$('modal').hidden && $('modal').classList.contains('over')) draw(); });
 }
-function profStat(k, n) { if (k === 'chapters') runEnd('win'); PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(loginNudge, 3000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
+function profStat(k, n) { if (k === 'chapters') runEnd('win'); PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(joinNudge, 9000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(loginNudge, 3000); if (k === 'chapters' && store.get('nf-ref') && PROF.st.chapters >= 3) setTimeout(() => refTry(false), 6000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
 const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: 'https://t.me/nightfaregame', maxUrl: '' };
@@ -9040,7 +9126,7 @@ function pimg(kind, id, price, legend) {
   return `<div class="pimg" style="--neon:${neon}"><i class="pglow"></i><i class="ppod"></i><img src="assets/shop/img/${kind}-${id}.webp" alt="" loading="lazy" onerror="this.remove()">${kind === 'up' || kind === 'pack' ? '' : `<em class="prar" style="--rc:${r[1]}">${r[0]}</em>`}</div>`;
 }
 function renderProfile() {
-  const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['arms', 'Оружие'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения']];
+  const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['arms', 'Оружие'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения'], ['top', 'Рейтинг'], ['friends', 'Друзья']];
   $('profTabs').innerHTML = tabs.map(([k, t]) => `<button class="chip${profTab === k ? ' active' : ''}" data-tab="${k}" type="button">${t}</button>`).join('');
   $('profName').textContent = PROF.name; $('profSub').textContent = PROF.god ? 'тестовый профиль · бессмертие · все покупки бесплатно' : PROF.login ? 'профиль ' + PROF.login : 'гость · прогресс хранится в этом браузере';
   $('profCoins').textContent = coinsText(); $('profAva').textContent = (PROF.name[0] || 'Г').toUpperCase();
@@ -9094,6 +9180,8 @@ function renderProfile() {
     <div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button">${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
     <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
     <div class="pmsg">${esc(profMsg)}</div>`;
+  } else if (profTab === 'top') { h = topHtml(); if (!TOP.busy && Date.now() - TOP.t > 60e3) topLoad();
+  } else if (profTab === 'friends') { h = friendsHtml(); if (PROF.cloud && !REF.busy && !REF.code) refLoad();
   } else if (profTab === 'up') {
     h = '<div class="pitems">' + UPGRADES.map((u) => { const l = PROF.up[u.id]; return `<div class="pitem shop">${pimg('up', u.id, 1000 * (l + 1))}<b>${u.name}</b><span>${u.desc}</span><div class="pips">${[0, 1, 2, 3, 4].map((j) => `<i class="${j < l ? 'on' : ''}"></i>`).join('')}</div>${l >= UP_MAX ? '<button class="btn sm" disabled type="button">Максимум</button>' : `<button class="btn sm primary" data-act="buy-up" data-id="${u.id}" type="button">${PROF.god ? 'Улучшить' : upPrice(l) + ' монет'}</button>`}</div>`; }).join('') + '</div>';
   } else {
@@ -9133,6 +9221,10 @@ function profAction(act, id) {
   else if (act === 'buy-item') { if (pay(ITEMS[id].price, ITEMS[id].name)) { PROF.inv[id] = (PROF.inv[id] || 0) + (ITEMS[id].pack || 1); saveProfile(); updateAmmoHud(); } }
   else if (act === 'buy-up') { const l = PROF.up[id]; if (l < UP_MAX && pay(upPrice(l), 'Улучшение')) { PROF.up[id]++; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'buy-coins') { payBuy(id); return; }
+  else if (act === 'gologin') { gateAgain('Войди, чтобы получить свою ссылку-приглашение и попасть в рейтинг.'); return; }
+  else if (act === 'refshare') { refShare(); return; }
+  else if (act === 'refcopy') { refCopy(); return; }
+  else if (act === 'refenter') { const v = ($('refIn') && $('refIn').value || '').trim().toUpperCase(); if (!/^[A-Z0-9]{6}$/.test(v)) { profMsg = 'Код — 6 латинских букв и цифр.'; renderProfile(); return; } store.set('nf-ref', { code: v, t: Date.now() }); refTry(true); return; }
   else if (act === 'buy-pack') {
     if (PROF.god) { PACKS[id].grant(PROF); saveProfile(); applyLoadout(); checkAch(); profMsg = `«${PACKS[id].name}» выдан (тестовый профиль).`; }
     else profMsg = 'Покупка наборов скоро появится. Деньги не списываются.';
@@ -9482,6 +9574,7 @@ function tgAuthFromLocation() {
   return user && user.hash ? user : null;
 }
 const TG_AUTH = inMiniApp ? null : tgAuthFromLocation();
+refFromLocation();   // ?ref=CODE before the VK address cleanup
 const VK_AUTH = inMiniApp ? null : vkidFromLocation();
 async function tgWidgetLogin(user) {
   if (!cloudInit()) return noServer();
