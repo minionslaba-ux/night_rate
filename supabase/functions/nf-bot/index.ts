@@ -66,6 +66,7 @@ const ADMIN_COMMANDS = [
   { command: 'reload', description: 'Перезагрузить игру у всех (очистить кэш)' },
   { command: 'loads', description: 'Загрузка игры по устройствам за сутки' },
   { command: 'missions', description: 'Миссии: где бросают и где проваливают' },
+  { command: 'logins', description: 'Вход гостей сайта: показали окно → нажали → вошли (за 7 дней)' },
   { command: 'dailytask', description: 'Пост о задании дня: превью (/dailytask now — опубликовать)' },
   { command: 'stats', description: 'Отчёт за сегодня' },
   { command: 'yesterday', description: 'Отчёт за вчера' },
@@ -101,6 +102,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 ⏱ /loads — как грузится игра: устройства, браузеры, время до меню, сбои (сводка приходит сама каждое утро)
 📅 /dailytask — пост о задании дня (сам выходит раз в 5 дней в 15:00 МСК): превью · /dailytask now — опубликовать сейчас
 🎯 /missions — миссии за 7 дней: сколько начали, прошли, провалили, бросили; где скучно и где сложно (/missions 1 — за сутки)
+🔑 /logins — вход гостей сайта за 7 дней: сколько увидели окно входа, нажали кнопку, вошли, отказались, какие ошибки
 🚨 О сбоях бот пишет сам (проверка раз в 2 минуты, не чаще раза в 5 минут) — с кнопкой перезагрузки
 
 📊 <b>Статистика</b>
@@ -332,6 +334,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
     }
     case 'reload': await say(await reloadAll()); return true;
     case 'loads': await say(await loadsReport(Number(rest) || 24)); return true;
+    case 'logins': await say(await loginsReport(Number(rest) || 7)); return true;
     case 'missions': await say(await missionsReport(Number(rest) || 7)); return true;
     case 'dailytask': {
       if (arg === 'now') { const r = await dtaskRun(true); await say(r.ok ? `✅ Пост о задании дня опубликован.\n${r.vk}\n${r.max}` : `Не вышло: ${esc(r.error || r.skipped || '')}`); return true; }
@@ -440,6 +443,23 @@ async function loadsReport(hours: number) {
   const fl = fails.slice(0, 5).map((r) => `• ${esc(r.device)} · ${esc(r.stage || '')} · ${esc(String(r.note || '').slice(0, 90))} · ${esc(r.ver || '')}`);
   return `⏱ <b>Загрузка игры за ${hours} ч</b>: ${L.length} запусков, сбоев ${fails.length}, медиана до меню ${sec(med(all))}\n\n${rows.join('\n')}`
     + (slow.length ? `\n\n🐢 <b>Дольше 20 с</b>\n${slow.join('\n')}` : '') + (fl.length ? `\n\n❌ <b>Не загрузились</b>\n${fl.join('\n')}` : '');
+}
+// воронка входа гостей сайта (таблица nf_login, пишется с v102): по устройствам (sid) — увидели окно, нажали кнопку, вошли, отказались
+async function loginsReport(days: number) {
+  const since = new Date(Date.now() - days * 864e5).toISOString();
+  const [{ data }, { data: loads }] = await Promise.all([
+    db.from('nf_login').select('sid, ev, method, place, note').gte('created_at', since).limit(20000),
+    db.from('nf_loads').select('sid, guest').gte('created_at', since).eq('guest', true).limit(20000)]);
+  const R = data || [], uniq = (f: (r: any) => boolean) => new Set(R.filter(f).map((r) => r.sid)).size;
+  const guests = new Set((loads || []).map((r: any) => r.sid)).size;
+  if (!R.length) return `🔑 Вход гостей за ${days} дн.: записей нет (гостей с запусками: ${guests}).`;
+  const by = (ev: string, key: 'place' | 'method') => { const m = new Map<string, Set<string>>(); for (const r of R) if (r.ev === ev) { const k = r[key] || '—'; if (!m.has(k)) m.set(k, new Set()); m.get(k)!.add(r.sid); } return [...m].map(([k, v]) => `${k} ${v.size}`).join(', ') || '—'; };
+  const fails = R.filter((r) => r.ev === 'fail').slice(-5).map((r) => `• ${esc(r.method || '?')}: ${esc(String(r.note || '').slice(0, 100))}`);
+  return `🔑 <b>Вход гостей сайта за ${days} дн.</b> (считаются устройства)\n`
+    + `Гостей с запусками: ${guests}\nУвидели окно входа: <b>${uniq((r) => r.ev === 'offer')}</b> (${by('offer', 'place')})\n`
+    + `Нажали кнопку входа: <b>${uniq((r) => r.ev === 'click')}</b> (${by('click', 'method')})\nВошли: <b>${uniq((r) => r.ev === 'ok')}</b> (${by('ok', 'method')})\n`
+    + `«Играть без входа»: ${uniq((r) => r.ev === 'skip')} · закрыли окно: ${uniq((r) => r.ev === 'close')} · ошибки: ${uniq((r) => r.ev === 'fail')}`
+    + (fails.length ? `\n\n❌ <b>Последние ошибки входа</b>\n${fails.join('\n')}` : '');
 }
 // журнал миссий (таблица nf_missions): по каждой миссии — начали, прошли, провалили (провал + гибель), бросили (вышел в меню, закрыл игру,
 // начал заново), медианное время прохождения. Тестеры не считаются.
