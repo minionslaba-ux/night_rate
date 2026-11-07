@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v97'; window.__errs = [];
+window.APP_VER = 'v98'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -9206,10 +9206,20 @@ function mrgPlace() {
   }
 }
 addEventListener('resize', () => { if (state.mode === 'preview') mrgPlace(); });
+// ad journal (table nf_ads): every attempt and what Yandex answered — shown, error (with its text) or nothing at all
+function adLog(ev, note) {
+  try { const U = uaInfo(); fetch(SB_URL + '/rest/v1/nf_ads', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' },
+    body: JSON.stringify([{ ver: window.APP_VER, net: PLATFORM, ev, note: note ? String(note).slice(0, 190) : null, device: U.device, browser: U.browser }]) }).catch(() => {}); } catch (e) { /* no log */ }
+}
 function adBetween() {
-  if (!adCan() || Date.now() - (store.get('nf-ad-at') || 0) < AD_GAP) return;
-  store.set('nf-ad-at', Date.now()); adLoad();
-  window.yaContextCb.push(() => { try { window.Ya.Context.AdvManager.render({ blockId: AD_BLOCK, type: 'fullscreen', platform: 'touch' }); } catch (e) { /* no ad */ } });
+  if (!adCan()) return;
+  if (Date.now() - (store.get('nf-ad-at') || 0) < AD_GAP) return;
+  store.set('nf-ad-at', Date.now()); adLoad(); adLog('try');
+  let answered = false;
+  setTimeout(() => { if (!answered) adLog('error', window.Ya && window.Ya.Context ? 'нет ответа за 8 с' : 'скрипт context.js не загрузился (блокировщик или сеть)'); }, 8000);
+  window.yaContextCb.push(() => { try { window.Ya.Context.AdvManager.render({ blockId: AD_BLOCK, type: 'fullscreen', platform: 'touch',
+    onRender: () => { answered = true; adLog('shown'); }, onClose: () => adLog('closed'),
+    onError: (e) => { answered = true; adLog('error', (e && (e.type || e.code || e.message)) ? `${e.type || ''} ${e.code || ''} ${e.message || ''}` : JSON.stringify(e || {})); } }); } catch (e) { answered = true; adLog('error', 'исключение: ' + String(e && e.message || e)); } });
 }
 function profMax(k, v) { if (v > (PROF.st[k] || 0)) { PROF.st[k] = v; saveProfile(); checkAch(); } }
 function profEp(ep) { if (!PROF.st.eps.includes(ep)) { PROF.st.eps.push(ep); saveProfile(); } checkAch(); checkRank(); }
