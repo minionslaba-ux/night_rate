@@ -755,7 +755,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v85'; window.__errs = [];
+window.APP_VER = 'v86'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -827,7 +827,11 @@ const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') ||
   setTimeout(() => { try { localStorage.setItem('nf-crash', '0'); } catch (e) { /* storage unavailable */ } }, 120000); }   // two minutes without a crash: the count starts over
 const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if (CRASH >= 2) localStorage.setItem('nf-gfx', 'auto'); } catch (e) { /* storage unavailable */ } const phone = isTouch && Math.min(screen.width, screen.height) < 600;   // phones start light (HD in the pause menu); tablets and computers in HD
   return { pref: v === 'hd' && CRASH === 0 ? 'hd' : v === 'auto' || CRASH >= 1 || phone ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' || CRASH >= 1, crash: CRASH }; })();   // HD by default; «chosen» = the player picked it in the pause menu (or a crash picked «auto»)   // HD by default; «chosen» = the player picked it in the pause menu
-const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 ? 1 : isTouch ? 1.5 : 1.75), PR_HD = Math.min(DPR, 2);
+// the GPU name (where the browser tells it): phones with a weak GPU (Mali-G57 in Helio G99 — Tecno, Infinix, Redmi…) start lighter
+const GPU = (() => { try { const gl = renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return String((x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) || '').slice(0, 110); } catch (e) { return ''; } })();
+const WEAK_GPU = isTouch && (/Mali-(G31|G51|G52|G57|T\d)|Adreno \(TM\) ([345]\d\d|6[01]\d)\b|PowerVR|IMG BXM/i.test(GPU) || (navigator.deviceMemory || 8) <= 3);
+const PHONE = isTouch && Math.min(screen.width, screen.height) < 600;
+const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 ? 1 : isTouch ? (WEAK_GPU ? 1.25 : 1.5) : 1.75), PR_HD = Math.min(DPR, 2);
 const HD = () => GFX.pref === 'hd';
 if (CRASH >= 1) setTimeout(() => toast('Игра перезапустилась после сбоя: включена облегчённая графика. Вернуть HD можно в паузе.', 5), 6000);
 renderer.setPixelRatio(HD() ? PR_HD : PR_BASE);
@@ -903,6 +907,7 @@ const coverOpen = () => !$('prof').hidden || !$('gate').hidden || !$('modal').hi
 let coverDrawn = 0;
 function render() {
   if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else { coverDrawn = 0; if (RS.pending) resize(); }
+  if (perf.shadowSkip) { renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = (perf.fn++ & 1) === 0; }
   if (composer) composer.render(); else renderer.render(scene, camera);
 }
 // iPhone Safari fires resize events on every scroll (the toolbar folds in and out); rebuilding the full-screen GPU buffers
@@ -930,29 +935,61 @@ window.addEventListener('resize', resizeSoon);
 window.addEventListener('orientationchange', () => { resize(); setTimeout(resize, 250); setTimeout(resize, 700); });
 if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeSoon);
 resize();
-// adaptive quality: first the bloom, then the resolution; the colour grade and the anti-aliasing stay unless the device really cannot cope
-const perf = { t: 0, frames: 0, level: 0, done: false, slow: 0 };
-function checkPerf(dt) {
-  if (perf.done) return;
-  if (isTouch && coverOpen()) { perf.t = 0; perf.frames = 0; return; }   // a window covers the game: no frames drawn, nothing to measure
-  perf.t += dt; perf.frames++;
-  if (perf.t < 2.5) return;
+// adaptive quality (mode «auto»): measured on real wall-clock time while driving or on foot — the light menu scene says nothing
+// about the city. It watches the whole session, not just the first seconds: two slow windows in a row (< 30 fps) — one step lighter:
+// 1 no bloom · 2 resolution 1× · 3 small shadow map, updated every other frame · 4 no post-processing, phones 0.8×.
+// The step reached is remembered on the device, so the next start is already light. Phones never climb above the base resolution.
+let PERF_SAVED = 0;
+try { const o = JSON.parse(localStorage.getItem('nf-perf') || 'null'); if (o && o.l > 0) PERF_SAVED = o.v === window.APP_VER ? o.l : o.l - 1; } catch (e) { /* storage unavailable */ }
+const PERF_BASE = () => (HD() ? 0 : Math.min(4, Math.max(WEAK_GPU ? 1 : 0, PERF_SAVED)));
+const perf = { t: 0, frames: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0,
+  st: 0, sf: 0, low: 99, sent: false };
+function perfSave() { try { localStorage.setItem('nf-perf', JSON.stringify({ l: perf.level, v: window.APP_VER })); } catch (e) { /* storage unavailable */ } }
+function perfShadow(sz) { if (moon.shadow.mapSize.x !== sz) { moon.shadow.mapSize.setScalar(sz); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } } }
+function perfApply() {
+  perf.applied = true;
+  if (HD()) { perf.shadowSkip = false; return; }
+  const L = perf.level;
+  if (bloomPass) bloomPass.enabled = L < 1;
+  perfShadow(L >= 3 ? 512 : isTouch || L >= 1 ? 1024 : 2048);
+  perf.shadowSkip = L >= 3; if (!perf.shadowSkip) renderer.shadowMap.autoUpdate = true;
+  const pr = L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
+  if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
+  if (L >= 4) composer = null;
+}
+// one report per session after a minute of play: how fast the game really runs on this device (table nf_fps)
+function perfReport() {
+  if (perf.sent || perf.st < 60) return; perf.sent = true;
+  try {
+    const U = uaInfo();
+    const row = { ver: window.APP_VER, device: U.device, os: U.os, browser: U.browser, gpu: GPU, mem: navigator.deviceMemory || null, cores: navigator.hardwareConcurrency || null, dpr: DPR,
+      fps: Math.round(perf.sf / perf.st * 10) / 10, fps_low: Math.round(perf.low * 10) / 10, pr: renderer.getPixelRatio(), level: perf.level, gfx: GFX.pref, secs: Math.round(perf.st) };
+    fetch(SB_URL + '/rest/v1/nf_fps', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([row]) }).catch(() => {});
+  } catch (e) { /* no report */ }
+}
+function checkPerf(raw) {
+  if (!perf.applied) perfApply();
+  if ((isTouch && coverOpen()) || document.hidden) { perf.t = 0; perf.frames = 0; return; }   // a window over the game or a hidden tab: nothing to measure
+  if (raw > 2) return;   // a long stall (loading a model, the tab coming back): skipped, the window goes on; slower frames are real lag and count
+  perf.t += raw; perf.frames++; perf.st += raw; perf.sf++;
+  if (perf.t < 3) return;
   const fps = perf.frames / perf.t; perf.t = 0; perf.frames = 0;
+  perf.low = Math.min(perf.low, fps); perf.win = (perf.win || 0) + 1; perf.last = fps; perfReport();
+  if (perf.cool > 0) { perf.cool--; return; }   // just changed something: let it settle for one window
   if (HD()) {
-    if (fps >= 24) { perf.slow = 0; perf.done = true; return; }
-    // HD by default but the device cannot keep up: quietly fall back to the adaptive mode (a player who picked HD keeps it)
-    if (!GFX.chosen && ++perf.slow >= 2) { GFX.pref = 'auto'; renderer.setPixelRatio(PR_BASE); resize(); moon.shadow.mapSize.setScalar(isTouch ? 1024 : 2048); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } perf.slow = 0; return; }
-    if (GFX.chosen && fps < 20 && !perf.warned) { perf.warned = true; toast('Графика HD тяжела для этого устройства — в паузе можно включить «Авто»', 4); perf.done = true; }
+    if (fps >= 24) { perf.slow = 0; return; }
+    // HD by default but the device cannot keep up: quietly fall back to «auto» (a player who picked HD keeps it)
+    if (!GFX.chosen && ++perf.slow >= 2) { GFX.pref = 'auto'; perf.level = Math.max(1, PERF_BASE()); perf.slow = 0; perf.cool = 1; perfApply(); perfSave(); return; }
+    if (GFX.chosen && fps < 20 && !perf.warned) { perf.warned = true; toast('Графика HD тяжела для этого устройства — в паузе можно включить «Авто»', 4); }
     return;
   }
-  // auto: plenty of headroom — climb to HD resolution once; if that costs too much, step back down
-  if (fps >= 55 && !perf.up && perf.level === 0 && !/iPhone|iPod/.test(navigator.userAgent) && PR_HD > renderer.getPixelRatio() + 0.1) { perf.up = true; renderer.setPixelRatio(PR_HD); resize(); return; }
-  if (perf.up && fps < 32 && renderer.getPixelRatio() > PR_BASE) { renderer.setPixelRatio(PR_BASE); resize(); perf.done = true; return; }
-  if (fps >= 32) { perf.done = true; return; }
-  perf.level++;
-  if (perf.level === 1) { if (bloomPass) bloomPass.enabled = false; moon.shadow.mapSize.set(1024, 1024); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } }
-  if (perf.level === 2) { renderer.setPixelRatio(1); resize(); }
-  if (perf.level === 3) { if (fps < 24) composer = null; perf.done = true; }
+  // tablets and computers with plenty of headroom: one step up to HD resolution; too costly — back down for good
+  if (!PHONE && !perf.up && !perf.noUp && perf.level === 0 && fps >= 55 && !/iPhone|iPod/.test(navigator.userAgent) && PR_HD > renderer.getPixelRatio() + 0.1) { perf.up = true; perf.cool = 1; perfApply(); return; }
+  if (perf.up && fps < 40) { perf.up = false; perf.noUp = true; perf.cool = 1; perfApply(); return; }
+  if (fps >= 30) { perf.slow = 0; return; }
+  if (perf.level === 3 && fps >= 22) { perf.slow = 0; return; }   // the last step (no post-processing at all) only when it is really bad
+  if (++perf.slow < 2 || perf.level >= 4) return;
+  perf.slow = 0; perf.level++; perf.cool = 1; perfApply(); perfSave();
 }
 
 // sky dome with stars and moon
@@ -981,6 +1018,7 @@ moon.shadow.mapSize.setScalar(HD() ? (isTouch ? 2048 : 4096) : isTouch ? 1024 : 
 Object.assign(moon.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 260 });
 moon.shadow.bias = -0.0004; moon.shadow.normalBias = 0.02;
 scene.add(moon, moon.target);
+perfApply();   // a weak GPU or a step remembered from the last session: light from the very first frame
 const flash = new THREE.PointLight(0xffa040, 0, 40, 2);
 scene.add(flash);
 const heroLight = new THREE.PointLight(0xffe2c0, 0, 16, 1.6);
@@ -13037,9 +13075,11 @@ let pausedFrom = null;
 // switch the graphics: resolution and shadows change at once; anti-aliasing and the detailed cars follow on the next start
 function setGfx(v) {
   GFX.pref = v; GFX.chosen = true; try { localStorage.setItem('nf-gfx', v); } catch (e) { /* storage unavailable */ }
-  perf.done = false; perf.up = false; perf.warned = false; perf.t = 0; perf.frames = 0; perf.level = 0; if (bloomPass) bloomPass.enabled = true;
+  PERF_SAVED = 0; try { localStorage.removeItem('nf-perf'); } catch (e) { /* storage unavailable */ }
+  perf.up = false; perf.noUp = false; perf.warned = false; perf.t = 0; perf.frames = 0; perf.slow = 0; perf.cool = 1; perf.level = PERF_BASE();
+  if (!composer) setupPost(); if (bloomPass) bloomPass.enabled = true; renderer.shadowMap.autoUpdate = true; perf.shadowSkip = false;
   renderer.setPixelRatio(HD() ? PR_HD : PR_BASE); resize();
-  moon.shadow.mapSize.setScalar(HD() ? (isTouch ? 2048 : 4096) : isTouch ? 1024 : 2048); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; }
+  perfShadow(HD() ? (isTouch ? 2048 : 4096) : isTouch ? 1024 : 2048); perfApply();
   toast(HD() ? 'Графика HD: полное разрешение и чёткие тени. Сглаживание и подробные машины — после перезапуска игры' : 'Графика: авто — игра сама подбирает качество под устройство', 3.2);
 }
 function pauseGame() {
@@ -13408,9 +13448,9 @@ window.addEventListener('keydown', (e) => {
 let last = performance.now();
 function loop(now) {
   requestAnimationFrame(loop);
-  let dt = Math.min(0.05, (now - last) / 1000); last = now; dt = cineTime(dt); state.t += dt;
+  const rawDt = (now - last) / 1000; let dt = Math.min(0.05, rawDt); last = now; dt = cineTime(dt); state.t += dt;
   if (state.invuln > 0) state.invuln -= dt;
-  if (state.mode === 'preview' || state.mode === 'drive') checkPerf(dt);
+  if (state.mode === 'drive' || state.mode === 'foot') checkPerf(rawDt);
   if (state.mode !== 'drive' && audio.sk && audio.sk.k > 0) skid(0);   // out of the car (dialog, foot, pause): the screech stops
   ambTick(dt);
   if (state.mode === 'preview') updatePreview(dt);
@@ -13489,7 +13529,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
