@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v94'; window.__errs = [];
+window.APP_VER = 'v95'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -8153,7 +8153,7 @@ const GEN = {
     let rot = 0;
     const cfg = (k, w) => { const heavy = c.heavyFrom && w >= c.heavyFrom && k % 3 === 0; return Object.assign({ look: factionLook(fac, heavy), react: rand(0.6, 1.5), tgt: ally && k % 3 === 1 ? ally : undefined }, heavy ? { hp: 130, scale: 1.12, burst: 2 } : {}); };
     const group = (n, w) => { const pts = []; for (let k = 0; k < n; k++) pts.push(A.edges[(rot++ * 4 + k) % A.edges.length]); queueWave(pts, 0.5, (k) => cfg(k, w)); };
-    const phases = []; if (c.docs) phases.push('docs'); if (c.waves) phases.push('waves'); if (c.drill) phases.push('drill'); if (c.survive) phases.push('survive'); if (c.heliBoss) phases.push('heli'); if (c.boss) phases.push('boss'); if (c.exit) phases.push('exit');
+    const phases = []; if (c.docs) phases.push('docs'); if (c.waves) phases.push('waves'); if (c.zone) phases.push('zone'); if (c.drill) phases.push('drill'); if (c.survive) phases.push('survive'); if (c.heliBoss) phases.push('heli'); if (c.boss) phases.push('boss'); if (c.exit) phases.push('exit');
     const st = { ph: -1, found: 0, wave: 0, gap: 0, left: 0, spT: 0, boss: null, exit: null, medkit: false, prog: 0, jam: false, jamT: 0, fix: 0, dpos: null, rig: null };
     if (A.bank) setVault(c.vault === 'open');
     if (c.drill) {
@@ -8185,6 +8185,10 @@ const GEN = {
         toast(c.heliBoss.msg || 'Вертолёт заходит на цель!', 2); setObjective(c.heliBoss.obj || 'Сбей вертолёт: целься в него и стреляй.');
       }
       else if (P_ === 'survive') { st.left = c.survive; st.spT = 1; setObjective(c.surviveObj || `Продержись ${fmt(c.survive)}.`); }
+      else if (P_ === 'zone') {   // hold a point: stand inside the green circle while the bar fills; fewer foes around — faster; step out — it drains
+        const Z = c.zone, at = Z.at || A.mid; st.zp = new V3(at[0], 0, at[1]); st.prog = 0; st.spT = 2; st.zTxt = '';
+        st.zmark = tMark(at[0], at[1], 0x4dffa6, 10); setBeam(st.zp); toast(Z.msg || `Удержи: ${Z.name}!`, 1.8);
+      }
       else if (P_ === 'boss') {
         const B = c.boss, go = () => {
           state.mode = 'foot'; if (A.gate) warehouseDoor.position.y = 6.2;
@@ -8205,6 +8209,14 @@ const GEN = {
       update(dt) {
         const P_ = phases[st.ph], clear = aliveFoes() === 0 && !spawnQueue.length;
         if (P_ === 'docs') { if (st.found >= c.docs && clear) next(); }
+        else if (P_ === 'zone') {
+          const Z = c.zone, inside = hero && Math.hypot(hero.pos.x - st.zp.x, hero.pos.z - st.zp.z) < 5, foes = aliveFoes();
+          if (inside) st.prog += dt * 100 / (Z.secs || 30) * (foes > 3 ? 0.45 : foes > 0 ? 0.75 : 1); else st.prog = Math.max(0, st.prog - dt * 2.5);
+          st.spT -= dt; if (st.spT <= 0 && foes + spawnQueue.length < (Z.max || 5)) { group(2, 2); st.spT = Z.every || 6.5; }
+          const txt = `${Z.name}: ${Math.min(100, Math.floor(st.prog))}%${inside ? (foes > 0 ? ' · враги рядом — медленнее' : '') : ' · вернись в зелёный круг!'}`;
+          if (txt !== st.zTxt) { st.zTxt = txt; setObjective(txt); }
+          if (st.prog >= 100) { scene.remove(st.zmark); toast(Z.done || `${Z.name}: удержано!`, 1.6); addCoins(30); next(); }
+        }
         else if (P_ === 'waves') {
           if (st.gap > 0) {
             st.gap -= dt;
@@ -11092,6 +11104,14 @@ const EP_REMIX = [
     about: 'Подъезды к вертолётной площадке «Сокола» перекрыты заграждениями, за каждым — бочки с топливом. Снести их на скорости, пока вертолёт не заправился.',
     intro: [['hero', 'Заграждения на всех подъездах, а за ними бочки с топливом.'], ['mark', 'Стрелять бесполезно, их там десятки. Тарань на скорости — бочки вспыхнут сами.']] },
 ];
+// arenas that now have a point to hold instead of (part of) the waves
+const ZONE_REMIX = [
+  { ep: 6, ch: 2, waves: [4], zone: { name: 'Причал', secs: 32, msg: 'Держи причал, пока Соня прячется за контейнером!' } },
+  { ep: 9, ch: 6, waves: [5, 6], zone: { name: 'Ворота гаража', secs: 30, msg: 'Не дай им прорваться в гараж: встань у ворот!' } },
+  { ep: 12, ch: 1, waves: [4], zone: { name: 'Крыльцо мэрии', secs: 28, msg: 'Займи крыльцо мэрии — оттуда видно фургон!' } },
+  { ep: 12, ch: 5, waves: [5], zone: { name: 'Двери склада', secs: 30, msg: 'Пробейся к дверям склада и держи их!' } },
+];
+for (const Z of ZONE_REMIX) { const c = EPS[Z.ep] && EPS[Z.ep].chapters[Z.ch - 1]; if (c && c.type === 'arena') { c.waves = Z.waves; c.zone = Z.zone; } }
 for (const R of EP_REMIX) {
   const E = EPS[R.ep], old = E && E.chapters[R.ch - 1]; if (!old || old.type !== 'arena') continue;
   const cfg = pickT2(R.kind, { x: R.start[0], z: R.start[1], h: hdg(R.start[2]) }, R.ep * 10 + R.ch); if (!cfg) continue;
