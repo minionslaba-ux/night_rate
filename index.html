@@ -757,7 +757,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v90'; window.__errs = [];
+window.APP_VER = 'v91'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -796,7 +796,10 @@ const sr = (a, b) => a + srand() * (b - a);
 const pick = (arr) => arr[Math.floor(srand() * arr.length)];
 
 const isTouch = window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
-if (/iPhone|iPod/.test(navigator.userAgent)) document.documentElement.classList.add('ios');
+// iPhone and iPad (iPadOS Safari introduces itself as a Mac — the touch screen gives it away): the same memory limits and the same light start
+const IOS = /iPhone|iPod|iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const IOS_VER = IOS ? +((navigator.userAgent.match(/OS (\d+)_/) || navigator.userAgent.match(/Version\/(\d+)/) || [])[1] || 0) : 0;
+if (IOS) document.documentElement.classList.add('ios');   // iPad too: no backdrop blur (costly on old iPads)
 if (isTouch) { document.documentElement.classList.add('tch'); const dn = document.querySelector('.dlg-next'); if (dn) dn.textContent = 'Нажми — дальше'; }   // not 'touch': that is the class of the on-screen controls
 
 // ---------------- renderer / scene ----------------
@@ -826,13 +829,15 @@ const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') ||
 { const mark = (on) => { try { if (on) localStorage.setItem('nf-run', '1'); else localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } };
   addEventListener('pagehide', () => mark(false)); addEventListener('pageshow', () => mark(true)); document.addEventListener('visibilitychange', () => mark(!document.hidden));
   setTimeout(() => { try { localStorage.setItem('nf-crash', '0'); } catch (e) { /* storage unavailable */ } }, 120000); }   // two minutes without a crash: the count starts over
-const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if (CRASH >= 2) localStorage.setItem('nf-gfx', 'auto'); } catch (e) { /* storage unavailable */ } const phone = isTouch && Math.min(screen.width, screen.height) < 600;   // phones start light (HD in the pause menu); tablets and computers in HD
+const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if (CRASH >= 2) localStorage.setItem('nf-gfx', 'auto'); } catch (e) { /* storage unavailable */ } const phone = isTouch && (Math.min(screen.width, screen.height) < 600 || IOS);   // phones and iPads start light (HD in the pause menu); tablets and computers in HD
   return { pref: v === 'hd' && CRASH === 0 ? 'hd' : v === 'auto' || CRASH >= 1 || phone ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' || CRASH >= 1, crash: CRASH }; })();   // HD by default; «chosen» = the player picked it in the pause menu (or a crash picked «auto»)   // HD by default; «chosen» = the player picked it in the pause menu
 // the GPU name (where the browser tells it): phones with a weak GPU (Mali-G57 in Helio G99 — Tecno, Infinix, Redmi…) start lighter
 const GPU = (() => { try { const gl = renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return String((x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) || '').slice(0, 110); } catch (e) { return ''; } })();
 const WEAK_GPU = isTouch && (/Mali-(G31|G51|G52|G57|T\d)|Adreno \(TM\) ([345]\d\d|6[01]\d)\b|PowerVR|IMG BXM/i.test(GPU) || (navigator.deviceMemory || 8) <= 3);
-const PHONE = isTouch && Math.min(screen.width, screen.height) < 600;
-const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 ? 1 : isTouch ? (WEAK_GPU ? 1.25 : 1.5) : 1.75), PR_HD = Math.min(DPR, 2);
+// old Apple devices (iOS 16 and older, or a 9.7-inch iPad 768×1024): 1000+ draw calls a frame is more than their processor can feed
+const OLD_IOS = IOS && ((IOS_VER > 0 && IOS_VER <= 16) || (Math.min(screen.width, screen.height) <= 768 && Math.max(screen.width, screen.height) <= 1024));
+const PHONE = isTouch && (Math.min(screen.width, screen.height) < 600 || IOS);
+const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 ? 1 : isTouch ? (WEAK_GPU || OLD_IOS ? 1.25 : 1.5) : 1.75), PR_HD = Math.min(DPR, 2);
 const HD = () => GFX.pref === 'hd';
 if (CRASH >= 1) setTimeout(() => toast('Игра перезапустилась после сбоя: включена облегчённая графика. Вернуть HD можно в паузе.', 5), 6000);
 renderer.setPixelRatio(HD() ? PR_HD : PR_BASE);
@@ -922,7 +927,7 @@ function warmShaders() {
 }
 function render() {
   if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else { coverDrawn = 0; if (RS.pending) resize(); }
-  if (perf.shadowSkip) { renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = (perf.fn++ & 1) === 0; }
+  if (perf.shadowSkip) { renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = (perf.fn++ % perf.every) === 0; }
   if (composer) composer.render(); else renderer.render(scene, camera);
 }
 // iPhone Safari fires resize events on every scroll (the toolbar folds in and out); rebuilding the full-screen GPU buffers
@@ -956,18 +961,22 @@ resize();
 // The step reached is remembered on the device, so the next start is already light. Phones never climb above the base resolution.
 let PERF_SAVED = 0;
 try { const o = JSON.parse(localStorage.getItem('nf-perf') || 'null'); if (o && o.l > 0) PERF_SAVED = o.v === window.APP_VER ? o.l : o.l - 1; } catch (e) { /* storage unavailable */ }
-const PERF_BASE = () => (HD() ? 0 : Math.min(4, Math.max(WEAK_GPU ? 1 : 0, PERF_SAVED)));
-const perf = { t: 0, frames: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0,
+const PERF_BASE = () => (HD() ? 0 : Math.min(4, Math.max(OLD_IOS ? 3 : WEAK_GPU ? 1 : 0, PERF_SAVED)));
+const perf = { t: 0, frames: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0, view: 0, every: 1,
   st: 0, sf: 0, low: 99, sent: false };
 function perfSave() { try { localStorage.setItem('nf-perf', JSON.stringify({ l: perf.level, v: window.APP_VER })); } catch (e) { /* storage unavailable */ } }
 function perfShadow(sz) { if (moon.shadow.mapSize.x !== sz) { moon.shadow.mapSize.setScalar(sz); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } } }
 function perfApply() {
   perf.applied = true;
-  if (HD()) { perf.shadowSkip = false; return; }
+  if (HD()) { perf.shadowSkip = false; perf.view = 0; camera.far = 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(1); scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = true; }); return; }
   const L = perf.level;
   if (bloomPass) bloomPass.enabled = L < 1;
   perfShadow(L >= 3 ? 512 : isTouch || L >= 1 ? 1024 : 2048);
-  perf.shadowSkip = L >= 3; if (!perf.shadowSkip) renderer.shadowMap.autoUpdate = true;
+  perf.shadowSkip = L >= 3; perf.every = L >= 4 ? 4 : 2; if (!perf.shadowSkip) renderer.shadowMap.autoUpdate = true;
+  // draw distance: the far blocks hide in the fog (half the draw calls at 170 m); the sky dome shrinks with it so the stars stay
+  perf.view = L >= 3 ? 170 : L >= 2 ? 230 : 0; camera.far = perf.view || 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(perf.view ? (perf.view - 15) / 800 : 1);
+  // parked cars, lamps and benches (instanced kit models, ~0.5 M triangles) stop casting shadows
+  scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = L < 3; });
   const pr = L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
   if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
   if (L >= 4) composer = null;
@@ -999,7 +1008,7 @@ function checkPerf(raw) {
     return;
   }
   // tablets and computers with plenty of headroom: one step up to HD resolution; too costly — back down for good
-  if (!PHONE && !perf.up && !perf.noUp && perf.level === 0 && fps >= 55 && !/iPhone|iPod/.test(navigator.userAgent) && PR_HD > renderer.getPixelRatio() + 0.1) { perf.up = true; perf.cool = 1; perfApply(); return; }
+  if (!PHONE && !perf.up && !perf.noUp && perf.level === 0 && fps >= 55 && !IOS && PR_HD > renderer.getPixelRatio() + 0.1) { perf.up = true; perf.cool = 1; perfApply(); return; }
   if (perf.up && fps < 40) { perf.up = false; perf.noUp = true; perf.cool = 1; perfApply(); return; }
   if (fps >= 30) { perf.slow = 0; return; }
   if (perf.level === 3 && fps >= 22) { perf.slow = 0; return; }   // the last step (no post-processing at all) only when it is really bad
@@ -1279,7 +1288,7 @@ function kitInstances(name, list, mat, shadow) {
       const im = new THREE.InstancedMesh(geo, mat || o.material, part.length), box = new THREE.Box3(), sp = new THREE.Sphere();
       part.forEach((t, i) => { _m4.compose(_p.set(t.x, t.y || 0, t.z), _q.setFromEuler(_e.set(0, t.ry || 0, 0)), _s.set(t.sx, t.sy || t.sx, t.sz || t.sx)); _mw.multiplyMatrices(_m4, o.matrixWorld); im.setMatrixAt(i, _mw); sp.copy(o.geometry.boundingSphere).applyMatrix4(_mw); box.expandByPoint(sp.center.clone().addScalar(sp.radius)); box.expandByPoint(sp.center.clone().addScalar(-sp.radius)); });
       geo.boundingSphere = box.getBoundingSphere(new THREE.Sphere()); geo.boundingBox = box;
-      im.castShadow = !!shadow; im.receiveShadow = true; im.frustumCulled = true; im.matrixAutoUpdate = false; scene.add(im);
+      im.castShadow = !!shadow; im.userData.kitShadow = !!shadow; im.receiveShadow = true; im.frustumCulled = true; im.matrixAutoUpdate = false; scene.add(im);
     }
   });
 }
@@ -4848,7 +4857,7 @@ function liftDark(c) { const hsl = {}; c.getHSL(hsl); if (hsl.l < 0.06) c.setHSL
 const NR = { ready: false, G: {}, clips: {}, H: 2.0, carInfo: null };
 // iPhone: Safari ends the tab when memory runs out at start — the four heavy people (≈50 pictures of 1024 px, 6.6 MB of files)
 // are not loaded there; the characters made of them wear the light bodies
-const NR_LITE = /iPhone|iPod/.test(navigator.userAgent) ? { man2: 'man', man3: 'man', woman2: 'woman', woman3: 'woman' } : {};
+const NR_LITE = IOS ? { man2: 'man', man3: 'man', woman2: 'woman', woman3: 'woman' } : {};
 const NR_SRC = ['man', 'man2', 'man3', 'woman', 'woman2', 'woman3', 'michelle', 'anims', 'car'].filter((k) => !NR_LITE[k]);
 const NR_BODY = { vik: 'man', gleb: 'man', artem: 'man', timur: 'man3', savva: 'man2', rustam: 'man2', kira: 'woman', maya: 'michelle', zoya: 'woman2', nika: 'woman2', olga: 'woman3', mark: 'man3', vera: 'woman3', thug1: 'man2', thug2: 'man', thug3: 'man2', boss: 'man', crow: 'man2' };
 const NR_FEM = { woman: 1, woman2: 1, woman3: 1, michelle: 1 };
@@ -4897,7 +4906,7 @@ function nrPlaceGear(f) {
 }
 // iPhone: Safari closes the tab when it runs out of memory («На странице повторно возникла проблема»); the people and car packs
 // bring ~60 textures of 1024 px (4 MB each in memory, more with mipmaps) — on iPhone they are scaled to 512 px when loaded
-const TEX_CAP = /iPhone|iPod/.test(navigator.userAgent) ? 512 : 0, texCapDone = new WeakSet();
+const TEX_CAP = IOS ? 512 : 0, texCapDone = new WeakSet();
 function texCap(root, gl) {
   if (!TEX_CAP || !root) return;
   if (gl) gl.parser = null;   // its cache keeps the full-size pictures alive
@@ -5257,7 +5266,7 @@ function updateWeather(dt, focusP) {
   // rain: lines and splashes; fog: the fog closes in; wet asphalt reflects more
   const indoor = state.act === 2 && hero && hero.pos.x > 1270 && (state.mode === 'foot' || state.mode === 'dialog') && !['roof', 'motelRoof'].some((n) => Math.abs(hero.pos.x - INT[n][0]) < INT_W / 2 + 3 && Math.abs(hero.pos.z - INT[n][1]) < INT_D / 2 + 3);   // Season 3 rooms: no rain or snow under a roof (the rooftops stay open)
   rain.visible = WX.rain > 0.03 && !indoor; rain.material.opacity = 0.42 * WX.rain;
-  const fogK = Math.max(WX.fog, CITY && CITY.fogMin || 0, MIS && MIS.fog || 0); scene.fog.near = 70 - 62 * fogK; scene.fog.far = 290 - 215 * fogK;
+  const fogK = Math.max(WX.fog, CITY && CITY.fogMin || 0, MIS && MIS.fog || 0); scene.fog.near = 70 - 62 * fogK; scene.fog.far = 290 - 215 * fogK; if (perf.view) { scene.fog.far = Math.min(scene.fog.far, perf.view - 8); scene.fog.near = Math.min(scene.fog.near, scene.fog.far * 0.4); }
   if (KIT.groundMat) KIT.groundMat.envMapIntensity = 0.35 + 0.6 * Math.min(1, WX.rain + 0.4 * WX.fog);
   if (WX.snow > 0.03 && !indoor) {
     if (!WX.snowPts) wxSnowBuild();
@@ -6417,6 +6426,7 @@ function beginDrive(x, z, h) {
   if (hero) hero.g.visible = false; heroLight.intensity = 0;
   arrow.visible = true; $('hpLabel').textContent = 'Машина';
   camYaw = h; snapCam = true; state.spawnT = 6; state.firstChase = false; state.mode = 'drive';
+  if (perf.level >= 3) perfApply();   // a mission may have built a city of its own
 }
 function beginFoot(x, z, face) {
   if (state.mode === 'drive') sfx.door();
@@ -13620,7 +13630,7 @@ function loadReport(ok, stage, note) {
   } catch (e) { /* no report */ }
 }
 BOOT_LOAD.then(() => {
-  crumbStage('world'); buildWorld();
+  crumbStage('world'); buildWorld(); perfApply();   // the city's parked cars and lamps now exist: apply the shadow and distance settings to them
   crumbStage('profile'); loadProfile();   // a guest until the server session (if any) is restored
   initLife();
   buildRoster();
