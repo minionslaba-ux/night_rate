@@ -144,6 +144,7 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 @media (max-width: 560px) { .bars, .bars.low { top: calc(172px + var(--sat)); width: calc(100% - 24px); } }
 .boss .bar-track { margin-top: 5px; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
+.chip .stars { color: #ffc43d; letter-spacing: 1px; margin-left: 4px; font-size: .9em; }
 .drift-hud { position: absolute; top: 19%; left: 50%; transform: translateX(-50%) skewX(-8deg); font: 800 clamp(16px, 3vw, 26px)/1 var(--font-display); letter-spacing: .06em; color: #ff5ad1; text-shadow: 0 0 16px rgba(255,90,209,.6), 0 2px 4px #000; white-space: nowrap; pointer-events: none; z-index: 6; }
 .toast { position: absolute; top: 28%; left: 50%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(18px, 3.4vw, 30px); color: var(--taxi); text-shadow: 0 0 18px rgba(255,196,61,.55), 0 2px 4px #000; white-space: nowrap; animation: pop .25s ease-out; }
 @keyframes pop { from { transform: translateX(-50%) scale(1.4); opacity: 0; } }
@@ -757,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v91'; window.__errs = [];
+window.APP_VER = 'v92'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5901,7 +5902,9 @@ const MLOG = { sid: (() => { try { let v = localStorage.getItem('nf-sid'); if (!
 function missionLog(ev, reason, extra) {
   try {
     if (MIS && MIS.online) return;
-    if (ev === 'start') { MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey(); }
+    if (ev === 'start') { MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
+      MLOG.gt0 = state.time; MLOG.dmg0 = DIFF.dmg; MLOG.par = (extra && extra.par) || 150;
+      { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 2500); } }
     else { if (!MLOG.open) return; MLOG.open = false; }
     const all = store.get('nf-tries') || {};
     const row = { ver: window.APP_VER, sid: MLOG.sid, ep: MLOG.ep, ch: MLOG.ch, title: String(MLOG.title).slice(0, 90), mtype: String(MLOG.type).slice(0, 20), ev,
@@ -5910,11 +5913,28 @@ function missionLog(ev, reason, extra) {
     fetch(SB_URL + '/rest/v1/nf_missions', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([row]) }).catch(() => {});
   } catch (e) { /* no journal */ }
 }
+// ---- stars and records: ★ for the mission, ★ for beating the target time, ★ for coming through almost unhurt; every new star +25 coins.
+// The time is play time (driving and on foot), dialogs do not count. Stored in PROF.stars['ep:ch'] = { s, t } (best stars, best time).
+const PAR_BY_TYPE = { arena: 150, deliver: 110, escape: 130, stop: 120, tail: 160, hunt: 140, storm: 170, helichase: 160, train: 130, plane: 140 };
+function missionPar(c) { return Math.round((c && c.par) || (c && c.secs ? c.secs * 0.65 : PAR_BY_TYPE[c && c.type] || 150)); }
+const fmtT = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec) % 60).padStart(2, '0')}`;
+function starsLine(st) { return '★'.repeat(st.s || 0) + '☆'.repeat(3 - (st.s || 0)); }
+function missionStars() {
+  if (!MLOG.open || (MIS && MIS.online)) return null;
+  const t = Math.max(1, state.time - (MLOG.gt0 || 0)), dmg = DIFF.dmg - (MLOG.dmg0 || 0), fast = t <= MLOG.par, clean = dmg <= 20;
+  const s = 1 + (fast ? 1 : 0) + (clean ? 1 : 0), key = MLOG.ep + ':' + MLOG.ch;
+  PROF.stars = PROF.stars || {}; const old = PROF.stars[key] || { s: 0, t: 0 }, rec = !old.t || t < old.t;
+  const gain = Math.max(0, s - old.s);
+  PROF.stars[key] = { s: Math.max(s, old.s), t: rec ? Math.round(t) : old.t }; saveProfile();
+  setTimeout(() => toast(`${'★'.repeat(s)}${'☆'.repeat(3 - s)} · ${fmtT(t)}${rec && old.t ? ' — рекорд!' : ''}${!fast ? ` · быстрее ${fmtT(MLOG.par)} — ещё ★` : ''}${!clean ? ' · без урона — ещё ★' : ''}`, 3.2), 300);
+  if (gain > 0) setTimeout(() => addCoins(25 * gain), 1400);
+  return s;
+}
 // closing the game in the middle of a mission counts as quitting it
 addEventListener('pagehide', () => { if (MLOG.open) missionLog('quit', 'закрыл игру'); });
 function runEnd(result, reason) {
   if (MIS && MIS.online) return;
-  missionLog(result === 'win' ? 'win' : result === 'death' ? 'death' : 'fail', reason);
+  missionLog(result === 'win' ? 'win' : result === 'death' ? 'death' : 'fail', reason, result === 'win' ? { stars: missionStars() } : null);
   DIFF.last = { key: diffKey(), result, reason };
   const key = diffKey(), all = store.get('nf-tries') || {}, tries = all[key] || 0, mult = Math.round(diffMult() * 100) / 100;
   if (result === 'win') delete all[key]; else all[key] = Math.min(9, tries + 1);
@@ -6964,7 +6984,7 @@ function renderChapters() {
   const box = $('chapters'), max = selEp >= 2 ? epMaxAny(selEp) : 1; box.hidden = selEp < 2;
   if (ep2Pick > max) ep2Pick = max;
   const titles = selEp === 2 ? EP2_TITLES : selEp >= 3 ? EPS[selEp].chapters.map((c) => c.t) : [];
-  box.innerHTML = titles.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}${i + 1 === max && !epDone(selEp) ? ' next' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1 < max || epDone(selEp) ? '✓ ' : i + 1 > max ? '🔒 ' : '▶ '}${i + 1}. ${t}</button>`).join('');
+  box.innerHTML = titles.map((t, i) => `<button class="chip${ep2Pick === i + 1 ? ' active' : ''}${i + 1 === max && !epDone(selEp) ? ' next' : ''}" type="button" data-ch="${i + 1}" ${i + 1 > max ? 'disabled' : ''}>${i + 1 < max || epDone(selEp) ? '✓ ' : i + 1 > max ? '🔒 ' : '▶ '}${i + 1}. ${t}${(() => { const st = (PROF.stars || {})[selEp + ':' + (i + 1)]; return st ? ` <span class="stars">${starsLine(st)}</span>` : ''; })()}</button>`).join('');
   box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { ep2Pick = +b.dataset.ch; renderChapters(); }));
   const L = loadLast();
   $('btnGo').textContent = L && L.ep === selEp && L.ch === ep2Pick && selEp >= 2 ? `Продолжить: эпизод ${selEp}, миссия ${ep2Pick}` : selEp >= 2 ? (ep2Pick === 1 ? `Начать эпизод ${selEp}` : `Миссия ${ep2Pick}`) : 'В путь';
@@ -7897,7 +7917,7 @@ function startGen(ep, i, withIntro) {
   const mode0 = state.mode;
   const intro = () => { if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; }); };
   if (E.season3 && c.type !== 'choice' && state.mode !== 'dialog') s3Trunk(intro); else intro();
-  if (MLOG.open) missionLog('quit', 'перезапуск'); missionLog('start', null, { type: c.type, title: c.t });
+  if (MLOG.open) missionLog('quit', 'перезапуск'); missionLog('start', null, { type: c.type, title: c.t, par: missionPar(c) });
 }
 
 // the business jet: parked in hangar 3, or set down where a chapter needs it
