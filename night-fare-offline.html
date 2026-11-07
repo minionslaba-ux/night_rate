@@ -144,6 +144,7 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 @media (max-width: 560px) { .bars, .bars.low { top: calc(172px + var(--sat)); width: calc(100% - 24px); } }
 .boss .bar-track { margin-top: 5px; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
+.drift-hud { position: absolute; top: 19%; left: 50%; transform: translateX(-50%) skewX(-8deg); font: 800 clamp(16px, 3vw, 26px)/1 var(--font-display); letter-spacing: .06em; color: #ff5ad1; text-shadow: 0 0 16px rgba(255,90,209,.6), 0 2px 4px #000; white-space: nowrap; pointer-events: none; z-index: 6; }
 .toast { position: absolute; top: 28%; left: 50%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(18px, 3.4vw, 30px); color: var(--taxi); text-shadow: 0 0 18px rgba(255,196,61,.55), 0 2px 4px #000; white-space: nowrap; animation: pop .25s ease-out; }
 @keyframes pop { from { transform: translateX(-50%) scale(1.4); opacity: 0; } }
 .hint { position: absolute; left: calc(14px + var(--sal)); bottom: calc(14px + var(--sab)); font-size: 12px; color: var(--muted); background: var(--panel); padding: 6px 10px; border-radius: 6px; }
@@ -656,6 +657,7 @@ setTimeout(function () {
   <div id="cabArrow" class="cab-arrow" hidden><svg id="cabArrowI" viewBox="-50 -50 100 100" aria-hidden="true"><path d="M0 -44 L34 -4 L14 -4 L14 40 L-14 40 L-14 -4 L-34 -4 Z" fill="#4dffa6" fill-opacity=".85" stroke="#0b0d1f" stroke-opacity=".7" stroke-width="4" stroke-linejoin="round"/></svg></div>
   <div id="speedo" class="speedo"><b id="speed">0</b><small>км/ч</small></div>
   <div id="toast" class="toast" hidden></div>
+  <div id="driftHud" class="drift-hud" hidden></div>
   <div id="hint" class="hint"></div>
 </div>
 
@@ -755,7 +757,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v86'; window.__errs = [];
+window.APP_VER = 'v87'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5736,6 +5738,53 @@ function segDist2(a, b, p) {
   const x = a.x + abx * t - p.x, z = a.z + abz * t - p.z; return x * x + z * z;
 }
 
+// ---------------- drift: tyre marks, smoke from the rear wheels, drift points ----------------
+// marks: one instanced mesh (a single draw call), a ring of 700 short dark strips laid behind the rear wheels
+const SKID = (() => {
+  const N = 700, geo = new THREE.PlaneGeometry(0.32, 1); geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ color: 0x07070a, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const m = new THREE.InstancedMesh(geo, mat, N); m.count = 0; m.frustumCulled = false; m.renderOrder = 1; scene.add(m);
+  return { m, N, i: 0, last: [null, null], o: new THREE.Object3D() };
+})();
+function skidClear() { SKID.m.count = 0; SKID.i = 0; SKID.last = [null, null]; SKID.m.instanceMatrix.needsUpdate = true; }
+const DRIFT = { on: false, t: 0, off: 0, score: 0, combo: 0, shown: '' };
+const wheelPos = (side) => { const f = Math.sin(pc.h), g = Math.cos(pc.h); return new V3(pc.pos.x - f * 1.25 - g * 0.82 * side, 0.05, pc.pos.z - g * 1.25 + f * 0.82 * side); };
+function driftHud(text) { const el = $('driftHud'); if (!el) return; if (text === DRIFT.shown) return; DRIFT.shown = text; el.hidden = !text; if (text) el.textContent = text; }
+function driftEnd(ok) {
+  const sc = Math.round(DRIFT.score); DRIFT.on = false; DRIFT.score = 0; DRIFT.combo = 0; DRIFT.t = 0; driftHud('');
+  if (!ok) { if (sc >= 100) toast('Занос сорван', 1.2); return; }
+  if (sc < 100) return;
+  const st = PROF.st, rec = sc > (st.driftBest || 0); if (rec) { st.driftBest = sc; saveProfile(); }
+  const coins = Math.min(15, Math.floor(sc / 100));
+  if (coins > 0) addCoins(coins);
+  setTimeout(() => toast(rec && sc >= 400 ? `Рекорд заноса: ${sc} очков!` : `Занос: ${sc} очков`, 1.6), coins > 0 ? 700 : 0);
+}
+function driftTick(dt, drift, imp, throttle) {
+  const sp = Math.abs(pc.vf || 0), side = Math.abs(pc.vr || 0), slide = side > 3.5 && sp > 8 && !pc.locked;
+  const brake = throttle < -0.3 && (pc.vf || 0) > 14;
+  // marks: while sliding with «Занос», or a hard sideways skid / a hard stop at speed
+  const mark = (slide && (drift || side > 6.5)) || (brake && sp > 16);
+  for (let w = 0; w < 2; w++) {
+    if (!mark) { SKID.last[w] = null; continue; }
+    const p = wheelPos(w ? 1 : -1), l = SKID.last[w];
+    if (l) { const dx = p.x - l.x, dz = p.z - l.z, len = Math.hypot(dx, dz);
+      if (len > 4) SKID.last[w] = p;
+      else if (len > 0.35) { const o = SKID.o; o.position.set((p.x + l.x) / 2, 0.045, (p.z + l.z) / 2); o.rotation.set(0, Math.atan2(dx, dz), 0); o.scale.set(1, 1, len + 0.05); o.updateMatrix();
+        SKID.m.setMatrixAt(SKID.i, o.matrix); SKID.i = (SKID.i + 1) % SKID.N; SKID.m.count = Math.min(SKID.N, SKID.m.count + 1); SKID.m.instanceMatrix.needsUpdate = true; SKID.last[w] = p; }
+    } else SKID.last[w] = p;
+    // white tyre smoke from each rear wheel (fewer puffs on a lightened phone)
+    if (drift && slide && Math.random() < (perf.level >= 2 ? 0.25 : 0.55)) spawnP(p.setY(0.35), { color: 0xd8d8e0, size: 0.55, vel: new V3(rand(-0.6, 0.6), 1.1, rand(-0.6, 0.6)), life: 1.1, grow: 2.6, opacity: 0.32 });
+  }
+  // drift points anywhere (the drift show counts its own)
+  if (MIS && MIS.driftShow) { if (DRIFT.on) driftEnd(false); return; }
+  if (imp > 9 && DRIFT.on) return driftEnd(false);
+  if (drift && slide) {
+    DRIFT.on = true; DRIFT.off = 0; DRIFT.t += dt; DRIFT.combo = Math.min(2, DRIFT.combo + dt * 0.35);
+    DRIFT.score += side * sp * dt * 0.24 * (1 + DRIFT.combo);
+    if (DRIFT.t > 0.6) driftHud(`ЗАНОС ×${(1 + DRIFT.combo).toFixed(1)} · ${Math.round(DRIFT.score / 10) * 10}`);
+  } else if (DRIFT.on) { DRIFT.off += dt; if (DRIFT.off > 1.0) driftEnd(true); }   // a second to switch the slide to the other side: the series goes on
+}
+
 const tmpF = new V3(), tmpR = new V3();
 function carPhysics(c, dt, throttle, steer, drift, maxF, keepSpeed) {
   tmpF.set(Math.sin(c.h), 0, Math.cos(c.h)); tmpR.set(-Math.cos(c.h), 0, Math.sin(c.h));
@@ -5744,11 +5793,15 @@ function carPhysics(c, dt, throttle, steer, drift, maxF, keepSpeed) {
   else if (throttle < 0) { if (vf > 0.5) vf += 48 * throttle * dt; else if (vf > -13) vf += 16 * throttle * dt; }
   else vf -= vf * 0.8 * dt;
   vf -= vf * 0.12 * dt;
-  if (drift && !keepSpeed) vf -= vf * 0.5 * dt;
-  vr *= Math.exp(-(drift ? 1.6 : 7.5) * dt);
+  // drift: the rear lets go (low side grip), the speed holds better; on release the grip comes back over ~0.45 s, not in one snap
+  if (drift) { c.dOn = (c.dOn || 0) + dt; c.relT = 0; } else { c.dOn = 0; c.relT = c.relT == null ? 9 : c.relT + dt; }
+  if (drift && !keepSpeed) vf -= vf * 0.32 * dt;
+  vr *= Math.exp(-(drift ? 1.25 : 1.6 + 5.9 * Math.min(1, c.relT / 0.45)) * dt);
   c.vel.copy(tmpF).multiplyScalar(vf).addScaledVector(tmpR, vr);
   const sp = clamp(Math.abs(vf) / 9, 0, 1);
-  const turn = (drift ? 2.7 : 2.1) * sp * (vf < -0.5 ? -1 : 1) * (1 - 0.3 * clamp(Math.abs(vf) / maxF, 0, 1));
+  // in a drift, steering further into the slide fades past ~30° of slip (so the car holds an angle instead of spinning); countersteer always works
+  const slip = Math.atan2(Math.abs(vr), Math.abs(vf) + 0.1), into = drift && -steer * vf * vr > 0 && slip > 0.55 ? clamp(1 - (slip - 0.55) / 0.5, 0.15, 1) : 1;
+  const turn = into * (drift ? (c.dOn < 0.25 && Math.abs(vf) > 12 ? 3.6 : 2.85) : 2.1) * sp * (vf < -0.5 ? -1 : 1) * (1 - 0.3 * clamp(Math.abs(vf) / maxF, 0, 1));
   c.h = wrapA(c.h - steer * turn * dt);
   c.pos.addScaledVector(c.vel, dt);
   const imp = c.ghost ? 0 : collideCircle(c.pos, c.vel, 2.1);
@@ -6008,7 +6061,7 @@ function updateDrive(dt) {
   const ck = careK(), nitro = state.nitroT > 0 && ck > 0.5 && !pc.locked, cap = MIS && MIS.speedCap ? MIS.speedCap : 1e9, imp = carPhysics(pc, dt, pc.locked ? 0 : nitro ? 1 : throttle, steer, drift, Math.min(cap, (P.maxSpeed + (nitro ? 16 : 0)) * ck), P.drift);
   if (P.regen && pc.hp < 100) pc.hp = Math.min(100, pc.hp + 1.6 * dt);
   if (imp > 9) { damagePlayer((imp - 9) * 1.1); sfx.crash(imp); sparks(pc.pos.clone().add(new V3(0, 1, 0))); }
-  if (drift && Math.abs(pc.vr) > 6 && Math.random() < 0.6) spawnP(pc.pos.clone().add(new V3(rand(-1, 1), 0.3, 0)), { color: 0x9a9aa8, size: 0.6, vel: new V3(0, 1, 0), life: 0.8, grow: 2, opacity: 0.35 });
+  driftTick(dt, drift, imp, throttle);
   if (pc.hp < 40 && Math.random() < dt * 10) spawnP(pc.pos.clone().add(new V3(0, 1.4, 0)).addScaledVector(tmpF.set(Math.sin(pc.h), 0, Math.cos(pc.h)), 1.8), { color: 0x2a2a30, size: 0.5, vel: new V3(0, 3, 0), life: 1.2, grow: 2, opacity: .7 });
   if (trail[trail.length - 1].distanceTo(pc.pos) > 3) trail.push(pc.pos.clone());
 
@@ -6328,7 +6381,7 @@ function placeCar(x, z, h) {
 }
 function beginDrive(x, z, h) {
   if (state.mode === 'foot') sfx.door();
-  state.act = 1; placeCar(x, z, h); trail.length = 0; trail.push(pc.pos.clone());
+  state.act = 1; placeCar(x, z, h); trail.length = 0; trail.push(pc.pos.clone()); skidClear(); if (DRIFT.on) { DRIFT.on = false; DRIFT.score = 0; driftHud(''); }
   if (hero) hero.g.visible = false; heroLight.intensity = 0;
   arrow.visible = true; $('hpLabel').textContent = 'Машина';
   camYaw = h; snapCam = true; state.spawnT = 6; state.firstChase = false; state.mode = 'drive';
@@ -10980,7 +11033,7 @@ Object.assign(GEN, {
   drift(c, title, done) {
     beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
     let left = c.secs, score = 0, combo = 0; setObjective(`Дрифт-шоу: набери ${c.score} очков заноса.`);
-    return { title, chase: { max: 0 }, navName: 'Дрифт', navGoal: () => pc.pos,
+    return { title, chase: { max: 0 }, navName: 'Дрифт', driftShow: true, navGoal: () => pc.pos,
       update(dt) {
         left -= dt; if (left <= 0) return failChapter('Мало дыма', `Набрано ${Math.round(score)} из ${c.score}. Разгоняйся сильнее и держи занос дольше.`);
         const side = Math.abs(pc.vr || 0), sp = Math.abs(pc.vf || 0);
@@ -13451,7 +13504,8 @@ function loop(now) {
   const rawDt = (now - last) / 1000; let dt = Math.min(0.05, rawDt); last = now; dt = cineTime(dt); state.t += dt;
   if (state.invuln > 0) state.invuln -= dt;
   if (state.mode === 'drive' || state.mode === 'foot') checkPerf(rawDt);
-  if (state.mode !== 'drive' && audio.sk && audio.sk.k > 0) skid(0);   // out of the car (dialog, foot, pause): the screech stops
+  if (state.mode !== 'drive' && audio.sk && audio.sk.k > 0) skid(0);
+  if (state.mode !== 'drive' && state.mode !== 'paused' && DRIFT.on) { DRIFT.on = false; DRIFT.score = 0; driftHud(''); }   // out of the car (dialog, foot, pause): the screech stops
   ambTick(dt);
   if (state.mode === 'preview') updatePreview(dt);
   else if (state.mode === 'select') updateSelect(dt);
@@ -13529,7 +13583,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, DRIFTX: { SKID, DRIFT }, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
