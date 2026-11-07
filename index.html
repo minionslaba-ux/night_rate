@@ -745,7 +745,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v78'; window.__errs = [];
+window.APP_VER = 'v79'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5305,9 +5305,30 @@ function tone(freq, dur, vol) {
   o.frequency.value = freq; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g); g.connect(audio.master); o.start(t); o.stop(t + dur + 0.02);
 }
+// tyre screech: looping noise through two narrow resonances (the squeal) and a low band (the rubber scrub), with a slow wobble;
+// k = 0..1 is how hard the car slides; pressing «Занос» gives a sharp loud onset
+function skid(k, kick) {
+  if (!audio.ctx || audioSaved) return;
+  const c = audio.ctx, t = c.currentTime;
+  if (!audio.sk) {
+    if (!k) return;
+    const src = c.createBufferSource(); src.buffer = audio.nb; src.loop = true;
+    const out = c.createGain(); out.gain.value = 0; out.connect(audio.master);
+    const mk = (type, f, q, v) => { const b = c.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; const g = c.createGain(); g.gain.value = v; src.connect(b); b.connect(g); g.connect(out); return b; };
+    const s1 = mk('bandpass', 1250, 9, 2.6), s2 = mk('bandpass', 2550, 7, 1.5); mk('bandpass', 420, 1.2, 0.55);
+    const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 7.5; lg.gain.value = 70; lfo.connect(lg); lg.connect(s1.frequency); lg.connect(s2.frequency); lfo.start();
+    src.start(); audio.sk = { out, s1, s2, k: 0 };
+  }
+  const S = audio.sk, v = muted ? 0 : Math.max(0, Math.min(1, k));
+  if (kick && v > 0 && S.k < 0.2) { S.out.gain.cancelScheduledValues(t); S.out.gain.setValueAtTime(Math.max(S.out.gain.value, 0.01), t); S.out.gain.linearRampToValueAtTime(1.15, t + 0.04); S.out.gain.setTargetAtTime(v * 0.85, t + 0.12, 0.15); }
+  else S.out.gain.setTargetAtTime(v * 0.85, t, v > S.k ? 0.03 : 0.09);
+  const pitch = 1 + v * 0.18; S.s1.frequency.setTargetAtTime(1250 * pitch, t, 0.1); S.s2.frequency.setTargetAtTime(2550 * pitch, t, 0.1);
+  S.k = v;
+}
 function setEngine(speed, on) {
   if (!audio.ctx) return;
   const t = audio.ctx.currentTime;
+  if (!on) skid(0);
   audio.eg.gain.setTargetAtTime(on && !muted ? 0.05 : 0, t, 0.1);
   audio.osc.frequency.setTargetAtTime(38 + Math.abs(speed) * 2.6, t, 0.08);
 }
@@ -5825,6 +5846,9 @@ function updateDrive(dt) {
   pc.steerSm = (pc.steerSm || 0) + (clamp(steerKey + js, -1, 1) - (pc.steerSm || 0)) * Math.min(1, dt * (steerKey ? 14 : 9));
   const throttle = clamp(thrKey + jt, -1, 1), steer = pc.steerSm;
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
+  { const sp = Math.hypot(pc.vel.x, pc.vel.z), side = Math.abs(pc.vr || 0);
+    const k = sp < 4 || pc.locked ? 0 : drift ? Math.min(1, 0.55 + side / 12 + sp / 80) : side > 6 ? Math.min(0.7, (side - 6) / 8) : 0;
+    skid(k, drift && !pc.driftWas); pc.driftWas = drift; }
   pc.steerIn = steer;
   const ck = careK(), nitro = state.nitroT > 0 && ck > 0.5 && !pc.locked, cap = MIS && MIS.speedCap ? MIS.speedCap : 1e9, imp = carPhysics(pc, dt, pc.locked ? 0 : nitro ? 1 : throttle, steer, drift, Math.min(cap, (P.maxSpeed + (nitro ? 16 : 0)) * ck), P.drift);
   if (P.regen && pc.hp < 100) pc.hp = Math.min(100, pc.hp + 1.6 * dt);
@@ -13250,6 +13274,7 @@ function loop(now) {
   if (state.mode === 'preview') updatePreview(dt);
   else if (state.mode === 'select') updateSelect(dt);
   else if (state.mode === 'drive') { updateDrive(dt); state.time += dt; }
+  if (state.mode !== 'drive' && audio.sk && audio.sk.k > 0) skid(0);   // out of the car (dialog, foot, pause): the screech stops
   else if (state.mode === 'foot') { updateFoot(dt); state.time += dt; }
   else if (state.mode === 'dialog') updateDialog(dt);
   else if (state.mode === 'dying') {
@@ -13300,7 +13325,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, get AUDIO() { return audio; }, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
