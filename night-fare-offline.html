@@ -745,7 +745,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v80'; window.__errs = [];
+window.APP_VER = 'v81'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -3782,7 +3782,7 @@ function updateLife(dt) {
     const ap = state.act === 1 && pc ? pc.pos : hero ? hero.pos : near;
     const dPlayer = Math.hypot(ap.x - _lq.x, ap.z - _lq.z);
     if (LIFE.shotT < 1.5 && dPlayer < 32) p.panic = 4;
-    if (state.act === 1 && pc && Math.abs(pc.vf || 0) > 5 && dPlayer < 7 && p.dodge <= 0) { p.dodge = 0.6; p.panic = Math.max(p.panic, 2.5); p.dir = -p.dir; }
+    if (state.act === 1 && pc && Math.abs(pc.vf || 0) > 5 && dPlayer < 7 && p.dodge <= 0) { p.dodge = 0.6; p.panic = Math.max(p.panic, 2.5); p.dir = -p.dir; sfx.yelp(); }
     if (p.panic > 0) p.panic -= dt; if (p.dodge > 0) p.dodge -= dt;
     const run = p.panic > 0, sp = run ? 4.6 : p.sp;
     p.u += p.dir * sp * dt;
@@ -5365,12 +5365,69 @@ Object.assign(sfx, {
   // a tap on a button
   click: () => noise(0.018, 4200, 0.035),
 });
-// rain on the roof and the road: a soft loop that follows the weather
-function rainSound(k) {
+Object.assign(sfx, {
+  // a bullet on the car body: a metal ping
+  ping: () => { glide(2300 + Math.random() * 600, 1700, 0.09, 0.05, 'square'); noise(0.04, 4200, 0.09); },
+  // the last seconds of a timer
+  tick: () => tone(1320, 0.05, 0.05),
+  // a heartbeat: lub-dub
+  heart: () => { glide(70, 48, 0.14, 0.32, 'sine'); glide(64, 44, 0.12, 0.22, 'sine', 0.17); },
+  // a pickup: a quick bright arpeggio
+  pickup: () => { [880, 1175, 1568].forEach((f, i) => glide(f, f, 0.12, 0.05, 'triangle', i * 0.05)); },
+  // a pole, a sign, a cone: a hollow metal clang
+  clang: () => { glide(420, 380, 0.5, 0.09, 'triangle'); glide(1130, 1050, 0.3, 0.04, 'sine'); noise(0.08, 700, 0.15); },
+  // a passer-by jumps out of the way
+  yelp: () => glide(520 + Math.random() * 160, 880, 0.18, 0.03, 'sawtooth'),
+  // the shop: the till
+  cash: () => { noise(0.05, 3000, 0.06); [1568, 2093].forEach((f, i) => glide(f, f, 0.25, 0.05, 'triangle', 0.06 + i * 0.07)); },
+  // a new rank: a longer fanfare
+  rank: () => { [392, 523, 659, 784, 1046].forEach((f, i) => glide(f, f, 0.22, 0.08, 'triangle', i * 0.1)); glide(1046, 1046, 0.8, 0.07, 'sine', 0.5); },
+  // an achievement: a sparkle
+  ach: () => { [1318, 1760, 2093, 2637].forEach((f, i) => glide(f, f, 0.18, 0.045, 'sine', i * 0.06)); },
+});
+// the player's gun by its class: pistol, smg, rifle, shotgun, heavy
+function shotFor(cls) {
+  if (cls === 'smg') return gunshot(0.4, 0);
+  if (cls === 'rifle') { gunshot(0.6, 0); return noise(0.03, 4800, 0.22); }
+  if (cls === 'shotgun') { gunshot(0.65, 0); return noise(0.32, 260, 0.5, 'lowpass'); }
+  if (cls === 'heavy') { gunshot(0.7, 0); return noise(0.65, 110, 0.7, 'lowpass'); }
+  gunshot(0.5, 0);
+}
+// the city around: a low rumble, and now and then a far horn, a gust of wind, and something of the place —
+// a big bell in London, a siren in New York, an accordion in Paris; the chasing cars' engines and screeching tyres;
+// a heartbeat when health is low
+const AMB = { t: 6, beat: 0, eT: 0 };
+function ambLoop(c) {
+  const src = c.createBufferSource(); src.buffer = audio.nb; src.loop = true; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 170;
+  const g = c.createGain(); g.gain.value = 0; src.connect(lp); lp.connect(g); g.connect(audio.master); src.start();
+  const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 50; const lp2 = c.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 380; const eg = c.createGain(); eg.gain.value = 0; o.connect(lp2); lp2.connect(eg); eg.connect(audio.master); o.start();
+  audio.amb = { g, o, eg };
+}
+function ambTick(dt) {
   if (!audio.ctx || audioSaved) return;
-  const c = audio.ctx, t = c.currentTime;
-  if (!audio.rn) { if (k < 0.03) return; const src = c.createBufferSource(); src.buffer = audio.nb; src.loop = true; const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7000; const g = c.createGain(); g.gain.value = 0; src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(audio.master); src.start(); audio.rn = { g }; }
-  audio.rn.g.gain.setTargetAtTime(muted ? 0 : Math.min(1, k) * 0.12, t, 0.6);
+  const c = audio.ctx, t = c.currentTime, on = !muted && (state.mode === 'drive' || state.mode === 'foot');
+  if (!audio.amb) { if (!on) return; ambLoop(c); }
+  const A = audio.amb; A.g.gain.setTargetAtTime(on ? 0.07 : 0, t, 0.5);
+  // the nearest chasing car: its engine
+  let ne = null, nd = 1e9; if (on && state.act === 1 && pc) for (const e of enemyCars) { if (e.dead || !e.pos) continue; const d = Math.hypot(e.pos.x - pc.pos.x, e.pos.z - pc.pos.z); if (d < nd) { nd = d; ne = e; } }
+  const ev = ne ? Math.abs(ne.v || (ne.vel ? Math.hypot(ne.vel.x, ne.vel.z) : 0)) : 0;
+  A.eg.gain.setTargetAtTime(ne && nd < 45 ? 0.045 * (1 - nd / 45) : 0, t, 0.15); if (ne) A.o.frequency.setTargetAtTime(44 + ev * 2.4, t, 0.1);
+  // its tyres in a hard turn
+  AMB.eT -= dt;
+  if (ne && nd < 35 && ev > 12 && AMB.eT <= 0) { const dh = Math.abs(wrapA((ne.h || 0) - (ne.hPrevA === undefined ? ne.h || 0 : ne.hPrevA))) / Math.max(dt, 0.001); if (dh > 0.9) { AMB.eT = 1.2; sweep(0.35, 1700, 1300, 0.16 * (1 - nd / 35), 'bandpass', 7); } }
+  for (const e of enemyCars) e.hPrevA = e.h;
+  if (!on) return;
+  // a heartbeat below a quarter of health
+  const hp = state.act === 1 ? pc.hp / 100 : hero ? hero.hp / (P.footMax || 100) : 1;
+  AMB.beat -= dt; if (hp > 0 && hp < 0.25 && AMB.beat <= 0) { AMB.beat = hp < 0.12 ? 0.6 : 0.8; sfx.heart(); }
+  // the far sounds of the place
+  AMB.t -= dt; if (AMB.t > 0) return; AMB.t = 7 + Math.random() * 9;
+  const place = CITY ? CITY.id : '', r = Math.random();
+  if (place === 'london' && r < 0.35) { [196, 392].forEach((f) => glide(f, f * 0.995, 2.6, 0.05, 'sine')); glide(588, 586, 1.6, 0.015, 'sine'); }
+  else if (place === 'ny' && r < 0.4) { for (let k = 0; k < 3; k++) { glide(640, 980, 0.55, 0.018, 'sine', k * 1.1); glide(980, 640, 0.55, 0.018, 'sine', k * 1.1 + 0.55); } }
+  else if (place === 'paris' && r < 0.4) { [523, 587, 659, 587, 523, 494, 523].forEach((f, i) => glide(f, f * 1.004, 0.32, 0.022, 'triangle', i * 0.3)); }
+  else if (r < 0.7) { const f = 300 + Math.random() * 120; glide(f, f, 0.45, 0.02, 'square'); glide(f * 1.26, f * 1.26, 0.45, 0.015, 'square'); }
+  else sweep(2.4, 260, 900, 0.06, 'lowpass', 0.7);
 }
 function setEngine(speed, on) {
   if (!audio.ctx) return;
@@ -5608,7 +5665,7 @@ function collideCircle(pos, vel, r) {
     } else { const d = Math.sqrt(d2); nx = dx / d; nz = dz / d; pen = r - d; }
     pos.x += nx * pen; pos.z += nz * pen;
     const vn = vel.x * nx + vel.z * nz;
-    if (vn < 0) { vel.x -= nx * vn * 1.35; vel.z -= nz * vn * 1.35; vel.multiplyScalar(0.94); impact = Math.max(impact, c.soft ? -vn * 0.35 : -vn); }
+    if (vn < 0) { vel.x -= nx * vn * 1.35; vel.z -= nz * vn * 1.35; vel.multiplyScalar(0.94); impact = Math.max(impact, c.soft ? -vn * 0.35 : -vn); if (c.soft && -vn > 4 && state.t - (AMB.clang || 0) > 0.5) { AMB.clang = state.t; sfx.clang(); } }
   }
   if (TRK.on && pos.x < TRK.x1 + 15) impact = Math.max(impact, trkWall(pos, vel, r));
   if (LOW.on && !ONL.on) { pos.x = clamp(pos.x, -LIM, LOW.x1); pos.z = clamp(pos.z, LOW.z0, LIM + 2); }
@@ -5662,7 +5719,7 @@ function fire(from, dir, speed, dmg, team, o) {
   if (o.quiet) return;
   spawnP(from, { color: team === 'p' ? 0xffe08a : 0xff6a6a, size: o.blast ? 0.7 : 0.35, life: 0.06, add: true });
   flash.position.copy(from); flash.intensity = Math.max(flash.intensity, o.blast ? 2.2 : 1.1);
-  (team === 'p' ? sfx.shot : sfx.eshot)();
+  if (team === 'p') shotFor(curW() && curW().cls); else sfx.eshot();
 }
 const prevP = new V3();
 function updateBullets(dt) {
@@ -5690,7 +5747,7 @@ function updateBullets(dt) {
         if (!hit && HELI && heliHit(prevP, b.pos)) { hit = true; sfx.hit(); damageHeli(b.dmg); hitMarker(HELI && HELI.crash); }
       } else {
         const t = state.act === 1 ? pc : hero, r = state.act === 1 ? 2.4 : 0.85;
-        if (t && !t.dead && segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos, 0xff6a6a); damagePlayer(b.dmg); hitFrom(b.vel); }
+        if (t && !t.dead && segDist2(prevP, b.pos, t.pos) < r * r) { hit = true; sparks(b.pos, 0xff6a6a); damagePlayer(b.dmg); hitFrom(b.vel); if (state.act === 1) sfx.ping(); }
         else if (state.act === 2) for (const a of allies) { if (!a.dead && a.hp < 1e6 && segDist2(prevP, b.pos, a.pos) < 0.8) { hit = true; sparks(b.pos, 0xff6a6a); damageAlly(a, b.dmg); break; } }
       }
     }
@@ -6289,7 +6346,7 @@ function addMedkit(x, z) { return addPickup('med', x, z, () => { hero.hp = Math.
 function updatePickups(dt) {
   for (let i = pickups.length - 1; i >= 0; i--) {
     const k = pickups[i]; k.m.rotation.y += dt * 2; k.m.position.y = 0.8 + Math.sin(state.t * 3 + i) * 0.15;
-    if (Math.hypot(hero.pos.x - k.pos.x, hero.pos.z - k.pos.z) < 1.8) { scene.remove(k.m); pickups.splice(i, 1); if (k.onTake) k.onTake(k); }
+    if (Math.hypot(hero.pos.x - k.pos.x, hero.pos.z - k.pos.z) < 1.8) { scene.remove(k.m); pickups.splice(i, 1); sfx.pickup(); if (k.onTake) k.onTake(k); }
   }
 }
 // queue a group of enemies; cfg can add a target (ally), look, hp, etc.
@@ -6689,7 +6746,7 @@ function checkRank(quiet) {
   if (typeof PROF === 'undefined' || !PROF || !PROF.st) return;
   const r = rankAt(missionsDone());
   if (PROF.st.rank === undefined || quiet) { if (PROF.st.rank === undefined || r < PROF.st.rank) { PROF.st.rank = r; saveProfile(); } return; }
-  if (r > PROF.st.rank) { const gift = 250 * r; PROF.st.rank = r; walletAdd(gift); saveProfile(); setTimeout(() => toast(`Новое звание: «${RANKS[r][1]}»! +${gift} монет`, 3), 1200); }
+  if (r > PROF.st.rank) { const gift = 250 * r; PROF.st.rank = r; walletAdd(gift); saveProfile(); setTimeout(() => sfx.rank(), 1200); setTimeout(() => toast(`Новое звание: «${RANKS[r][1]}»! +${gift} монет`, 3), 1200); }
 }
 const PV_TEXT = { 1: 'Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».', 2: 'Вера просит о помощи: курьер, засада в парке и серый фургон, в котором держат Марка.' };
 // main screen: the next step on the big button, the rank and progress, the side lines open or locked
@@ -8400,7 +8457,7 @@ function updateHud(dt) {
   $('nav').hidden = !(state.act === 1 && state.mode === 'drive');
   if (state.act === 1 && pc) $('speed').textContent = Math.round(Math.abs(pc.vf || 0) * 3.3);
   let bars = [], timer = '', tbad = false;
-  if (state.ep >= 2 && MIS && MIS.hud && (state.mode === 'drive' || state.mode === 'foot')) { const hh = MIS.hud(); bars = hh.bars || []; timer = hh.timer || ''; tbad = !!hh.bad; }
+  if (state.ep >= 2 && MIS && MIS.hud && (state.mode === 'drive' || state.mode === 'foot')) { const hh = MIS.hud(); bars = hh.bars || []; timer = hh.timer || ''; tbad = !!hh.bad; if (tbad && state.mode === 'drive' || tbad && state.mode === 'foot') { const sec = Math.floor(state.t); if (sec !== AMB.tick) { AMB.tick = sec; sfx.tick(); } } }
   const boss = state.act === 2 && enemies.find((e) => e.boss && !e.dead);
   if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
   if (HELI && !HELI.crash && !HELI.invuln && (state.mode === 'drive' || state.mode === 'foot')) bars = bars.concat([{ label: HELI.name, frac: HELI.hp / HELI.max, color: '#c0ff6a' }]);
@@ -8728,7 +8785,7 @@ let achBusy = false;
 function walletAdd(n) { if (!n) return; PROF.coins += n; PROF.st.earned += Math.max(0, n); saveProfile(); checkAch(); }
 function canPay(price) { return PROF.god || PROF.coins >= price; }
 // not enough coins for a purchase: say how many are missing and offer the coin packs (roubles → Robokassa) right there
-function pay(price, what) { if (!canPay(price)) { needCoins(price, what); return false; } if (!PROF.god) PROF.coins -= price; saveProfile(); return true; }
+function pay(price, what) { if (!canPay(price)) { needCoins(price, what); return false; } if (!PROF.god) PROF.coins -= price; saveProfile(); if (price > 0) sfx.cash(); return true; }
 function needCoins(price, what, alt) {
   const lack = Math.max(1, price - PROF.coins), web = PLATFORM === 'web';
   // in the middle of a ride the game waits while the offer is open, and goes on when it closes
@@ -8889,7 +8946,7 @@ function checkAch() {
   for (const [id, name, , reward, prog] of ACH) {
     if (PROF.ach[id]) continue;
     const [c, m] = prog(PROF);
-    if (c >= m) { PROF.ach[id] = Date.now(); PROF.coins += reward; PROF.st.earned += reward; saveProfile(); if (state.mode === 'drive' || state.mode === 'foot') toast(`Достижение «${name}»: +${reward}`, 2.2); }
+    if (c >= m) { PROF.ach[id] = Date.now(); PROF.coins += reward; PROF.st.earned += reward; saveProfile(); sfx.ach(); if (state.mode === 'drive' || state.mode === 'foot') toast(`Достижение «${name}»: +${reward}`, 2.2); }
   }
   achBusy = false; updateProfChip();
 }
@@ -13324,7 +13381,7 @@ function loop(now) {
   if (state.invuln > 0) state.invuln -= dt;
   if (state.mode === 'preview' || state.mode === 'drive') checkPerf(dt);
   if (state.mode !== 'drive' && audio.sk && audio.sk.k > 0) skid(0);   // out of the car (dialog, foot, pause): the screech stops
-  rainSound(rain.visible ? WX.rain : 0);
+  ambTick(dt);
   if (state.mode === 'preview') updatePreview(dt);
   else if (state.mode === 'select') updateSelect(dt);
   else if (state.mode === 'drive') { updateDrive(dt); state.time += dt; }
@@ -13378,7 +13435,7 @@ loadAssets((k) => { $('loading').textContent = 'Загрузка города…
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, get AUDIO() { return audio; }, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, get AUDIO() { return audio; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
