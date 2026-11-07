@@ -737,7 +737,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v73'; window.__errs = [];
+window.APP_VER = 'v74'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -10452,14 +10452,14 @@ function jobNew() {
 function jobEnd(msg) { JOBS.cur = null; JOBS.wait = rand(6, 12); document.body.classList.remove('job'); $('btnJob').hidden = true; beam.visible = false; if (msg) toast(msg, 2.6); setObjective('Открытый город: катайся, бери заказы, сигналь (H) и общайся в чате.'); }
 function jobsUpdate(dt) {
   if (!JOBS.cur) { JOBS.wait -= dt; if (JOBS.wait <= 0 && pc) jobNew(); return; }
-  const J = JOBS.cur, tgt = J.ph === 'pick' ? J.from[1] : J.to[1], d = Math.hypot(tgt[0] - pc.pos.x, tgt[1] - pc.pos.z), slow = Math.hypot(pc.vel.x, pc.vel.z) < 7;
+  const J = JOBS.cur, tgt = J.ph === 'pick' ? J.from[1] : J.to[1], d = Math.hypot(tgt[0] - pc.pos.x, tgt[1] - pc.pos.z), slow = Math.hypot(pc.vel.x, pc.vel.z) < 12; if (d < 12) arriveBrake(dt);
   setBeam(new V3(tgt[0], 0, tgt[1]));
   if (J.ph === 'pick') {
-    if (d < 11 && slow) { J.ph = 'ride'; J.left = J.total = Math.round(J.dist / 8.5 + 25); toast('Пассажир: «' + JOB_HELLO[Math.floor(Math.random() * JOB_HELLO.length)] + '»', 3); setObjective(`Вези пассажира: ${J.to[0]}. Успей за ${fmt(J.left)}.`); }
+    if (d < 12 && slow) { J.ph = 'ride'; J.left = J.total = Math.round(J.dist / 8.5 + 25); toast('Пассажир: «' + JOB_HELLO[Math.floor(Math.random() * JOB_HELLO.length)] + '»', 3); setObjective(`Вези пассажира: ${J.to[0]}. Успей за ${fmt(J.left)}.`); }
   } else {
     J.left -= dt;
     if (J.left <= 0) return jobEnd('Пассажир не дождался и вышел. Без оплаты.');
-    if (d < 11 && slow) {
+    if (d < 12 && slow) {
       const tip = J.left > J.total * 0.4 && !APL.used ? Math.round(J.reward * 0.5) : 0, look = careFareK(), pay0 = Math.round((J.reward + tip) * look);
       addCoins(pay0); profStat('fares'); JOBS.done++;
       return jobEnd('«' + JOB_BYE[Math.floor(Math.random() * JOB_BYE.length)] + '»' + (tip ? ` Чаевые: +${tip}` : '') + (look > 1 ? ' Чистая машина: +10%' : look < 1 ? ' Грязная машина: −10%' : ''));
@@ -10621,6 +10621,9 @@ function tBarricade(x, z) {
   scene.add(g); TMARKS.push(g); return g;
 }
 const kmh = () => Math.abs(pc.vf || 0) * 3.3;
+// inside the circle of a stop (the glowing pillar): the car brakes by itself, so a stop counts on the first pass instead of
+// rolling through and coming back; the speed allowed for the stop is wider than before
+function arriveBrake(dt, k) { if (!pc || pc.locked) return; const f = Math.pow(k || 0.06, dt); pc.vel.multiplyScalar(f); pc.vf = (pc.vf || 0) * f; }
 Object.assign(GEN, {
   race(c, title, done) {
     beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
@@ -10646,7 +10649,7 @@ Object.assign(GEN, {
       update(dt) {
         left -= dt; if (left <= 0) return failChapter('Свет ушёл', 'Время вышло — фотограф уехал без снимков.');
         const k = nextI(); if (k < 0) return; setBeam(P_[k]);
-        if (pc.pos.distanceTo(P_[k]) < 13 && kmh() < 8) { hold += dt; if (hold > 1.6) { hold = 0; got[k] = true; scene.remove(marks[k]); sfx.key(); camFlash(); toast(`Снимок: ${c.names[k]}`, 1.2); if (got.every(Boolean)) return done(); } }
+        if (pc.pos.distanceTo(P_[k]) < 13) arriveBrake(dt, 0.15); if (pc.pos.distanceTo(P_[k]) < 13 && kmh() < 16) { hold += dt; if (hold > 1.0) { hold = 0; got[k] = true; scene.remove(marks[k]); sfx.key(); camFlash(); toast(`Снимок: ${c.names[k]}`, 1.2); if (got.every(Boolean)) return done(); } }
         else hold = 0;
       },
       hud() { return { timer: `${fmt(left)} · снимков ${got.filter(Boolean).length}/${P_.length}${hold > 0 ? ' · держи…' : ''}`, bad: left < 15 }; } };
@@ -11044,7 +11047,7 @@ Object.assign(GEN, {
         if (pen > 6 && ouch <= 0) { ouch = 1.6; toast(pick(c.ouch || ['Ой! Потише!', 'Аккуратнее, прошу…', 'Мне нехорошо…']), 1.2); }
         this.dbg = [Math.round(acc), Math.round(lat), Math.round(kmh())]; comfort = Math.max(0, comfort - pen * dt * (c.k || 1));
         if (comfort <= 0) return failChapter(c.failTitle || 'Пассажирке плохо', c.failText || 'Слишком резко. Разгоняйся и тормози плавно, повороты — на малой скорости.');
-        if (pc.pos.distanceTo(P_[leg].v) < 10 && kmh() < 12) { hold += dt; if (hold > 0.6) { hold = 0; const q = P_[leg]; leg++; if (leg >= P_.length) return done(); if (q.say) playDialog(q.say.map(fixLine), () => { state.mode = 'drive'; start(); }); else { toast(`${q.name} — приехали`, 1.2); start(); } } }
+        if (pc.pos.distanceTo(P_[leg].v) < 11 && kmh() < 20) { hold += dt; if (hold > 0.35) { hold = 0; const q = P_[leg]; leg++; if (leg >= P_.length) return done(); if (q.say) playDialog(q.say.map(fixLine), () => { state.mode = 'drive'; start(); }); else { toast(`${q.name} — приехали`, 1.2); start(); } } }
         else hold = 0;
       },
       hud() { return { bars: [{ label: `Комфорт пассажирки: ${Math.round(comfort)}%`, frac: comfort / 100, color: comfort < 35 ? '#ff4d6d' : '#7ad6ff' }], timer: `Не быстрее ${c.limit} км/ч`, bad: kmh() > c.limit }; } };
@@ -11096,10 +11099,11 @@ Object.assign(GEN, {
       update(dt) {
         left -= dt; if (left <= 0) return failChapter('Не успели', `Время вышло: ждут ещё ${total - saved - aboard}. Бери по ${cap} и не теряй ни секунды.`);
         if (fire) for (let k = 0; k < 2; k++) { if (Math.random() < dt * 40) spawnP(fire.clone().add(new V3(rand(-22, 22), rand(1, 7), rand(-14, 14))), { color: pick([0xff6a1a, 0xffa030, 0xffd060]), size: rand(0.8, 1.6), vel: new V3(rand(-1, 1), rand(4, 8), rand(-1, 1)), life: 0.9, add: true }); if (Math.random() < dt * 14) spawnP(fire.clone().add(new V3(rand(-20, 20), 9, rand(-12, 12))), { color: 0x2a2a30, size: 2.2, vel: new V3(rand(-1, 1), 5, rand(-1, 1)), life: 3, grow: 3, opacity: 0.55 }); }
-        const slow = kmh() < 8;
-        let at = null; for (const q of H) if (q.n > 0 && aboard < cap && q.v.distanceTo(pc.pos) < 11) at = q;
-        const atBase = aboard > 0 && base.distanceTo(pc.pos) < 11;
-        if ((at || atBase) && slow) { hold += dt; if (hold > 0.8) { hold = 0;
+        const slow = kmh() < 22;
+        let at = null; for (const q of H) if (q.n > 0 && aboard < cap && q.v.distanceTo(pc.pos) < 12) at = q;
+        const atBase = aboard > 0 && base.distanceTo(pc.pos) < 12;
+        if (at || atBase) arriveBrake(dt);
+        if ((at || atBase) && slow) { hold += dt; if (hold > 0.3) { hold = 0;
           if (atBase) { saved += aboard; toast(`Высадили ${aboard} · спасено ${saved}/${total}`, 1.4); sfx.bell(); aboard = 0; if (saved >= total) { scene.remove(bmk); return done(); } }
           else { const n = Math.min(cap - aboard, at.n); at.n -= n; aboard += n; toast(`Сели ${n} · в машине ${aboard}/${cap}`, 1.2); sfx.key(); if (at.n <= 0) scene.remove(at.mk); }
         } } else hold = 0;
@@ -11787,13 +11791,13 @@ Object.assign(GEN, {
     const next = () => { let b = null, bd = 1e9; for (const r of R) { const q = r.st === 'ride' ? r.to : r.st === 'wait' && riding() < seats ? r.at : null; if (!q) continue; const d = q.distanceTo(pc.pos); if (d < bd) { bd = d; b = q; } } return b || pc.pos; };
     return { title, noFire: true, noFireMsg: 'Пассажиры в салоне: без стрельбы', chase: { max: 0 }, navName: 'Пассажиры', navGoal: next,
       update(dt) {
-        const slow = Math.abs(pc.vf || 0) < 3.2;
+        const slow = Math.abs(pc.vf || 0) < 6.5; for (const r of R) if ((r.st === 'wait' && riding() < seats && pc.pos.distanceTo(r.at) < 10) || (r.st === 'ride' && pc.pos.distanceTo(r.to) < 10)) { arriveBrake(dt); break; }
         for (const r of R) {
           if (r.st === 'done' || r.st === 'lost') continue;
           r.t -= dt * (r.st === 'ride' ? 0.6 : 1);
           if (r.t <= 0) { r.st = 'lost'; lost++; scene.remove(r.mk); if (r.mk2) scene.remove(r.mk2); r.a.g.visible = false; toast(`${r.name} не дождался и ушёл пешком`, 2); if (lost > (c.lostMax || 0)) return failChapter('Пассажиры ушли', 'Слишком долго. Сначала вези тех, кто ближе, и подбирай по дороге.'); continue; }
-          if (r.st === 'wait' && slow && riding() < seats && pc.pos.distanceTo(r.at) < 9.5) { r.st = 'ride'; r.a.g.visible = false; scene.remove(r.mk); r.mk2 = tMark(r.to.x, r.to.z, 0x4dffa6, 6); toast(`${r.name} сел: «${r.toName}»`, 1.8); sfx.key(); }
-          else if (r.st === 'ride' && slow && pc.pos.distanceTo(r.to) < 9.5) { r.st = 'done'; got++; scene.remove(r.mk2); addCoins(40); toast(`${r.name} доволен: «Merci!»`, 1.6); sfx.bell(); }
+          if (r.st === 'wait' && slow && riding() < seats && pc.pos.distanceTo(r.at) < 10) { r.st = 'ride'; r.a.g.visible = false; scene.remove(r.mk); r.mk2 = tMark(r.to.x, r.to.z, 0x4dffa6, 6); toast(`${r.name} сел: «${r.toName}»`, 1.8); sfx.key(); }
+          else if (r.st === 'ride' && slow && pc.pos.distanceTo(r.to) < 10) { r.st = 'done'; got++; scene.remove(r.mk2); addCoins(40); toast(`${r.name} доволен: «Merci!»`, 1.6); sfx.bell(); }
         }
         setBeam(next());
         if (got + lost >= R.length) done();
@@ -11963,7 +11967,7 @@ Object.assign(GEN, {
         if ((pc.vf || 0) > 4 && sd < -0.8) { wrongT += dt; if (wrongT > 1.3 && cool <= 0) { fouls++; wrongT = 0; cool = 2.5; sfx.crash(3); toast(fouls > c.fouls ? 'Опять по правой!' : `По правой стороне! Нарушение ${fouls}/${c.fouls}`, 1.6); if (fouls > c.fouls) return failChapter('Лицензия под угрозой', 'Слишком много езды по правой стороне. В Лондоне держатся левее: на перекрёстке поворачивай в ближнюю левую полосу.'); } }
         else wrongT = Math.max(0, wrongT - dt * 2);
         const s = S[si]; setBeam(s.v);
-        if (pc.pos.distanceTo(s.v) < 8 && Math.abs(pc.vf || 0) < 3) { si++; scene.remove(mk); addCoins(25); sfx.bell(); toast(`${s.n}: Гарри доволен`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 6); }
+        if (pc.pos.distanceTo(s.v) < 10) arriveBrake(dt); if (pc.pos.distanceTo(s.v) < 10 && Math.abs(pc.vf || 0) < 6.5) { si++; scene.remove(mk); addCoins(25); sfx.bell(); toast(`${s.n}: Гарри доволен`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 6); }
       },
       hud() { return { bars: [{ label: wrongT > 0 ? 'Правая сторона!' : 'Левая сторона', frac: 1 - wrongT / 1.3, color: wrongT > 0 ? '#ff5a5a' : '#4dffa6' }], timer: `${fmt(left)} · адрес ${Math.min(si + 1, S.length)}/${S.length} · нарушений ${fouls}/${c.fouls}`, bad: wrongT > 0 || left < 20 }; } };
   },
@@ -11998,7 +12002,7 @@ Object.assign(GEN, {
         if (prevV > 9 && prevV - v > 8 && bumpCd <= 0) { stars--; bumpCd = 1.5; toast(stars > 0 ? `Удар! Пассажиры недовольны (осталось ${stars})` : 'Удар! Пассажиры выходят', 1.6); if (stars <= 0) return failChapter('Пассажиры вышли', 'Двухэтажный автобус высокий: входи в повороты медленно и не бейся о бордюры.'); }
         prevV = v;
         const s = S[si]; setBeam(s.v);
-        if (pc.pos.distanceTo(s.v) < 7 && v < 2.5) { hold += dt; if (hold > 2) { hold = 0; si++; scene.remove(mk); addCoins(20); sfx.bell(); toast(`«${s.n}»: посадка закончена`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0xffd23a, 4); } }
+        if (pc.pos.distanceTo(s.v) < 8) arriveBrake(dt, 0.12); if (pc.pos.distanceTo(s.v) < 8 && v < 4) { hold += dt; if (hold > 1.2) { hold = 0; si++; scene.remove(mk); addCoins(20); sfx.bell(); toast(`«${s.n}»: посадка закончена`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0xffd23a, 4); } }
         else hold = Math.max(0, hold - dt);
       },
       hud() { return { bars: [{ label: hold > 0 ? 'Посадка…' : `Остановка «${S[Math.min(si, S.length - 1)].n}»`, frac: hold / 2, color: '#ffd23a' }], timer: `${fmt(left)} · остановка ${Math.min(si + 1, S.length)}/${S.length} · ${'★'.repeat(Math.max(0, stars))}`, bad: left < 20 }; } };
@@ -12225,10 +12229,10 @@ Object.assign(GEN, {
         for (let i = hails.length - 1; i >= 0; i--) { const h = hails[i]; h.life -= dt; if (h.life <= 0 && !ride || h.life <= 0 && ride && ride.h !== h) { scene.remove(h.mk); h.a.g.visible = false; hails.splice(i, 1); } }
         while (hails.length < 3) addHail();
         const v = Math.abs(pc.vf || 0);
-        if (!ride) { for (const h of hails) if (v < 2.5 && pc.pos.distanceTo(h.p) < 9) { const to = cityRoadPt(C, h.p, 220); const d = Math.abs(to.x - h.p.x) + Math.abs(to.z - h.p.z); ride = { h, to, fare: 6 + d * 0.02, tip: c.tip || 12, tip0: c.tip || 12, mk: tMark(to.x, to.z, 0x4dffa6, 6) }; scene.remove(h.mk); h.a.g.visible = false; hails.splice(hails.indexOf(h), 1); toast(`Поехали: $${ride.fare.toFixed(0)} по счётчику + чаевые`, 1.6); sfx.key(); break; } }
+        if (!ride) { for (const h of hails) if (pc.pos.distanceTo(h.p) < 10) { arriveBrake(dt); break; } for (const h of hails) if (v < 5 && pc.pos.distanceTo(h.p) < 10) { const to = cityRoadPt(C, h.p, 220); const d = Math.abs(to.x - h.p.x) + Math.abs(to.z - h.p.z); ride = { h, to, fare: 6 + d * 0.02, tip: c.tip || 12, tip0: c.tip || 12, mk: tMark(to.x, to.z, 0x4dffa6, 6) }; scene.remove(h.mk); h.a.g.visible = false; hails.splice(hails.indexOf(h), 1); toast(`Поехали: $${ride.fare.toFixed(0)} по счётчику + чаевые`, 1.6); sfx.key(); break; } }
         else {
           ride.tip = Math.max(0, ride.tip - dt * (c.melt || 0.25)); setBeam(ride.to);
-          if (v < 2.5 && pc.pos.distanceTo(ride.to) < 9) { const got = ride.fare + ride.tip; cash += got; scene.remove(ride.mk); addCoins(Math.round(got)); toast(`+$${got.toFixed(0)} (чаевые $${ride.tip.toFixed(0)})`, 1.6); sfx.bell(); ride = null; if (cash >= c.target) return done(); }
+          if (pc.pos.distanceTo(ride.to) < 10) arriveBrake(dt); if (v < 5 && pc.pos.distanceTo(ride.to) < 10) { const got = ride.fare + ride.tip; cash += got; scene.remove(ride.mk); addCoins(Math.round(got)); toast(`+$${got.toFixed(0)} (чаевые $${ride.tip.toFixed(0)})`, 1.6); sfx.bell(); ride = null; if (cash >= c.target) return done(); }
         }
         if (!ride) setBeam(null);
       },
@@ -12267,7 +12271,7 @@ Object.assign(GEN, {
         left -= dt; shuffleT -= dt; if (left <= 0) return failChapter('Застряли', 'Не жди, пока затор рассосётся: сворачивай заранее и объезжай квартал.');
         if (shuffleT <= 0) { shuffleT = c.every || 45; place(); toast('Пробки сдвинулись', 1.4); }
         const s = S[si]; setBeam(s.v);
-        if (pc.pos.distanceTo(s.v) < 9 && Math.abs(pc.vf || 0) < 3) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}» — приехали`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 8); }
+        if (pc.pos.distanceTo(s.v) < 10) arriveBrake(dt); if (pc.pos.distanceTo(s.v) < 10 && Math.abs(pc.vf || 0) < 6.5) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}» — приехали`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 8); }
       },
       hud() { return { timer: `${fmt(left)} · адрес ${Math.min(si + 1, S.length)}/${S.length} · пробки сдвинутся через ${Math.ceil(shuffleT)} с`, bad: left < 25 }; } };
   },
@@ -12283,7 +12287,7 @@ Object.assign(GEN, {
         const g = 1 - Math.pow(1 - (c.grip || 0.18), dt * 30); pc.vel.x = prev.x + (pc.vel.x - prev.x) * g; pc.vel.z = prev.z + (pc.vel.z - prev.z) * g; prev.copy(pc.vel);
         const v = pc.vel.length(); if (prevV - v > 6 && cd <= 0) { hits++; cd = 1.2; toast(hits > c.hits ? 'Пакеты разбились…' : `Удар! Груз под угрозой (${hits}/${c.hits})`, 1.6); if (hits > c.hits) return failChapter('Груз испорчен', 'На льду удар неизбежен, если входить в поворот на скорости. Сбрасывай газ за полквартала.'); } prevV = v;
         const s = S[si]; setBeam(s.v);
-        if (pc.pos.distanceTo(s.v) < 9 && v < 3.5) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}»: кровь принята`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0xff5a5a, 6); }
+        if (pc.pos.distanceTo(s.v) < 10) arriveBrake(dt); if (pc.pos.distanceTo(s.v) < 10 && v < 6.5) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}»: кровь принята`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0xff5a5a, 6); }
       },
       hud() { return { timer: `${fmt(left)} · больница ${Math.min(si + 1, S.length)}/${S.length} · ударов ${hits}/${c.hits}`, bad: left < 25 }; } };
   },
@@ -12309,7 +12313,7 @@ Object.assign(GEN, {
         T.g.position.set(tp.x, 0, tp.z); T.g.rotation.y = th; haz.visible = Math.sin(state.t * 8) > 0;
         rope.position.set((hx + tp.x + Math.sin(th) * 2.2) / 2, 0.7, (hz + tp.z + Math.cos(th) * 2.2) / 2); rope.rotation.y = Math.atan2(dx, dz); rope.scale.set(0.08, 0.08, Math.max(0.1, d - 2.2));
         setBeam(goal);
-        if (tp.distanceTo(goal) < 10 && Math.abs(pc.vf || 0) < 3) { scene.remove(mk); return done(); }
+        if (tp.distanceTo(goal) < 11) arriveBrake(dt); if (tp.distanceTo(goal) < 11 && Math.abs(pc.vf || 0) < 6) { scene.remove(mk); return done(); }
       },
       hud() { return { bars: [{ label: 'Прицеп', frac: Math.max(0, hp) / 100, color: hp > 40 ? '#4dffa6' : '#ff5a5a' }], timer: `${fmt(left)}`, bad: left < 20 }; } };
   },
@@ -12360,7 +12364,7 @@ Object.assign(GEN, {
           const dx = pc.pos.x - q.p.x, dz = pc.pos.z - q.p.z, fw = dx * Math.sin(q.h) + dz * Math.cos(q.h), sd = dx * Math.cos(q.h) - dz * Math.sin(q.h);
           if (Math.abs(fw) < 4.5 + 2 && Math.abs(sd) < 2.5 + 1.6) { const d = Math.hypot(dx, dz) || 1; pc.pos.x += dx / d * 3; pc.pos.z += dz / d * 3; pc.vel.set(0, 0, 0); pc.vf = 0; if (cd <= 0) { touches++; cd = 1.5; sfx.crash(5); toast(touches > (c.touches || 2) ? 'Парад остановлен!' : `Задел платформу! (${touches}/${c.touches || 2})`, 1.6); if (touches > (c.touches || 2)) return failChapter('Въехал в парад', 'Колонна не остановится. Жди просвет между платформами и проскакивай сразу за хвостом одной из них.'); } } }
         const s = S[si]; setBeam(s.v);
-        if (pc.pos.distanceTo(s.v) < 9 && Math.abs(pc.vf || 0) < 3) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}» — на месте`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 8); }
+        if (pc.pos.distanceTo(s.v) < 10) arriveBrake(dt); if (pc.pos.distanceTo(s.v) < 10 && Math.abs(pc.vf || 0) < 6.5) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}» — на месте`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 8); }
       },
       hud() { return { timer: `${fmt(left)} · адрес ${Math.min(si + 1, S.length)}/${S.length} · касаний ${touches}/${c.touches || 2}`, bad: left < 25 }; } };
   },
