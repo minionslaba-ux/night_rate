@@ -144,6 +144,9 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 @media (max-width: 560px) { .bars, .bars.low { top: calc(172px + var(--sat)); width: calc(100% - 24px); } }
 .boss .bar-track { margin-top: 5px; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
+.btn.daily { background: linear-gradient(160deg, #ff5ad1, #8a2be2); color: #fff; border: 0; }
+.daily-top { margin: 8px 0 4px; padding-left: 0; list-style: none; max-height: 34vh; overflow: auto; }
+.daily-top li { padding: 3px 0; } .daily-top li.me { color: var(--taxi); font-weight: 700; }
 .chip .stars { color: #ffc43d; letter-spacing: 1px; margin-left: 4px; font-size: .9em; }
 .drift-hud { position: absolute; top: 19%; left: 50%; transform: translateX(-50%) skewX(-8deg); font: 800 clamp(16px, 3vw, 26px)/1 var(--font-display); letter-spacing: .06em; color: #ff5ad1; text-shadow: 0 0 16px rgba(255,90,209,.6), 0 2px 4px #000; white-space: nowrap; pointer-events: none; z-index: 6; }
 .toast { position: absolute; top: 28%; left: 50%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(18px, 3.4vw, 30px); color: var(--taxi); text-shadow: 0 0 18px rgba(255,196,61,.55), 0 2px 4px #000; white-space: nowrap; animation: pop .25s ease-out; }
@@ -685,7 +688,7 @@ setTimeout(function () {
     <div class="kicker pv-k">Порт-Северный · 02:47</div>
     <h1 class="logo pv-logo">Ночной тариф<span>Эпизод 1. Кейс</span></h1>
     <p class="pv-tag">Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».</p>
-    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
+    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnDaily" class="btn big daily" type="button">Задание дня</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
     <p id="pvPath" class="pv-path"></p>
   </div>
   <div id="mrgBox" class="mrg-box" hidden><div class="mrg-label">Реклама</div><div id="mrgSlot"></div>
@@ -758,7 +761,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v98'; window.__errs = [];
+window.APP_VER = 'v99'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5940,7 +5943,7 @@ const MODS = [
 ];
 function replayMod(ep, i, c) {
   MLOG.mod = null; MLOG.coins = (c && c.coins) || 150;
-  if (!MIS || MIS.online || c.type === 'choice') return;
+  if (!MIS || MIS.online || c.type === 'choice' || (EPS[ep] && EPS[ep].daily)) return;
   const passed = (PROF.stars || {})[ep + ':' + (i + 1)] || epMaxAny(ep) > i + 1;
   if (!passed || Math.random() > 0.7) return;
   const list = MODS.filter((m) => { try { return m.ok(); } catch (e) { return false; } }); if (!list.length) return;
@@ -6666,7 +6669,7 @@ function failChapter(title, text) {
   runEnd('fail', title);
   state.mode = 'dead'; setEngine(0, false);
   showModal(`
-    <div class="kicker">Эпизод ${state.ep} · ${MIS.title}</div>
+    <div class="kicker">${state.ep === 90 ? 'Задание дня' : `Эпизод ${state.ep} · ${MIS.title}`}</div>
     <h2 class="h2 bad">${title}</h2>
     <p class="lead">${text}</p>
     <div class="btns"><button id="mRetry" class="btn primary" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>`, {
@@ -6954,7 +6957,7 @@ function ch6() {
 
 function startEpisode2(ch) { startEpisode(2, ch); }
 function startEpisode(ep, ch) {
-  saveLast(ep, ch);
+  if (!(EPS[ep] && EPS[ep].daily)) saveLast(ep, ch);
   initAudio(); hideModal(); setMood('night');
   $('select').hidden = true; $('preview').hidden = true; $('hud').hidden = false; $('touch').hidden = !isTouch;
   document.body.classList.toggle('touch-on', isTouch);
@@ -7983,13 +7986,14 @@ function setMood(m) {
 }
 
 function startGen(ep, i, withIntro) {
-  const E = EPS[ep], c = E.chapters[i]; saveLast(ep, i + 1);
+  const E = EPS[ep], c = E.chapters[i]; if (!E.daily) saveLast(ep, i + 1);
   if (E.season3) s3Vik(); clearStage(); setMood(c.mood || 'night');
-  state.ep = ep; state.ch = i + 1; epSave(ep, i + 1); state.fireLock = true;
+  state.ep = ep; state.ch = i + 1; if (!E.daily) epSave(ep, i + 1); state.fireLock = true;
   const title = `Миссия ${i + 1} · ${c.t}`;
   let finished = false;
   const done = () => {
     if (finished) return; finished = true;
+    if (E.daily) { profStat('chapters'); for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; } clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0); dailyFinish(); return; }
     epSave(ep, i + 2); addCoins(c.coins || 150); profStat('chapters');
     for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; }
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
@@ -11198,6 +11202,53 @@ for (const R of EP_REMIX) {
   if (R.name) cfg.name = R.name;
   E.chapters[R.ch - 1] = Object.assign(cfg, { t: R.t, type: R.kind, start: R.start, about: R.about, intro: R.intro, outro: old.outro, coins: old.coins, mood: old.mood, remix: true });
 }
+// ---- the daily challenge: one task a day, the same for everyone; score — the time; a ranking of the day (nf_daily_top);
+// the first finish of the day +150 coins. Signed-in players get into the ranking (nf_daily_submit keeps the best time).
+const DAILY_KINDS = ['race', 'collect', 'smash', 'photo', 'drift'];
+const DAILY_NAMES = { race: 'Гонка по точкам', collect: 'Сбор по району', smash: 'Тараны на скорости', photo: 'Фотоохота', drift: 'Дрифт-шоу' };
+const dailyDay = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+const dailyNum = () => Math.floor((Date.now() + 3 * 3600e3) / 864e5);
+function dailyChapter() {
+  const n = dailyNum(), kind = DAILY_KINDS[n % DAILY_KINDS.length], start = [0, 40, 'N'];
+  const cfg = pickT2(kind, { x: start[0], z: start[1], h: hdg(start[2]) }, 300 + (n % 997)) || pickT2('collect', { x: 0, z: 40, h: 0 }, 1);
+  return Object.assign(cfg, { t: `Задание дня · ${DAILY_NAMES[kind]}`, type: kind, start, coins: 0, intro: [['mark', `Задание дня: ${DAILY_NAMES[kind].toLowerCase()}. Сегодня его едут все таксисты города — время пойдёт в общий рейтинг.`], ['hero', 'Тогда без лишних слов.']] });
+}
+const DAILY = { rows: null, err: '' };
+async function dailyTop() {
+  if (!cloudInit()) { DAILY.err = 'Рейтинг недоступен без связи.'; return; }
+  try { const { data, error } = await CLOUD.sb.rpc('nf_daily_top', { p_day: dailyDay(), lim: 10 }); if (error) DAILY.err = 'Рейтинг сейчас недоступен.'; else { DAILY.rows = data || []; DAILY.err = ''; } } catch (e) { DAILY.err = 'Рейтинг сейчас недоступен.'; }
+}
+function dailyTopHtml() {
+  if (DAILY.err) return `<p class="lead">${DAILY.err}</p>`;
+  if (!DAILY.rows) return '<p class="lead">Загружаю рейтинг…</p>';
+  if (!DAILY.rows.length) return '<p class="lead">Сегодня ещё никто не проехал. Будь первым!</p>';
+  return `<ol class="daily-top">${DAILY.rows.map((r) => `<li class="${r.me ? 'me' : ''}"><b>${r.place}.</b> ${String(r.name).replace(/[<>&]/g, '')} — ${fmtT(r.secs)}</li>`).join('')}</ol>`;
+}
+function dailyOpen() {
+  const c = dailyChapter(), best = (store.get('nf-daily') || {})[dailyDay()];
+  const draw = () => showModal(`<div class="kicker">${dailyDay().split('-').reverse().join('.')} · одно задание на всех</div><h2 class="h2">Задание дня: ${DAILY_NAMES[c.type]}</h2>
+    <p class="lead">${c.type === 'drift' ? `Набери ${c.score} очков заноса как можно быстрее.` : c.type === 'photo' ? `Сфотографируй ${c.pts.length} места как можно быстрее.` : c.type === 'smash' ? `Снеси ${c.pts.length} преград на скорости как можно быстрее.` : `Проедь ${c.pts.length} точек как можно быстрее.`} Первое прохождение за день — +150 монет.${best ? ` Твой лучший результат сегодня: <b>${fmtT(best)}</b>.` : ''}${CLOUD.user ? '' : ' <br><small>Чтобы попасть в рейтинг, войди в профиль.</small>'}</p>
+    ${dailyTopHtml()}
+    <div class="btns"><button id="dGo" class="btn primary" type="button">Начать</button><button id="dClose" class="btn" type="button">Закрыть</button></div>`, {
+    dGo: () => { hideModal(); dailyStart(); }, dClose: () => hideModal(),
+  });
+  draw(); DAILY.rows = null; dailyTop().then(() => { if (!$('modal').hidden && $('dGo')) draw(); });
+}
+function dailyStart() { EPS[90] = { daily: true, chapters: [dailyChapter()] }; startEpisode(90, 1); }
+async function dailyFinish() {
+  const t = Math.max(1, Math.round(state.time - (MLOG.gt0 || 0))), day = dailyDay(), all = store.get('nf-daily') || {}, first = !all[day];
+  if (!all[day] || t < all[day]) all[day] = t; store.set('nf-daily', all);
+  state.mode = 'end'; setEngine(0, false);
+  if (first) setTimeout(() => addCoins(150), 400);
+  let place = '';
+  if (CLOUD.user && !PROF.god) { try { const { data } = await CLOUD.sb.rpc('nf_daily_submit', { p_day: day, p_secs: t }); const r = data && data[0]; if (r && r.place) place = `Место в рейтинге дня: <b>${r.place}</b>${r.improved ? ' — новый личный рекорд!' : ` (лучшее время ${fmtT(r.best)})`}.`; } catch (e) { place = 'Результат не отправился: нет связи.'; } }
+  else place = PROF.god ? 'Тестовый профиль в рейтинг не попадает.' : 'Войди в профиль, чтобы попасть в рейтинг дня.';
+  await dailyTop();
+  showModal(`<div class="kicker">Задание дня</div><h2 class="h2">Время: ${fmtT(t)}</h2><p class="lead">${place}${first ? ' Первое прохождение за сегодня: +150 монет.' : ''}</p>${dailyTopHtml()}
+    <div class="btns"><button id="dAgain" class="btn primary" type="button">Ещё раз</button><button id="dMenu" class="btn" type="button">В меню</button></div>`, {
+    dAgain: () => { hideModal(); dailyStart(); }, dMenu: () => { hideModal(); showSelect(); },
+  });
+}
 // glowing markers for several targets at once
 function tMark(x, z, color, tall) {
   const g = new THREE.Group(); g.position.set(x, 0, z);
@@ -13673,6 +13724,7 @@ $('btnPlay').addEventListener('click', showSelect);
 $('btnS3').addEventListener('click', () => openLine(LINES[1]));
 setInterval(() => { if (state.mode === 'preview') { renderMenuPath(); mrgPlace(); } }, 3000);   // the cloud profile may arrive after the menu is up
 $('btnCities').addEventListener('click', () => openLine(LINES[2]));
+$('btnDaily').addEventListener('click', () => { initAudio(); dailyOpen(); });
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
 $('btnOnline').addEventListener('click', startOnline);
@@ -13834,7 +13886,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, DRIFTX: { SKID, DRIFT }, storyChoice, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
