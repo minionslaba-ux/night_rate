@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v92'; window.__errs = [];
+window.APP_VER = 'v93'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5930,10 +5930,29 @@ function missionStars() {
   if (gain > 0) setTimeout(() => addCoins(25 * gain), 1400);
   return s;
 }
+// ---- replay conditions: a mission already passed gets (70%) one twist and a bigger reward, so the same mission plays differently
+const MODS = [
+  { id: 'fog', name: 'Туман над городом', bonus: 0.4, ok: () => true, apply: () => { MIS.fog = 0.75; } },
+  { id: 'dent', name: 'Машина побита: 60% прочности', bonus: 0.5, ok: () => state.act === 1 && pc, apply: () => { pc.hp = 60; } },
+  { id: 'rush', name: 'Спешка: на звезду за время — на 30% меньше', bonus: 0.5, ok: () => true, apply: () => { MLOG.par = Math.round(MLOG.par * 0.7); } },
+  { id: 'jam', name: 'Ствол заклинило на 25 секунд', bonus: 0.4, ok: () => !MIS.noFire, apply: () => { const m = MIS; m.noFire = true; m.noFireMsg = 'Ствол заклинило — ещё немного'; setTimeout(() => { if (MIS === m) { m.noFire = false; m.noFireMsg = null; toast('Ствол снова стреляет', 1.4); } }, 25000); } },
+  { id: 'tail', name: 'Хвост злее: на одну машину больше', bonus: 0.5, ok: () => MIS.chase && MIS.chase.max > 0, apply: () => { MIS.chase.max++; } },
+  { id: 'gold', name: 'Щедрый заказчик', bonus: 0.5, ok: () => true, apply: () => {} },
+];
+function replayMod(ep, i, c) {
+  MLOG.mod = null; MLOG.coins = (c && c.coins) || 150;
+  if (!MIS || MIS.online || c.type === 'choice') return;
+  const passed = (PROF.stars || {})[ep + ':' + (i + 1)] || epMaxAny(ep) > i + 1;
+  if (!passed || Math.random() > 0.7) return;
+  const list = MODS.filter((m) => { try { return m.ok(); } catch (e) { return false; } }); if (!list.length) return;
+  const m = list[Math.floor(Math.random() * list.length)]; m.apply(); MLOG.mod = m; MIS.modsTxt = m.id;
+  setTimeout(() => { if (MLOG.mod === m && (state.mode === 'drive' || state.mode === 'foot')) toast(`Условие повтора: ${m.name} · +${Math.round(m.bonus * 100)}% к награде`, 3.4); }, 6200);
+}
 // closing the game in the middle of a mission counts as quitting it
 addEventListener('pagehide', () => { if (MLOG.open) missionLog('quit', 'закрыл игру'); });
 function runEnd(result, reason) {
   if (MIS && MIS.online) return;
+  if (result === 'win' && MLOG.open && MLOG.mod) { const md = MLOG.mod, b = Math.round(MLOG.coins * md.bonus); setTimeout(() => { addCoins(b); toast(`Условие «${md.name}» выполнено: +${b} монет`, 2.4); }, 2600); }
   missionLog(result === 'win' ? 'win' : result === 'death' ? 'death' : 'fail', reason, result === 'win' ? { stars: missionStars() } : null);
   DIFF.last = { key: diffKey(), result, reason };
   const key = diffKey(), all = store.get('nf-tries') || {}, tries = all[key] || 0, mult = Math.round(diffMult() * 100) / 100;
@@ -7917,7 +7936,7 @@ function startGen(ep, i, withIntro) {
   const mode0 = state.mode;
   const intro = () => { if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; }); };
   if (E.season3 && c.type !== 'choice' && state.mode !== 'dialog') s3Trunk(intro); else intro();
-  if (MLOG.open) missionLog('quit', 'перезапуск'); missionLog('start', null, { type: c.type, title: c.t, par: missionPar(c) });
+  if (MLOG.open) missionLog('quit', 'перезапуск'); missionLog('start', null, { type: c.type, title: c.t, par: missionPar(c) }); replayMod(ep, i, c);
 }
 
 // the business jet: parked in hangar 3, or set down where a chapter needs it
