@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v96'; window.__errs = [];
+window.APP_VER = 'v97'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5947,6 +5947,36 @@ function replayMod(ep, i, c) {
   const m = list[Math.floor(Math.random() * list.length)]; m.apply(); MLOG.mod = m; MIS.modsTxt = m.id;
   setTimeout(() => { if (MLOG.mod === m && (state.mode === 'drive' || state.mode === 'foot')) toast(`Условие повтора: ${m.name} · +${Math.round(m.bonus * 100)}% к награде`, 3.4); }, 6200);
 }
+// ---- a choice in every episode 3–12: after one mission the player decides how to play the next one.
+// «hot» — one more pursuer, +40% reward; «quiet» — one pursuer fewer and 30% more time for the speed star, no bonus.
+const STORY_CHOICES = {
+  3: { after: 4, q: 'Три грузовика с копиями тетради идут в порт.', hot: 'Перехватить в лоб на проспекте', quiet: 'Подкараулить у переезда' },
+  4: { after: 2, q: 'Гастролёры идут по следу Сони.', hot: 'Увести всю стаю за собой', quiet: 'Уйти тихо, дворами' },
+  5: { after: 3, q: 'Лимузин Хозяина уходит к реке.', hot: 'Таранить сразу, на проспекте', quiet: 'Дождаться, пока он свернёт с людных улиц' },
+  6: { after: 3, q: 'Город без света, на улицах неразбериха.', hot: 'Ехать через центр, напрямую', quiet: 'Объехать по набережной' },
+  7: { after: 1, q: 'Мосты разводят через пару минут.', hot: 'Прорываться через блокпост', quiet: 'Искать объезд по тёмным улицам' },
+  8: { after: 1, q: 'Дед ждёт на окраине, за ним следят.', hot: 'Забрать его с шумом, у всех на виду', quiet: 'Подъехать без фар, переулками' },
+  9: { after: 4, q: 'Сумки в багажнике, охрана поднята по тревоге.', hot: 'Гнать через центр', quiet: 'Петлять окольными улицами' },
+  10: { after: 2, q: 'Облава у особняка: «Гранит» стягивает людей.', hot: 'Прорваться через ворота', quiet: 'Уйти через сад, по задворкам' },
+  11: { after: 1, q: 'Свидетель ждёт, вертолёт кружит над центром.', hot: 'Ехать по прямой, пусть видят', quiet: 'Под эстакадами, где вертолёт не видит' },
+  12: { after: 2, q: 'Мэр в безопасности, но жёлтое такси в розыске.', hot: 'Не прятаться — гнать к мэрии', quiet: 'Сменить маршрут и затеряться' },
+};
+function storyChoice(ep, chDone, go) {
+  const C = STORY_CHOICES[ep]; if (!C || C.after !== chDone || (MIS && MIS.online)) return go();
+  state.mode = 'dialog';
+  showModal(`<div class="kicker">Эпизод ${ep} · решение</div><h2 class="h2">Как действуем?</h2><p class="lead">${C.q}</p>
+    <div class="btns"><button id="chHot" class="btn primary" type="button">${C.hot}<br><small>+1 преследователь · +40% к награде</small></button><button id="chQuiet" class="btn" type="button">${C.quiet}<br><small>−1 преследователь · больше времени на звезду</small></button></div>`, {
+    chHot: () => { hideModal(); state.choice = { ep, ch: chDone + 1, eff: 'hot' }; PROF.st.choices = (PROF.st.choices || 0) + 1; saveProfile(); go(); },
+    chQuiet: () => { hideModal(); state.choice = { ep, ch: chDone + 1, eff: 'quiet' }; PROF.st.choices = (PROF.st.choices || 0) + 1; saveProfile(); go(); },
+  });
+}
+function applyChoice(ep, ch) {
+  const C = state.choice; if (!C || C.ep !== ep || C.ch !== ch || !MIS) return; state.choice = null;
+  if (C.eff === 'hot') { if (MIS.chase) MIS.chase.max = Math.max(1, (MIS.chase.max || 0) + 1); else MIS.fog = Math.max(MIS.fog || 0, 0.4); MLOG.mod = { id: 'hot', name: 'Напролом', bonus: 0.4 }; }
+  else { if (MIS.chase) MIS.chase.max = Math.max(0, (MIS.chase.max || 0) - 1); MLOG.par = Math.round(MLOG.par * 1.3); MLOG.mod = null; }
+  MIS.modsTxt = 'choice:' + C.eff;
+  setTimeout(() => { if (state.mode === 'drive' || state.mode === 'foot') toast(C.eff === 'hot' ? 'Решение — напролом: хвост злее, награда больше' : 'Решение — тихо: хвост слабее, времени больше', 3); }, 3000);
+}
 // closing the game in the middle of a mission counts as quitting it
 addEventListener('pagehide', () => { if (MLOG.open) missionLog('quit', 'закрыл игру'); });
 function runEnd(result, reason) {
@@ -7963,7 +7993,7 @@ function startGen(ep, i, withIntro) {
     epSave(ep, i + 2); addCoins(c.coins || 150); profStat('chapters');
     for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; }
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
-    playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? startGen(ep, i + 1, true) : showEndGen(ep)));
+    playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? storyChoice(ep, i + 1, () => startGen(ep, i + 1, true)) : showEndGen(ep)));
   };
   AIR.on = (c.zone || E.zone) === 'airport'; STA.on = (c.zone || E.zone) === 'station'; TRK.on = (c.zone || E.zone) === 'track'; VIL.on = (c.zone || E.zone) === 'village'; LOW.on = (c.zone || E.zone) === 'lower' || (c.zone || E.zone) === 'city' && !!E.season3; CITY = CITIES[c.zone || E.zone] || null; cityUse(CITY);
   resetJet(c.jetAt);
@@ -7976,7 +8006,7 @@ function startGen(ep, i, withIntro) {
   const mode0 = state.mode;
   const intro = () => { if (withIntro && c.intro && c.intro.length) playDialog(c.intro.map(fixLine), () => { state.mode = mode0; }); };
   if (E.season3 && c.type !== 'choice' && state.mode !== 'dialog') s3Trunk(intro); else intro();
-  if (MLOG.open) missionLog('quit', 'перезапуск'); missionLog('start', null, { type: c.type, title: c.t, par: missionPar(c) }); replayMod(ep, i, c); setPieceArm(ep, i + 1);
+  if (MLOG.open) missionLog('quit', 'перезапуск'); missionLog('start', null, { type: c.type, title: c.t, par: missionPar(c) }); replayMod(ep, i, c); applyChoice(ep, i + 1); setPieceArm(ep, i + 1);
 }
 
 // the business jet: parked in hangar 3, or set down where a chapter needs it
@@ -13794,7 +13824,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { CITIES, DRIFTX: { SKID, DRIFT }, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { CITIES, DRIFTX: { SKID, DRIFT }, storyChoice, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
