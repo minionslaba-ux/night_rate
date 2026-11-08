@@ -9,10 +9,6 @@
 <link rel="preload" href="assets/models/car.glb" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="assets/city.glb" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="assets/anims.glb" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="assets/models/woman.glb" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="assets/models/michelle.glb" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="assets/models/man.glb" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="assets/models/anims.glb" as="fetch" crossorigin="anonymous">
 <meta name="theme-color" content="#0b0d1f">
 <link rel="icon" href="favicon.ico" sizes="48x48">
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
@@ -544,7 +540,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .note.good { border-left-color: #4dffa6; background: rgba(77,255,166,.08); }
 @media (max-width: 560px) { .btn.s3new { margin: 10px 0 0; } }
 .card-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; cursor: pointer; }
-#modalCard { position: relative; } #modalCard #mDouble { order: 9; } #modalCard #mSave { order: 10; } .toptab { width: 100%; border-collapse: collapse; font-size: 13px; } .toptab th { text-align: left; opacity: .6; font-weight: 600; padding: 4px 6px; } .toptab td { padding: 6px; border-top: 1px solid var(--line); vertical-align: top; } .toptab td small { display: block; opacity: .6; font-size: 11px; } .toptab tr.me td { background: rgba(255,196,61,.12); } .toptab td:nth-child(3), .toptab td:nth-child(4) { font-family: var(--font-mono); } #modal.over { z-index: 50; } .topup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; } .topup-row.best { border-color: var(--taxi); } .topup-row b { font-size: 15px; } .topup-row small { opacity: .7; } .topup { display: grid; gap: 8px; margin: 10px 0; }
+.people-wait { position: fixed; left: 50%; bottom: calc(18% + var(--sab, 0px)); transform: translateX(-50%); z-index: 60; background: rgba(11,13,31,.92); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 15px; box-shadow: 0 4px 18px rgba(0,0,0,.4); pointer-events: none; } .people-wait[hidden] { display: none; } #modalCard { position: relative; } #modalCard #mDouble { order: 9; } #modalCard #mSave { order: 10; } .toptab { width: 100%; border-collapse: collapse; font-size: 13px; } .toptab th { text-align: left; opacity: .6; font-weight: 600; padding: 4px 6px; } .toptab td { padding: 6px; border-top: 1px solid var(--line); vertical-align: top; } .toptab td small { display: block; opacity: .6; font-size: 11px; } .toptab tr.me td { background: rgba(255,196,61,.12); } .toptab td:nth-child(3), .toptab td:nth-child(4) { font-family: var(--font-mono); } #modal.over { z-index: 50; } .topup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; } .topup-row.best { border-color: var(--taxi); } .topup-row b { font-size: 15px; } .topup-row small { opacity: .7; } .topup { display: grid; gap: 8px; margin: 10px 0; }
 .chip { border: 1px solid var(--hair-2); background: transparent; color: var(--muted); border-radius: 2px; font: 600 10.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; }
 .chip.active { background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); }
 .hud-chip { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -619,6 +615,7 @@ body.online:not(.task) .stat-line .sep { display: none; }
 
 <div id="stage"></div>
 <div id="loading" class="loading">Загрузка города…</div>
+<div id="peopleWait" class="people-wait" role="status" hidden>Загружаем героев…</div>
 <script>
 /* a watchdog that needs nothing else: if the game has not started in 30 s (a script hung on the network, the phone ran out of memory),
    say so, report it and offer a clean restart (the game's cache and service worker are dropped) */
@@ -761,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v103'; window.__errs = [];
+window.APP_VER = 'v104'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1278,13 +1275,16 @@ const CHAR_FILES = ['gleb', 'timur', 'artem', 'savva', 'rustam', 'kira', 'maya',
 function assetUrl(name) { const emb = window.NF_ASSETS && window.NF_ASSETS[name]; return emb ? 'data:model/gltf-binary;base64,' + emb : ASSET_DIR + name; }
 async function loadAssets(progress) {
   const loader = new THREE.GLTFLoader();
-  const files = ['city.glb', 'anims.glb'].concat(CHAR_FILES.map((c) => 'chars/' + c + '.glb'));
+  const files = ['city.glb', 'anims.glb'];   // the characters are not on the first screen: they come right after it (peopleLoad)
   let done = 0;
   const res = await Promise.all(files.map((f) => loader.loadAsync(assetUrl(f)).then((g) => { done++; progress(done / files.length); return g; })));
   res[0].scenes.forEach((sc) => { ASSETS.kit[sc.name] = sc; });
   ASSETS.clips = res[1].animations;
-  CHAR_FILES.forEach((c, i) => { ASSETS.chars[c] = res[i + 2]; });
   prepareKitMaterials();
+}
+function loadChars() {
+  const loader = new THREE.GLTFLoader();
+  return Promise.all(CHAR_FILES.map((c) => loader.loadAsync(assetUrl('chars/' + c + '.glb')).then((g) => { ASSETS.chars[c] = g; })));
 }
 const KIT = {};
 function prepareKitMaterials() {
@@ -3643,6 +3643,12 @@ function initLife() {
     const o = Object.assign(m, { pos: new V3(), h: 0, v: 0, vmax: 10.5, route: r, ri: 0, wait: 0, stops: BUS_STOPS.filter((q) => q.route === r.num), kind: 'bus' });
     moverStart(o, r.nodes[0], r.nodes[1], 20); LIFE.buses.push(o);
   });
+  LIFE.ready = true;
+  if (PEOPLE.ready) initPeds();
+}
+function initPeds() {
+  if (LIFE.peds.length) return;
+  const nPeds = perf.level >= 1 ? 8 : 14;
   const MODELS = ['gleb', 'timur', 'artem', 'savva', 'rustam', 'kira', 'maya', 'zoya', 'olga', 'nika'];
   const SHIRTS = ['#c84a4a', '#3a6ab8', '#e8e0d0', '#4a8a5a', '#d8a030', '#6a4a8a', '#2a2a32', '#a8b0bc', '#d86a9a'], PANTS = ['#2a2a35', '#3a3a48', '#4a3a2a', '#1a2a4a', '#5a5a62'], HAIR = ['#1e1620', '#5a3a20', '#c89a50', '#8a8a8a', '#a03a1a'];
   for (let i = 0; i < nPeds; i++) {
@@ -3653,7 +3659,6 @@ function initLife() {
     const p = Object.assign(h, { pos: new V3(), bx: 0, bz: 0, off: 28.6, u: 0, dir: 1, sp: rand(1.2, 1.6), panic: 0, dodge: 0, face: 0, act: '' });
     p.g.visible = false; LIFE.peds.push(p);
   }
-  LIFE.ready = true;
 }
 const BLOCKS = []; for (const bx of [-120, -40, 40, 120]) for (const bz of [-120, -40, 40, 120]) BLOCKS.push([bx, bz]);
 function pedPos(p, out) {
@@ -4761,7 +4766,7 @@ function makeCar(color, kind, forceModel) {
   const name = forceModel || (player ? PLAYER_CAR.model : wreck ? 'car_sedan' : pol ? 'car_police' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon', 'nine']));
   // the realistic sports car for the taxi, the gangs, traffic and wrecks; the police, vans and garage cars keep their own
   // detailed model: the player's taxi always; the gang cars on computers (on phones they would cost too much speed); traffic and wrecks stay light
-  const real = NR.ready && !!NR.G.car && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' && !(PLAYER_CAR.glb && GLBC[PLAYER_CAR.glb] && GLBC[PLAYER_CAR.glb].scene) : kind === false && (!isTouch || HD()) && perf.level === 0);
+  const real = NR.carOk && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' && !(PLAYER_CAR.glb && GLBC[PLAYER_CAR.glb] && GLBC[PLAYER_CAR.glb].scene) : kind === false && (!isTouch || HD()) && perf.level === 0);
   // the gangs on computers: the pack's cars in dark paint (light enough: 17–20k triangles); phones keep the kit cars
   const gang = null;   // the gangs keep the realistic sports car (the «real» path below)
   const gkey = forceModel && forceModel.indexOf('glb:') === 0 ? forceModel.slice(4) : player ? PLAYER_CAR.glb : pol && !forceModel ? 'police' : gang;
@@ -4947,20 +4952,53 @@ function texCap(root, gl) {
 function nrLoad(onProgress, after) {
   if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') return Promise.resolve(false);
   const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-  let done = 0;
-  return Promise.all(NR_SRC.map((k) => new Promise((res, rej) => loader.load('assets/models/' + k + '.glb', (g) => { texCap(g.scene, g); NR.G[k] = g; done++; if (onProgress) onProgress(done / NR_SRC.length); res(); }, undefined, rej))))
+  let done = 0; const boot = NR_SRC.filter((k) => k === 'car');
+  NR.loader = loader;
+  return Promise.all(boot.map((k) => nrOne(k).then(() => { done++; if (onProgress) onProgress(done / boot.length); })))
     .then(() => after)
     .then(() => {
-      for (const c of NR.G.anims.animations) if (/Idle|Walk|Run/.test(c.name)) NR.clips[c.name.replace(/.*\|/, '')] = c;
       // the car keeps only positions in the file: rebuild its normals
       if (NR.G.car) NR.G.car.scene.traverse((o) => { if (o.isMesh && !o.geometry.attributes.normal) o.geometry.computeVertexNormals(); });
-      // a person as tall as the old characters
-      try { const b = new THREE.Box3().setFromObject(ASSETS.chars.kira.scene); NR.H = (b.max.y - b.min.y) * HUMAN_S * 1.16; } catch (e) { NR.H = 2.0; }
-      NR.ready = !!(NR.clips.Idle && NR.clips.Walk && NR.clips.Run); polLoad();
+      NR.carOk = !!NR.G.car;
       if (PLAYER_CAR.glb) glbCarLoad(PLAYER_CAR.glb, () => applyLoadout());   // the loader was not ready when the profile loaded
-      return NR.ready;
+      return true;
     }).catch(() => false);
 }
+const nrOne = (k) => new Promise((res, rej) => NR.loader.load('assets/models/' + k + '.glb', (g) => { texCap(g.scene, g); NR.G[k] = g; res(); }, undefined, rej));
+// ---------- people after the first screen: the 17 story characters and the realistic people (~12 of the ~15 MB the menu used to wait for).
+// Until they are here a press on a menu button that would start the game waits with «Загружаем героев…» and then goes on by itself.
+const PEOPLE = { ready: false, p: null, wait: null, n: 0, k: 0 };
+function peopleLoad() {
+  if (PEOPLE.p) return PEOPLE.p;
+  const rest = NR.loader ? NR_SRC.filter((k) => k !== 'car') : [];
+  PEOPLE.n = rest.length + 1;
+  const step = (x) => x.then(() => { PEOPLE.k++; peopleWaitShow(); });
+  const nr = Promise.all(rest.map((k) => step(nrOne(k)))).then(() => true).catch(() => false);
+  PEOPLE.p = Promise.all([step(loadChars()), nr]).then(([, ok]) => {
+    try { if (ok && NR.G.anims) for (const c of NR.G.anims.animations) if (/Idle|Walk|Run/.test(c.name)) NR.clips[c.name.replace(/.*\|/, '')] = c; } catch (e) { /* old people */ }
+    // a person as tall as the old characters
+    try { const b = new THREE.Box3().setFromObject(ASSETS.chars.kira.scene); NR.H = (b.max.y - b.min.y) * HUMAN_S * 1.16; } catch (e) { NR.H = 2.0; }
+    NR.ready = ok && !!(NR.clips.Idle && NR.clips.Walk && NR.clips.Run); polLoad();
+    peopleReady();
+  }).catch((e) => { console.error(e); peopleReady(); });
+  return PEOPLE.p;
+}
+function peopleReady() {
+  PEOPLE.ready = true; window.__peopleT = Math.round(performance.now());
+  try { initPeds(); } catch (e) { /* no passers-by */ }
+  if (state.mode === 'preview' || state.mode === 'select') setTimeout(renderPortraits, 300);
+  const w = PEOPLE.wait; PEOPLE.wait = null; $('peopleWait').hidden = true;
+  if (w && document.contains(w)) { PEOPLE.replay = true; try { w.click(); } finally { PEOPLE.replay = false; } }
+}
+function peopleWaitShow() { const el = $('peopleWait'); if (el && !el.hidden) el.textContent = 'Загружаем героев… ' + Math.round(PEOPLE.k / Math.max(1, PEOPLE.n) * 100) + '%'; }
+// a press that would start the game while the people are still coming: remember it, show the wait, press it again when they are here
+document.addEventListener('click', (e) => {
+  if (PEOPLE.ready || PEOPLE.replay) return;
+  const t = e.target && e.target.closest && e.target.closest('button, a.btn, [data-act]'); if (!t) return;
+  if (!t.closest('#preview, #select') || t.closest('#mrgBox')) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  PEOPLE.wait = t; const el = $('peopleWait'); el.hidden = false; peopleWaitShow();
+}, true);
 const nrTint = {};
 function nrTintTex(tex, hex, mix) {
   if (!tex || !tex.image) return tex;
@@ -13586,7 +13624,7 @@ function drawPortrait(cv, ch) {
 // head-and-shoulders renders of the real 3D models for the roster cards
 let portraitsDone = false;
 function renderPortraits() {
-  if (portraitsDone) return; portraitsDone = true;
+  if (portraitsDone || !PEOPLE.ready) return; portraitsDone = true;
   let pr;
   try { pr = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); } catch (e) { return; }
   pr.setPixelRatio(1); pr.setSize(200, 240, false); pr.outputEncoding = THREE.sRGBEncoding; pr.toneMapping = THREE.ACESFilmicToneMapping; pr.setClearColor(0x000000, 0);
@@ -13958,7 +13996,7 @@ BOOT_LOAD.then(() => {
   showPreview(); $('ageBadge').hidden = PLATFORM !== 'vk';
   revealPrep();   // only the nearest part of the city goes to the GPU in the first frame, the rest over the next frames
   warmShaders();   // every shader of the menu scene handed to the GPU at once (after the cars: their lights change the shaders)
-  requestAnimationFrame(() => requestAnimationFrame(() => { crumbStage('first'); loadReport(true, 'menu'); setTimeout(() => { if (state.mode === 'preview' || state.mode === 'select') renderPortraits(); }, 1200); }));
+  requestAnimationFrame(() => requestAnimationFrame(() => { crumbStage('first'); loadReport(true, 'menu'); peopleLoad(); }));
   // a signed-in player skips the entry screen; wait for the server at most 4 s
   diffLoad();
   const restoring = cloudRestore();
