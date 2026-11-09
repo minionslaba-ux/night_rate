@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v118'; window.__errs = [];
+window.APP_VER = 'v119'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -3411,7 +3411,7 @@ function buildWorld() {
 
   CONTS.glb = (!isTouch || HD()) && perf.level === 0;
   buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage(); buildLower();   // the world cities are built on demand: cityUse()
-  contBuild(); trashBuild(TRASH); if (CONTS.glb) jerseyLoad();
+  contBuild(); trashBuild(TRASH); if (CONTS.glb) { jerseyLoad(); shipBuild(); }
 
   // one material per batch: a few draw calls for the whole city
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -3474,6 +3474,21 @@ function contSlot(x, y, z, c) {
 }
 // ---- wheeled trash bins (assets/models/trash_container.glb, computers only): one instanced mesh, green / grey, loaded in the background ----
 const TRASH = [];
+// ---- the container ship at the main harbour quay (assets/models/container_ship.glb, computers only): ≈146 m along the quay under the
+// three cranes, the red underwater hull below the water line (water at −1.5 m); scenery only, nobody drives in the water
+function shipBuild() {
+  if (!THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') return;
+  const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.load('assets/models/container_ship.glb', (gl) => {
+    texCap(gl.scene, gl);
+    let mesh = null; gl.scene.updateMatrixWorld(true); gl.scene.traverse((m) => { if (m.isMesh && !mesh) mesh = m; });
+    if (!mesh) return;
+    const geo = mesh.geometry.clone(); geo.applyMatrix4(mesh.matrixWorld); geo.computeBoundingBox();
+    const bb = geo.boundingBox, sz = bb.getSize(new V3()); geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+    const k = 22 / sz.z, m = new THREE.Mesh(geo, mesh.material);   // 22 m wide; length and height in proportion
+    m.scale.setScalar(k); m.position.set(-30, -1.5 - sz.y * k * 0.18, 182 + 1.5 + 11); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+  }, undefined, () => { /* no ship: the quay stays empty */ });
+}
 // ---- concrete jersey barriers (assets/models/barrier.glb, computers only): the police roadblock in chases; loaded in the background ----
 const JERSEY = { geo: null, mat: null, k: 1, asked: false };
 function jerseyLoad() {
