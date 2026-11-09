@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v108'; window.__errs = [];
+window.APP_VER = 'v109'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -9792,7 +9792,8 @@ function pimg(kind, id, price, legend) {
   return `<div class="pimg" style="--neon:${neon}"><i class="pglow"></i><i class="ppod"></i><img src="assets/shop/img/${kind}-${id}.webp" alt="" loading="lazy" onerror="this.remove()">${kind === 'up' || kind === 'pack' ? '' : `<em class="prar" style="--rc:${r[1]}">${r[0]}</em>`}</div>`;
 }
 function renderProfile() {
-  const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['arms', 'Оружие'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения'], ['top', 'Рейтинг'], ['friends', 'Друзья']];
+  const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['arms', 'Оружие'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения'], ['top', 'Рейтинг'], ['friends', 'Друзья']].filter(([id]) => !(PIKABU && (id === 'top' || id === 'friends')));
+  if (PIKABU && (profTab === 'top' || profTab === 'friends')) profTab = 'me';
   $('profTabs').innerHTML = tabs.map(([k, t]) => `<button class="chip${profTab === k ? ' active' : ''}" data-tab="${k}" type="button">${t}</button>`).join('');
   $('profName').textContent = PROF.name; $('profSub').textContent = PROF.god ? 'тестовый профиль · бессмертие · все покупки бесплатно' : PROF.login ? 'профиль ' + PROF.login : 'гость · прогресс хранится в этом браузере';
   $('profCoins').textContent = coinsText(); $('profAva').textContent = (PROF.name[0] || 'Г').toUpperCase();
@@ -10494,7 +10495,7 @@ function renderGate() {
   }
 }
 // installable web app: the service worker caches the game for fast start (only on http(s) with a manifest next to the page)
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel="manifest"]')) {
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && (document.querySelector('link[rel="manifest"]') || PK_DIRECT)) {
   window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* not available here */ }); });
 }
 
@@ -10768,7 +10769,7 @@ async function sendChat() {
   // the draft kept from 'input' covers iOS, where the field can read empty while the keyboard is still committing
   const inp = $('chatInput'), raw = (inp.value || ONL.draft || '').trim(); ONL.draft = '';
   const body = Array.from(raw).slice(0, 140).join(''); if (!body) return;
-  if (!PROF.cloud) { toast('Войди в профиль, чтобы писать в чат', 2); return; }
+  if (!PROF.cloud) { toast(PIKABU ? 'Чат здесь недоступен' : 'Войди в профиль, чтобы писать в чат', 2); return; }
   inp.value = '';
   const mine = { id: 'p' + Date.now(), user_id: ONL.id, name: onlineName(), body, pending: true };
   ONL.msgs.push(mine); renderChat();
@@ -11486,10 +11487,12 @@ function dailyChapter() {
 }
 const DAILY = { rows: null, err: '' };
 async function dailyTop() {
+  if (PIKABU) return;   // on Пикабу there is no profile of ours: the day's best time stays on the device, no rating
   if (!cloudInit()) { DAILY.err = 'Рейтинг недоступен без связи.'; return; }
   try { const { data, error } = await CLOUD.sb.rpc('nf_daily_top', { p_day: dailyDay(), lim: 10 }); if (error) DAILY.err = 'Рейтинг сейчас недоступен.'; else { DAILY.rows = data || []; DAILY.err = ''; } } catch (e) { DAILY.err = 'Рейтинг сейчас недоступен.'; }
 }
 function dailyTopHtml() {
+  if (PIKABU) return '';
   if (DAILY.err) return `<p class="lead">${DAILY.err}</p>`;
   if (!DAILY.rows) return '<p class="lead">Загружаю рейтинг…</p>';
   if (!DAILY.rows.length) return '<p class="lead">Сегодня ещё никто не проехал. Будь первым!</p>';
@@ -11498,7 +11501,7 @@ function dailyTopHtml() {
 function dailyOpen() {
   const c = dailyChapter(), best = (store.get('nf-daily') || {})[dailyDay()];
   const draw = () => showModal(`<div class="kicker">${dailyDay().split('-').reverse().join('.')} · одно задание на всех</div><h2 class="h2">Задание дня: ${DAILY_NAMES[c.type]}</h2>
-    <p class="lead">${c.type === 'drift' ? `Набери ${c.score} очков заноса как можно быстрее.` : c.type === 'photo' ? `Сфотографируй ${c.pts.length} места как можно быстрее.` : c.type === 'smash' ? `Снеси ${c.pts.length} преград на скорости как можно быстрее.` : `Проедь ${c.pts.length} точек как можно быстрее.`} Первое прохождение за день — +150 монет. Тройке лучших дня в полночь — приз 500 / 300 / 200 монет.${best ? ` Твой лучший результат сегодня: <b>${fmtT(best)}</b>.` : ''}${CLOUD.user ? '' : ' <br><small>Чтобы попасть в рейтинг, войди в профиль.</small>'}</p>
+    <p class="lead">${c.type === 'drift' ? `Набери ${c.score} очков заноса как можно быстрее.` : c.type === 'photo' ? `Сфотографируй ${c.pts.length} места как можно быстрее.` : c.type === 'smash' ? `Снеси ${c.pts.length} преград на скорости как можно быстрее.` : `Проедь ${c.pts.length} точек как можно быстрее.`} Первое прохождение за день — +150 монет.${PIKABU ? '' : ' Тройке лучших дня в полночь — приз 500 / 300 / 200 монет.'}${best ? ` Твой лучший результат сегодня: <b>${fmtT(best)}</b>.` : ''}${CLOUD.user || PIKABU ? '' : ' <br><small>Чтобы попасть в рейтинг, войди в профиль.</small>'}</p>
     ${dailyTopHtml()}
     <div class="btns"><button id="dGo" class="btn primary" type="button">Начать</button><button id="dClose" class="btn" type="button">Закрыть</button></div>`, {
     dGo: () => { hideModal(); dailyStart(); }, dClose: () => hideModal(),
@@ -11512,9 +11515,11 @@ async function dailyFinish() {
   state.mode = 'end'; setEngine(0, false);
   if (first) setTimeout(() => addCoins(150), 400);
   let place = '';
-  if (CLOUD.user && !PROF.god) { try { const { data } = await CLOUD.sb.rpc('nf_daily_submit', { p_day: day, p_secs: t }); const r = data && data[0]; if (r && r.place) place = `Место в рейтинге дня: <b>${r.place}</b>${r.improved ? ' — новый личный рекорд!' : ` (лучшее время ${fmtT(r.best)})`}.`; } catch (e) { place = 'Результат не отправился: нет связи.'; } }
-  else place = PROF.god ? 'Тестовый профиль в рейтинг не попадает.' : 'Войди в профиль, чтобы попасть в рейтинг дня.';
-  await dailyTop();
+  // the summary never waits for our server longer than a few seconds (a hanging request used to leave the screen frozen)
+  const within = (pr, ms) => Promise.race([pr, new Promise((r) => setTimeout(() => r({ data: null, timeout: true }), ms))]);
+  if (CLOUD.user && !PROF.god && !PIKABU) { try { const { data } = await within(CLOUD.sb.rpc('nf_daily_submit', { p_day: day, p_secs: t }), 5000); const r = data && data[0]; if (r && r.place) place = `Место в рейтинге дня: <b>${r.place}</b>${r.improved ? ' — новый личный рекорд!' : ` (лучшее время ${fmtT(r.best)})`}.`; } catch (e) { place = 'Результат не отправился: нет связи.'; } }
+  else place = PIKABU ? `Твоё лучшее время сегодня: <b>${fmtT(all[day])}</b>.` : PROF.god ? 'Тестовый профиль в рейтинг не попадает.' : 'Войди в профиль, чтобы попасть в рейтинг дня.';
+  await within(dailyTop(), 4000);
   showModal(`<div class="kicker">Задание дня</div><h2 class="h2">Время: ${fmtT(t)}</h2><p class="lead">${place}${first ? ' Первое прохождение за сегодня: +150 монет.' : ''}</p>${dailyTopHtml()}
     <div class="btns"><button id="dAgain" class="btn primary" type="button">Ещё раз</button><button id="dMenu" class="btn" type="button">В меню</button></div>`, {
     dAgain: () => { hideModal(); dailyStart(); }, dMenu: () => { hideModal(); showSelect(); },
