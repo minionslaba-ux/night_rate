@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v106'; window.__errs = [];
+window.APP_VER = 'v107'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6157,19 +6157,41 @@ function vkReward(done) {
   });
 }
 // ---------- GamePush SDK (Пикабу Игры). Project id and public token come with the build (window.NF_GP); without them — no SDK.
-const GP = { sdk: null, p: null, lastAd: 0 };
+const GP = { sdk: null, p: null, lastAd: 0, saveT: 0, pending: null, play: false };
+// the SDK's own loader: four mirrors, the first that answers (from the GamePush instructions)
+const GP_HOSTS = ['https://gs.eponesh.com/sdk/game-score.js', 'https://s3.gamepush.com/files/gs/sdk/game-score.js', 'https://s3-eu.gamepush.com/sdk/game-score.js', 'https://gamepush.com/sdk/game-score.js'];
 function gpLoad() {
   if (!PIKABU || GP.p) return GP.p;
   const cfg = window.NF_GP || {};
   if (!cfg.id || !cfg.token) { GP.p = Promise.resolve(null); return GP.p; }
   GP.p = new Promise((res) => {
-    window.nfGPInit = async (gp) => { try { await gp.player.ready; } catch (e) { /* guest */ } GP.sdk = gp; try { if (gp.gameStart) gp.gameStart(); } catch (e) { /* old SDK */ } res(gp); };
-    const sc = document.createElement('script'); sc.async = true;
-    sc.src = 'https://gamepush.com/sdk/game-score.js?projectId=' + encodeURIComponent(cfg.id) + '&publicToken=' + encodeURIComponent(cfg.token) + '&callback=nfGPInit';
-    sc.onerror = () => { adLog('error', 'gamepush sdk не загрузился'); res(null); };
-    document.head.appendChild(sc); setTimeout(() => res(GP.sdk), 15000);
+    window.nfGPInit = async (gp) => { try { await gp.player.ready; } catch (e) { /* guest */ } GP.sdk = gp; try { if (gp.gameStart) gp.gameStart(); } catch (e) { /* old SDK */ } gpCloudLoad(); res(gp); };
+    const q = '?projectId=' + encodeURIComponent(cfg.id) + '&publicToken=' + encodeURIComponent(cfg.token) + '&callback=nfGPInit';
+    let i = 0; const next = () => { if (i >= GP_HOSTS.length) { adLog('error', 'gamepush sdk не загрузился'); res(null); return; } const sc = document.createElement('script'); sc.async = true; sc.src = GP_HOSTS[i++] + q; sc.onerror = next; document.head.appendChild(sc); };
+    next(); setTimeout(() => res(GP.sdk), 20000);
   });
+  // the platform wants to know when the player is actually playing (it holds ads back during play)
+  setInterval(() => { const on = ['drive', 'foot', 'dialog', 'cine'].includes(state.mode); if (!GP.sdk || on === GP.play) return; GP.play = on; try { on ? GP.sdk.gameplayStart() : GP.sdk.gameplayStop(); } catch (e) { /* old SDK */ } if (!on && GP.pending) gpCloudApply(GP.pending); }, 1000);
   return GP.p;
+}
+// cloud saves (player field «nf» in the GamePush panel, type: string): the whole guest profile and the story progress.
+// At start the side that went further wins (earned + 100 per mission, as with our own profiles); a cloud save arriving
+// in the middle of a mission waits for the menu.
+const gpScore = (x) => (x && x.st ? (x.st.earned || 0) + (x.st.chapters || 0) * 100 : 0);
+function gpCloudLoad() {
+  const gp = GP.sdk; if (!gp) return;
+  let c = null; try { const raw = gp.player.get('nf'); c = raw ? JSON.parse(raw) : null; } catch (e) { c = null; }
+  if (c && c.p && gpScore(c.p) > gpScore(PROF)) { if (['preview', 'select'].includes(state.mode)) gpCloudApply(c); else GP.pending = c; }
+  else gpSaveSoon();
+}
+function gpCloudApply(c) {
+  GP.pending = null;
+  try { store.set(profKey(null), c.p); loadProfile(); applyProgress(c.pr); updateProfChip(); updateBoostsHud(); if (typeof renderMenuPath === 'function') renderMenuPath(); toast('Прогресс загружен из облака', 2.5); } catch (e) { /* keep the local one */ }
+}
+function gpSaveSoon() { if (!PIKABU || !GP.sdk || GP.saveT) return; GP.saveT = setTimeout(gpSave, 3000); }
+function gpSave() {
+  GP.saveT = 0; const gp = GP.sdk; if (!gp || GP.pending) return;
+  try { const { god, cloud, ...rest } = PROF; gp.player.set('nf', JSON.stringify({ v: 1, t: Date.now(), p: rest, pr: collectProgress() })); gp.player.sync(); } catch (e) { /* next time */ }
 }
 async function gpAd(kind) {   // 'reward' | 'fullscreen' → true when shown to the end
   const gp = GP.sdk || await gpLoad(); if (!gp || !gp.ads) return null;
@@ -6180,7 +6202,10 @@ async function gpAd(kind) {   // 'reward' | 'fullscreen' → true when shown to 
 }
 function gpReward(done) {
   if (adBusy) return; adBusy = true;
-  gpAd('reward').then((ok) => { adBusy = false; if (ok === false) { toast('Награда — за просмотр до конца', 2); return; } if (ok === null) toast('Реклама сейчас недоступна — награда без неё', 2); done(); });
+  // no video to show (none in stock, an ad blocker) — the reward without it; a video closed before the end — no reward
+  const can = !!(GP.sdk && GP.sdk.ads && GP.sdk.ads.isRewardedAvailable);
+  if (GP.sdk && !can) { adBusy = false; adLog('skip', 'gp reward: нет ролика'); toast('Реклама сейчас недоступна — награда без неё', 2); done(); return; }
+  gpAd('reward').then((ok) => { adBusy = false; if (ok === false) { toast('Награда — за просмотр рекламы до конца', 2); return; } if (ok === null) toast('Реклама сейчас недоступна — награда без неё', 2); done(); });
 }
 function gpBetween() {   // between missions, from the 2nd one, at most every 5 minutes (the platform may hold it back as well)
   if (PROF.noAds || Date.now() - GP.lastAd < AD_GAP) return;
@@ -9095,7 +9120,7 @@ async function cloudSave() {
   const { god, cloud, login, name, ...data } = PROF;
   try { await CLOUD.sb.from('profiles').update({ name: String(name || '').slice(0, 24), data, progress: collectProgress() }).eq('id', CLOUD.user.id); } catch (e) { /* will retry on the next save */ }
 }
-function cloudSaveSoon() { if (!PROF.cloud || CLOUD.saveT) return; CLOUD.saveT = setTimeout(cloudSave, 2500); }
+function cloudSaveSoon() { if (PIKABU) gpSaveSoon(); if (!PROF.cloud || CLOUD.saveT) return; CLOUD.saveT = setTimeout(cloudSave, 2500); }
 window.addEventListener('pagehide', () => { if (CLOUD.saveT) { clearTimeout(CLOUD.saveT); cloudSave(); } });
 const CARS = {
   taxi: { name: 'Такси «Классика»', model: 'car_taxi', price: 0, speed: 0, armor: 1, paint: 'yellow', desc: 'Рабочая лошадка таксопарка. Ничего лишнего.' },
@@ -9180,7 +9205,7 @@ function loadProfile() {
   PROF.god = false; PROF.cloud = false; PROF.login = null; CLOUD.user = null;
   applyLoadout();
 }
-function saveProfile() { if (PROF.cloud) { cloudSaveSoon(); return; } const { god, cloud, ...rest } = PROF; store.set(profKey(null), rest); }
+function saveProfile() { if (PROF.cloud) { cloudSaveSoon(); return; } const { god, cloud, ...rest } = PROF; store.set(profKey(null), rest); if (PIKABU) gpSaveSoon(); }
 async function profLogin(login, pass) {
   const l = (login || '').trim().toLowerCase();
   if (!l || !pass) return 'Введи логин и пароль.';
