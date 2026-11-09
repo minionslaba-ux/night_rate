@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v109'; window.__errs = [];
+window.APP_VER = 'v110'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6224,6 +6224,7 @@ function pkLoad() {
         try { sdk.on('storageSaveError', (r) => { adLog('error', 'pikabu storage: ' + r); if (r === 'REVISION_CONFLICT' && !PK.dead) { PK.dead = true; toast('Прогресс изменён в другой вкладке — перезапусти игру, чтобы не потерять его', 5); } }); } catch (e) { /* no events */ }
         try { sdk.on('userAuthorized', () => pkCloudLoad()); } catch (e) { /* no events */ }
         pkCloudLoad(); res(sdk);
+        setTimeout(pkStoreInit, 1500);   // prices and purchases not yet credited (after the cloud save is in place)
       } catch (e) { adLog('error', 'pikabu sdk init: ' + String(e && e.message || e).slice(0, 120)); res(null); }
     };
     sc.onerror = () => { adLog('error', 'pikabu sdk не загрузился'); res(null); };
@@ -6253,6 +6254,48 @@ async function pkAd(kind) {   // 'rewarded' | 'fullscreen' → { shown, reward }
   try { adLog('try', 'pikabu ' + kind); const r = await ad.show(); adLog(r && r.rendered ? 'shown' : 'error', 'pikabu ' + kind + (r && r.reason ? ': ' + r.reason : '') + (r && 'reward' in r ? ' reward=' + r.reward : '')); return r && r.rendered ? { shown: true, reward: !!r.reward } : null; }
   catch (e) { adLog('error', 'pikabu ' + kind + ': ' + String(e && e.message || e).slice(0, 120)); return null; }
   finally { try { wakeAudio(); } catch (e) { /* no audio */ } }
+}
+// ---------- purchases (Пикабу): the platform's payment window → our server checks the signature (nf-pikabu, key PIKABU_SECRET)
+// → the pack is credited. Consumables are then confirmed (consumePurchase); one-time packs stay with the account and are
+// credited once per profile. Every purchase id credited is kept in the profile, so nothing is credited twice.
+async function pkStoreInit() {
+  const st = PK.sdk && PK.sdk.store; if (!st) return;
+  try { const list = await st.getProducts(); PK.prices = {}; for (const x of list || []) PK.prices[x.id] = x.formattedPrice || (x.price / 100) + ' ₽'; if (!$('prof').hidden && profTab === 'shop') renderProfile(); } catch (e) { /* no store */ }
+  try { const ps = await st.getPurchases(); for (const x of ps || []) await pkHandle(x, false); } catch (e) { /* later */ }
+}
+async function pkHandle(purchase, loud) {
+  const id = purchase.productId, pid = purchase.purchaseId, pk = PACKS[id];
+  if (!pk) return false;
+  PROF.pkGot = PROF.pkGot || []; PROF.pkOwn = PROF.pkOwn || {};
+  let j = null;
+  try {
+    const signedData = await purchase.getSignedData();
+    const r = await fetch(SB_URL + '/functions/v1/nf-pikabu', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ signedData }) });
+    j = await r.json().catch(() => null);
+  } catch (e) { j = null; }
+  if (!j || !j.ok) { adLog('error', 'pikabu purchase ' + id + ': ' + (j && j.error || 'нет связи')); if (loud) toast('Оплата прошла, но проверить покупку сейчас не вышло — она придёт при следующем запуске', 4); return false; }
+  const credited = PROF.pkGot.includes(pid) || (!purchase.isConsumable && PROF.pkOwn[id]);
+  if (!credited) {
+    pk.grant(PROF); PROF.pkGot.push(pid); if (PROF.pkGot.length > 60) PROF.pkGot.splice(0, PROF.pkGot.length - 60);
+    if (!purchase.isConsumable) PROF.pkOwn[id] = true;
+    saveProfile(); applyLoadout(); checkAch(); updateProfChip(); toast(`«${pk.name}» — получено!`, 3);
+  }
+  if (purchase.isConsumable) { try { await PK.sdk.store.consumePurchase(pid); } catch (e) { /* stays in the list: next start, not credited again */ } }
+  if (!$('prof').hidden) renderProfile();
+  return true;
+}
+async function pkBuy(id) {
+  const st = PK.sdk && PK.sdk.store; if (!st) { profMsg = 'Магазин Пикабу ещё загружается — попробуй через пару секунд.'; renderProfile(); return; }
+  if (PK.buying) return; PK.buying = true; profMsg = 'Открываю оплату…'; renderProfile();
+  try {
+    const r = await st.purchase({ productId: id, developerPayload: JSON.stringify({ from: 'shop' }) });
+    if (!r || !r.success) {
+      const why = r && r.reason;
+      if (why === 'NON_CONSUMABLE_ALREADY_OWNED') { profMsg = 'Этот набор уже куплен — возвращаю его.'; await pkStoreInit(); }
+      else profMsg = why === 'USER_CANCELLED' ? 'Покупка отменена.' : why === 'USER_UNAUTHORIZED' ? 'Для покупки нужно войти в аккаунт Пикабу.' : 'Покупка не прошла. Попробуй ещё раз.';
+    } else { profMsg = ''; await pkHandle(r.purchase, true); }
+  } catch (e) { profMsg = 'Покупка не прошла. Попробуй ещё раз.'; }
+  PK.buying = false; renderProfile();
 }
 function pkReward(done) {
   if (adBusy) return; adBusy = true;
@@ -9847,7 +9890,7 @@ function renderProfile() {
     const payShow = PLATFORM === 'web' && PAY.ready && (!PAY.test || PROF.god);
     h = `${payShow ? `<div class="plabel">Монеты${PAY.test ? ' · тестовый режим' : ''}</div><div class="pitems">${COIN_PACKS.map(([id, rub, coins, bonus]) => `<div class="pitem shop coin-pack"><b>${coins.toLocaleString('ru-RU')} монет${bonus ? ` <em>+${bonus}%</em>` : ''}</b><span>${bonus ? 'Выгоднее, чем по 3 монеты за рубль' : '3 монеты за рубль'}</span><button class="btn sm primary" data-act="buy-coins" data-id="${id}" type="button">${rub} ₽</button></div>`).join('')}</div><div class="note">Оплата через Робокассу. Монеты придут в профиль после оплаты — на всех устройствах.${PROF.cloud ? '' : ' Чтобы купить, войди в профиль.'}</div>` : ''}
     <div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button">${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
-    <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
+    <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass) || (PK_DIRECT && id === 'starter' && PROF.pkOwn && PROF.pkOwn.starter); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : (PK_DIRECT && PK.prices && PK.prices[id]) || k.rub + ' ₽'}</button></div>`; }).join('')}</div>
     <div class="pmsg">${esc(profMsg)}</div>`;
   } else if (profTab === 'top') { h = topHtml(); if (!TOP.busy && Date.now() - TOP.t > 60e3) topLoad();
   } else if (profTab === 'friends') { h = friendsHtml(); if (PROF.cloud && !REF.busy && !REF.code) refLoad();
@@ -9895,6 +9938,7 @@ function profAction(act, id) {
   else if (act === 'refcopy') { refCopy(); return; }
   else if (act === 'refenter') { const v = ($('refIn') && $('refIn').value || '').trim().toUpperCase(); if (!/^[A-Z0-9]{6}$/.test(v)) { profMsg = 'Код — 6 латинских букв и цифр.'; renderProfile(); return; } store.set('nf-ref', { code: v, t: Date.now() }); refTry(true); return; }
   else if (act === 'buy-pack') {
+    if (PK_DIRECT && PACKS[id]) { pkBuy(id); return; }
     if (PROF.god) { PACKS[id].grant(PROF); saveProfile(); applyLoadout(); checkAch(); profMsg = `«${PACKS[id].name}» выдан (тестовый профиль).`; }
     else profMsg = 'Покупка наборов скоро появится. Деньги не списываются.';
   }
