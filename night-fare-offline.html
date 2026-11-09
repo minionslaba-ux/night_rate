@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v116'; window.__errs = [];
+window.APP_VER = 'v117'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -2121,7 +2121,11 @@ function buildLower() {
   for (let k = 0; k < 5; k++) putB(B.trim, G.cyl, bx + 26, 0.35 + k * 0.45, bz + 10, 1.3, 0.42, 1.3, 0, col(0x141416));
   // 3. the alley and the warehouse: two blocks with a 6 m passage, dumpsters, the warehouse with a loading bay
   block(683, -413, 730, -380, 4, col(0x6a5040)); block(683, -372, 730, -309, 3, col(0x5a4a40));
-  for (let k = 0; k < 3; k++) { boxB(B.trim, 690 + k * 12, 0, -378.6, 693 + k * 12, 1.4, -376.6, { col: col(pick([0x2a5a3a, 0x3a3a4a])) }); lBox(691.5 + k * 12, -377.6, 3, 2, 1.4); }
+  for (let k = 0; k < 3; k++) {
+    if (CONTS.glb) for (const dx of [-0.8, 0.8]) TRASH.push({ x: 691.5 + k * 12 + dx, z: -377.4, ry: PI + rand(-0.15, 0.15) });   // two wheeled bins, lids to the passage
+    else boxB(B.trim, 690 + k * 12, 0, -378.6, 693 + k * 12, 1.4, -376.6, { col: col(pick([0x2a5a3a, 0x3a3a4a])) });
+    lBox(691.5 + k * 12, -377.6, 3, 2, 1.4);
+  }
   const [wx, wz] = LOWP.warehouse;
   boxB(B.container, wx - 20, 0, wz - 16, wx + 52, 9, wz + 12, { us: 1 / 3, vs: 1 / 9, col: col(0x7a6a5a) }); boxB(B.roof, wx - 20.5, 9, wz - 16.5, wx + 52.5, 9.6, wz + 12.5, { col: col(0x3a3a40) }); lSolid(wx - 20, wz - 16, wx + 52, wz + 12, 9.6);
   putB(B.metal, G.box, LOWP.whDoor[0], 2.6, LOWP.whDoor[1] + 0.1, 0.1, 5.2, 6, 0, col(0x3a3e46)); sign('СКЛАД 14', 7, 1.75, wx + 10, 10.6, wz + 12.3, 0, '#e8e8e8', '#2a2a30');
@@ -3408,7 +3412,7 @@ function buildWorld() {
 
   CONTS.glb = (!isTouch || HD()) && perf.level === 0;
   buildPark(); buildDocks(); buildYard(); buildBank(); buildLandmarks(); buildCityScale(); buildAirport(); buildStation(); buildTrack(); buildVillage(); buildLower();   // the world cities are built on demand: cityUse()
-  contBuild();
+  contBuild(); trashBuild(TRASH);
 
   // one material per batch: a few draw calls for the whole city
   meshB(B.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -3468,6 +3472,24 @@ const CONTS = { slots: [], glb: false };
 function contSlot(x, y, z, c) {
   if (CONTS.glb) { CONTS.slots.push({ x, y, z, c: [pick(CONT_COLS), pick(CONT_COLS)] }); return; }
   boxB(B.container, x - 1.25, y, z - 6, x + 1.25, y + 2.6, z + 6, { us: 1 / 2, vs: 1 / 2.6, col: col(c) });
+}
+// ---- wheeled trash bins (assets/models/trash_container.glb, computers only): one instanced mesh, green / grey, loaded in the background ----
+const TRASH = [];
+let TRASH_GLB = null;   // one download for every place that puts bins
+function trashBuild(list) {
+  if (!list.length || !THREE.GLTFLoader || typeof MeshoptDecoder === 'undefined') return;
+  if (!TRASH_GLB) TRASH_GLB = new Promise((res) => { const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder); loader.load('assets/models/trash_container.glb', res, undefined, () => res(null)); });
+  TRASH_GLB.then((gl) => {
+    if (!gl) return;   // no bins: the street stays without them
+    let mesh = null; gl.scene.updateMatrixWorld(true); gl.scene.traverse((m) => { if (m.isMesh && !mesh) mesh = m; });
+    if (!mesh) return;
+    const geo = mesh.geometry.clone(); geo.applyMatrix4(mesh.matrixWorld); if (!geo.attributes.normal) geo.computeVertexNormals(); geo.computeBoundingBox();
+    const bb = geo.boundingBox, sz = bb.getSize(new V3()); geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+    const k = 1.45 / sz.x;   // 1.45 m wide, ≈1.2 m tall
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.35 }), list.length), o = new THREE.Object3D(), c = new THREE.Color();
+    list.forEach((q, i) => { o.position.set(q.x, q.y || 0, q.z); o.rotation.set(0, q.ry, 0); o.scale.setScalar(k); o.updateMatrix(); im.setMatrixAt(i, o.matrix); im.setColorAt(i, c.setHex(pick([0x2f6a3e, 0x2f6a3e, 0x3a5a48, 0x4a4e56]))); });
+    im.castShadow = true; im.receiveShadow = true; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; scene.add(im);
+  });
 }
 function contBuild() {
   if (!CONTS.slots.length) return;
@@ -3566,7 +3588,7 @@ const BUS_ROUTES = [
 function buildBusStops() {
   const glass = col(0x8ac0e0), frame = col(0x2a2c34);
   // computers: the 3D shelter (assets/models/bus_stop.glb, one instanced mesh, loaded in the background); phones: boxes
-  const glb = (!isTouch || HD()) && perf.level === 0 && !!THREE.GLTFLoader && typeof MeshoptDecoder !== 'undefined', slots = [];
+  const glb = (!isTouch || HD()) && perf.level === 0 && !!THREE.GLTFLoader && typeof MeshoptDecoder !== 'undefined', slots = [], trash = [];
   const tex = canvasTex(128, 128, (x, w) => { x.fillStyle = '#2a7a3a'; x.fillRect(0, 0, w, w); x.fillStyle = '#fff'; x.font = 'bold 72px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('А', w / 2, w / 2 + 4); });
   for (const r of BUS_ROUTES) r.nodes.forEach((a, i) => {
     const b = r.nodes[(i + 1) % r.nodes.length], d = laneDir(a, b);
@@ -3575,6 +3597,7 @@ function buildBusStops() {
       if (inCanalBand(x, z, 2) || inTunnel(x, z, 3) || (inBankBlock(x, z) && Math.abs(x - BANK.x) < 14) || (inSquare(x, z) && z > 48)) continue;
       const ry = Math.atan2(rx, rz);
       if (glb) slots.push({ x: x + rx * 0.15, z: z + rz * 0.15, ry: ry + PI });   // the model's open side (+z) faces the road
+      if (glb) trash.push({ x: x + rx * 0.3 - d.fx * 3.3, z: z + rz * 0.3 - d.fz * 3.3, ry: ry + PI + rand(-0.2, 0.2), y: 0.15 });   // a bin beside the shelter
       else {
         putB(B.trim, G.box, x + rx * 0.7, 1.4, z + rz * 0.7, 4.2, 2.5, 0.1, ry, glass);
         putB(B.roof, G.box, x, 2.75, z, 4.6, 0.15, 1.8, ry, frame);
@@ -3588,6 +3611,7 @@ function buildBusStops() {
     }
   });
   if (glb && slots.length) stopsGlb(slots, glass, frame);
+  if (trash.length) trashBuild(trash);
 }
 function stopsGlb(slots, glass, frame) {
   const boxes = () => {   // the model didn't load: simple shelters
