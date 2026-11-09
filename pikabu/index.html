@@ -751,7 +751,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v114'; window.__errs = [];
+window.APP_VER = 'v115'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1036,7 +1036,7 @@ function perfReport() {
   if (perf.sent || perf.st < 60) return; perf.sent = true;
   try {
     const U = uaInfo();
-    const row = { ver: window.APP_VER, device: U.device, os: U.os, browser: U.browser, gpu: GPU, mem: navigator.deviceMemory || null, cores: navigator.hardwareConcurrency || null, dpr: DPR,
+    const row = { ver: window.APP_VER, app: typeof PLATFORM !== 'undefined' ? PLATFORM : '?', device: U.device, os: U.os, browser: U.browser, gpu: GPU, mem: navigator.deviceMemory || null, cores: navigator.hardwareConcurrency || null, dpr: DPR,
       fps: Math.round(perf.sf / perf.st * 10) / 10, fps_low: Math.round(perf.low * 10) / 10, pr: renderer.getPixelRatio(), level: perf.level, gfx: GFX.pref, secs: Math.round(perf.st) };
     fetch(SB_URL + '/rest/v1/nf_fps', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([row]) }).catch(() => {});
   } catch (e) { /* no report */ }

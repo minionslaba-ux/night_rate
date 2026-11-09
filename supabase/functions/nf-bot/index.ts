@@ -66,6 +66,7 @@ const ADMIN_COMMANDS = [
   { command: 'reload', description: 'Перезагрузить игру у всех (очистить кэш)' },
   { command: 'loads', description: 'Загрузка игры по устройствам за сутки' },
   { command: 'missions', description: 'Миссии: где бросают и где проваливают' },
+  { command: 'pikabu', description: 'Пикабу Игры: игроки, миссии, реклама, покупки (за 7 дней)' },
   { command: 'logins', description: 'Вход гостей сайта: показали окно → нажали → вошли (за 7 дней)' },
   { command: 'dailytask', description: 'Пост о задании дня: превью (/dailytask now — опубликовать)' },
   { command: 'stats', description: 'Отчёт за сегодня' },
@@ -102,6 +103,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 ⏱ /loads — как грузится игра: устройства, браузеры, время до меню, сбои (сводка приходит сама каждое утро)
 📅 /dailytask — пост о задании дня (сам выходит раз в 5 дней в 15:00 МСК): превью · /dailytask now — опубликовать сейчас
 🎯 /missions — миссии за 7 дней: сколько начали, прошли, провалили, бросили; где скучно и где сложно (/missions 1 — за сутки)
+🟠 /pikabu — Пикабу Игры за 7 дней (за сутки приходит сама каждый день в 20:00 МСК): игроки, загрузка, скорость, миссии, реклама, покупки и выручка (/pikabu 1 — за сутки, /pikabu 30 — за месяц)
 🔑 /logins — вход гостей сайта за 7 дней: сколько увидели окно входа, нажали кнопку, вошли, отказались, какие ошибки
 🚨 О сбоях бот пишет сам (проверка раз в 2 минуты, не чаще раза в 5 минут) — с кнопкой перезагрузки
 
@@ -335,6 +337,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
     case 'reload': await say(await reloadAll()); return true;
     case 'loads': await say(await loadsReport(Number(rest) || 24)); return true;
     case 'logins': await say(await loginsReport(Number(rest) || 7)); return true;
+    case 'pikabu': await say(await pikabuReport(Number(rest) || 7)); return true;
     case 'missions': await say(await missionsReport(Number(rest) || 7)); return true;
     case 'dailytask': {
       if (arg === 'now') { const r = await dtaskRun(true); await say(r.ok ? `✅ Пост о задании дня опубликован.\n${r.vk}\n${r.max}` : `Не вышло: ${esc(r.error || r.skipped || '')}`); return true; }
@@ -444,6 +447,58 @@ async function loadsReport(hours: number) {
   return `⏱ <b>Загрузка игры за ${hours} ч</b>: ${L.length} запусков, сбоев ${fails.length}, медиана до меню ${sec(med(all))}\n\n${rows.join('\n')}`
     + (slow.length ? `\n\n🐢 <b>Дольше 20 с</b>\n${slow.join('\n')}` : '') + (fl.length ? `\n\n❌ <b>Не загрузились</b>\n${fl.join('\n')}` : '');
 }
+// всё про Пикабу Игры: запуски (nf_loads.app = 'pikabu'), игроки и миссии (по sid этих запусков), реклама (nf_ads.net), скорость (nf_fps.app), покупки (nf_pk_purchases)
+const PK_PRICE: Record<string, number> = { starter: 99, coins5: 149, coins20: 449, noads: 199, pass: 299 };
+const PK_NAME: Record<string, string> = { starter: 'Стартовый набор', coins5: 'Мешок монет', coins20: 'Сейф монет', noads: 'Без рекламы', pass: 'Сезонный пропуск' };
+async function pikabuReport(days: number) {
+  const since = new Date(Date.now() - days * 864e5).toISOString();
+  const [{ data: loads }, { data: ads }, { data: fps }, { data: buys }, { data: buysAll }] = await Promise.all([
+    db.from('nf_loads').select('sid, device, browser, ok, t_first, cached, created_at').eq('app', 'pikabu').gte('created_at', since).limit(20000),
+    db.from('nf_ads').select('ev, note').eq('net', 'pikabu').gte('created_at', since).limit(20000),
+    db.from('nf_fps').select('fps, fps_low, level, device').eq('app', 'pikabu').gte('created_at', since).limit(5000),
+    db.from('nf_pk_purchases').select('player_id, product_id, test, created_at').gte('created_at', since).limit(5000),
+    db.from('nf_pk_purchases').select('product_id, test').eq('test', false).limit(20000)]);
+  const L = loads || [];
+  const sids = [...new Set(L.map((r: any) => r.sid).filter(Boolean))];
+  let M: any[] = [];
+  for (let i = 0; i < sids.length; i += 300) {
+    const { data } = await db.from('nf_missions').select('sid, ep, ch, title, ev').eq('tester', false).gte('created_at', since).in('sid', sids.slice(i, i + 300)).limit(20000);
+    M = M.concat(data || []);
+  }
+  const med = (a: number[]) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
+  const sec = (ms: number | null) => (ms ? (ms / 1000).toFixed(1) + ' с' : '—');
+  // по дням (МСК)
+  const day = (iso: string) => new Date(new Date(iso).getTime() + 3 * 3600e3).toISOString().slice(5, 10).split('-').reverse().join('.');
+  const byDay = new Map<string, { n: number; p: Set<string> }>();
+  for (const r of L) { const d = day(r.created_at); if (!byDay.has(d)) byDay.set(d, { n: 0, p: new Set() }); const x = byDay.get(d)!; x.n++; if (r.sid) x.p.add(r.sid); }
+  const days_ = [...byDay.entries()].slice(-7).map(([d, x]) => `${d}: ${x.p.size} игр., ${x.n} зап.`).join(' · ');
+  const dev = new Map<string, number>(); for (const r of L) dev.set(r.device || '?', (dev.get(r.device || '?') || 0) + 1);
+  const ok = L.filter((r: any) => r.ok && r.t_first).map((r: any) => r.t_first), fails = L.filter((r: any) => !r.ok).length;
+  // миссии
+  const players = (f: (r: any) => boolean) => new Set(M.filter(f).map((r) => r.sid)).size;
+  const mStart = M.filter((r) => r.ev === 'start').length, mWin = M.filter((r) => r.ev === 'win').length;
+  const far = new Map<string, number>(); for (const r of M) if (r.ev === 'win') { far.set(r.sid, Math.max(far.get(r.sid) || 0, r.ep * 100 + r.ch)); }
+  const reach = [...far.values()], deep = reach.filter((v) => v >= 200).length;
+  const topM = new Map<string, number>(); for (const r of M) if (r.ev === 'start') topM.set(r.title || `${r.ep}.${r.ch}`, (topM.get(r.title || `${r.ep}.${r.ch}`) || 0) + 1);
+  // реклама
+  const A = ads || [], ac = (ev: string, re: RegExp) => A.filter((r: any) => r.ev === ev && re.test(r.note || '')).length;
+  // покупки
+  const B = buys || [], real = B.filter((r: any) => !r.test), test = B.filter((r: any) => r.test);
+  const rub = (a: any[]) => a.reduce((s, r) => s + (PK_PRICE[r.product_id] || 0), 0);
+  const byProd = (a: any[]) => { const m = new Map<string, number>(); for (const r of a) m.set(r.product_id, (m.get(r.product_id) || 0) + 1); return [...m].map(([k, n]) => `${PK_NAME[k] || k} ×${n}`).join(', ') || '—'; };
+  const F = fps || [], fpsMed = med(F.map((r: any) => r.fps)), fpsLowMed = med(F.map((r: any) => r.fps_low)), slow = F.filter((r: any) => r.fps < 25).length;
+  return `🟠 <b>Пикабу Игры за ${days} дн.</b>\n\n`
+    + `👥 <b>Игроки</b>: ${sids.length} (устройств) · запусков ${L.length}\n${days_ || 'запусков нет'}\n`
+    + `Устройства: ${[...dev].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${esc(k)} ${n}`).join(', ') || '—'}\n\n`
+    + `⏱ <b>Загрузка</b>: до меню медиана ${sec(med(ok))}, первый раз ${sec(med(L.filter((r: any) => r.ok && r.t_first && !r.cached).map((r: any) => r.t_first)))}, худшее ${sec(ok.length ? Math.max(...ok) : null)}${fails ? ` · <b>сбоев ${fails}</b>` : ' · сбоев нет'}\n`
+    + `🏎 <b>Скорость игры</b>: ${F.length ? `${fpsMed} к/с (в просадках ${fpsLowMed}), медленно (<25) у ${slow} из ${F.length}` : 'данных пока нет (пишется с v115)'}\n\n`
+    + `🎯 <b>Миссии</b>: начали ${mStart}, прошли ${mWin} · играли хоть одну: ${players((r) => r.ev === 'start')} · прошли хоть одну: ${players((r) => r.ev === 'win')} · дошли до 2-го эпизода: ${deep}\n`
+    + `Чаще всего: ${[...topM].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${esc(k)} ${n}`).join(', ') || '—'}\n\n`
+    + `📺 <b>Реклама</b>: за награду показана ${ac('shown', /rewarded/)} из ${ac('try', /rewarded/)} · между миссиями ${ac('shown', /fullscreen/)} из ${ac('try', /fullscreen/)} · ошибок ${A.filter((r: any) => r.ev === 'error').length}\n\n`
+    + `💰 <b>Покупки</b>: ${real.length} на ${rub(real)} ₽ (${byProd(real)}) · покупателей ${new Set(real.map((r: any) => r.player_id)).size}`
+    + (test.length ? `\n🧪 тестовых: ${test.length} (${byProd(test)})` : '')
+    + `\nЗа всё время: ${(buysAll || []).length} покупок на ${rub(buysAll || [])} ₽ (до вычета доли Пикабу и налога)`;
+}
 // воронка входа гостей сайта (таблица nf_login, пишется с v102): по устройствам (sid) — увидели окно, нажали кнопку, вошли, отказались
 async function loginsReport(days: number) {
   const since = new Date(Date.now() - days * 864e5).toISOString();
@@ -521,6 +576,12 @@ async function dtaskRun(force = false) {
 }
 async function loadsDaily() {
   const text = (await loadsReport(24)) + (await missionsReport(1, true).catch(() => '')); const { data: admins } = await db.from('nf_admins').select('tg_id');
+  for (const a of admins || []) await api('sendMessage', { chat_id: a.tg_id, text, parse_mode: 'HTML' });
+  return { sent: true };
+}
+// каждый день в 20:00 МСК (pg_cron nf-pikabu-daily, POST {pikabu: cron_key}): сводка по Пикабу за сутки владельцу
+async function pikabuDaily() {
+  const text = await pikabuReport(1); const { data: admins } = await db.from('nf_admins').select('tg_id');
   for (const a of admins || []) await api('sendMessage', { chat_id: a.tg_id, text, parse_mode: 'HTML' });
   return { sent: true };
 }
@@ -643,6 +704,7 @@ Deno.serve(async (req) => {
     if (b && key && b.daily === key && b.max_test === true) return json({ max: await maxTest() });   // тот же ключ расписания: тестовый пост в MAX
     if (b && key && b.alerts === key) return json(await alertsRun());
     if (b && key && b.loads === key) return json(await loadsDaily());
+    if (b && key && b.pikabu === key) return json(await pikabuDaily());   // каждый день в 20:00 МСК: сводка по Пикабу
     if (b && key && b.dtask === key) return json(await dtaskRun());   // каждый день в 15:00 МСК; пост — раз в 5 дней   // каждое утро: сводка загрузок владельцу   // раз в 2 минуты: сбои игры → владельцу
     if (b && key && b.daily === key) return json(await dailyRun());
     return json({ error: 'forbidden' }, 403);
