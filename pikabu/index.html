@@ -751,7 +751,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v115'; window.__errs = [];
+window.APP_VER = 'v116'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -3557,6 +3557,8 @@ const BUS_ROUTES = [
 ];
 function buildBusStops() {
   const glass = col(0x8ac0e0), frame = col(0x2a2c34);
+  // computers: the 3D shelter (assets/models/bus_stop.glb, one instanced mesh, loaded in the background); phones: boxes
+  const glb = (!isTouch || HD()) && perf.level === 0 && !!THREE.GLTFLoader && typeof MeshoptDecoder !== 'undefined', slots = [];
   const tex = canvasTex(128, 128, (x, w) => { x.fillStyle = '#2a7a3a'; x.fillRect(0, 0, w, w); x.fillStyle = '#fff'; x.font = 'bold 72px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('А', w / 2, w / 2 + 4); });
   for (const r of BUS_ROUTES) r.nodes.forEach((a, i) => {
     const b = r.nodes[(i + 1) % r.nodes.length], d = laneDir(a, b);
@@ -3564,16 +3566,43 @@ function buildBusStops() {
       const hwR = a[0] === b[0] ? hwX(a[0]) : hwZ(a[1]), off = hwR + (hwR >= 10 ? 1.4 : 2.4), rx = -d.fz, rz = d.fx, x = a[0] + d.fx * s + rx * off, z = a[1] + d.fz * s + rz * off;
       if (inCanalBand(x, z, 2) || inTunnel(x, z, 3) || (inBankBlock(x, z) && Math.abs(x - BANK.x) < 14) || (inSquare(x, z) && z > 48)) continue;
       const ry = Math.atan2(rx, rz);
-      putB(B.trim, G.box, x + rx * 0.7, 1.4, z + rz * 0.7, 4.2, 2.5, 0.1, ry, glass);
-      putB(B.roof, G.box, x, 2.75, z, 4.6, 0.15, 1.8, ry, frame);
-      putB(B.wood, G.box, x + rx * 0.4, 0.6, z + rz * 0.4, 3.2, 0.12, 0.5, ry, col(0x8a6a48));
-      putB(B.bankL, G.box, x, 2.65, z, 3.6, 0.04, 0.3, ry, HDR(0xe8f4ff, 2));
+      if (glb) slots.push({ x: x + rx * 0.15, z: z + rz * 0.15, ry: ry + PI });   // the model's open side (+z) faces the road
+      else {
+        putB(B.trim, G.box, x + rx * 0.7, 1.4, z + rz * 0.7, 4.2, 2.5, 0.1, ry, glass);
+        putB(B.roof, G.box, x, 2.75, z, 4.6, 0.15, 1.8, ry, frame);
+        putB(B.wood, G.box, x + rx * 0.4, 0.6, z + rz * 0.4, 3.2, 0.12, 0.5, ry, col(0x8a6a48));
+        putB(B.bankL, G.box, x, 2.65, z, 3.6, 0.04, 0.3, ry, HDR(0xe8f4ff, 2));
+      }
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.6, 1.6, 1.6), side: THREE.DoubleSide }));
       m.position.set(x - rx * 0.4 + d.fx * 2.6, 2.6, z - rz * 0.4 + d.fz * 2.6); m.rotation.y = ry; scene.add(m);
       putB(B.metal, G.cyl, x - rx * 0.4 + d.fx * 2.6, 1.15, z - rz * 0.4 + d.fz * 2.6, 0.1, 2.3, 0.1, 0, frame);
       BUS_STOPS.push({ route: r.num, seg: i, s });
     }
   });
+  if (glb && slots.length) stopsGlb(slots, glass, frame);
+}
+function stopsGlb(slots, glass, frame) {
+  const boxes = () => {   // the model didn't load: simple shelters
+    const gm = new THREE.MeshStandardMaterial({ color: glass, transparent: true, opacity: 0.45, roughness: 0.1 }), fm = new THREE.MeshStandardMaterial({ color: frame, roughness: 0.5, metalness: 0.5 });
+    for (const q of slots) {
+      const g = new THREE.Group(); g.position.set(q.x, 0, q.z); g.rotation.y = q.ry;
+      const back = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.5, 0.1), gm); back.position.set(0, 1.4, -0.55);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.15, 1.8), fm); roof.position.set(0, 2.75, 0);
+      g.add(back, roof); scene.add(g);
+    }
+  };
+  const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.load('assets/models/bus_stop.glb', (gl) => {
+    texCap(gl.scene, gl);
+    let mesh = null; gl.scene.updateMatrixWorld(true); gl.scene.traverse((m) => { if (m.isMesh && !mesh) mesh = m; });
+    if (!mesh) { boxes(); return; }
+    const geo = mesh.geometry.clone(); geo.applyMatrix4(mesh.matrixWorld); geo.computeBoundingBox();
+    const bb = geo.boundingBox, sz = bb.getSize(new V3()); geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+    const k = 4.6 / sz.x;   // 4.6 m long, height and depth in proportion (≈3 m × 1.6 m)
+    const im = new THREE.InstancedMesh(geo, mesh.material, slots.length), o = new THREE.Object3D();
+    slots.forEach((q, i) => { o.position.set(q.x, 0.15, q.z); o.rotation.set(0, q.ry, 0); o.scale.setScalar(k); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+    im.castShadow = true; im.receiveShadow = true; im.instanceMatrix.needsUpdate = true; scene.add(im);
+  }, undefined, boxes);
 }
 // a mover follows lane a->b, then a bezier through the crossroads onto the next lane
 function moverStart(m, a, b, s) { m.a = a; m.b = b; m.s = s; m.turn = null; m.wait = 0; lanePos(a, b, s, m.pos); m.h = Math.atan2(b[0] - a[0], b[1] - a[1]); }
