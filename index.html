@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v112'; window.__errs = [];
+window.APP_VER = 'v113'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6291,8 +6291,16 @@ async function pkHandle(purchase, loud) {
 }
 async function pkBuy(id) {
   const st = PK.sdk && PK.sdk.store; if (!st) { profMsg = 'Магазин Пикабу ещё загружается — попробуй через пару секунд.'; renderProfile(); return; }
-  if (PK.buying) return; PK.buying = true; profMsg = 'Открываю оплату…'; renderProfile();
+  if (PK.buying && Date.now() - PK.buying < 20000) return; PK.buying = Date.now(); profMsg = 'Открываю оплату…'; renderProfile();
   try {
+    // a guest can't pay: ask Pikabu to log in first, then go on to the payment
+    const pl = PK.sdk.player;
+    if (pl && pl.isAuthorized === false && PK.sdk.auth && PK.sdk.auth.openAuthDialog) {
+      profMsg = 'Войди в аккаунт Пикабу — после входа откроется оплата.'; renderProfile();
+      try { await PK.sdk.auth.openAuthDialog(); } catch (e) { /* closed */ }
+      if (PK.sdk.player && PK.sdk.player.isAuthorized === false) { profMsg = 'Для покупки нужно войти в аккаунт Пикабу (кнопка «Войти» вверху страницы).'; PK.buying = 0; renderProfile(); return; }
+      profMsg = 'Открываю оплату…'; renderProfile();
+    }
     const r = await st.purchase({ productId: id, developerPayload: JSON.stringify({ from: 'shop' }) });
     if (!r || !r.success) {
       const why = r && r.reason;
@@ -6300,7 +6308,7 @@ async function pkBuy(id) {
       else profMsg = why === 'USER_CANCELLED' ? 'Покупка отменена.' : why === 'USER_UNAUTHORIZED' ? 'Для покупки нужно войти в аккаунт Пикабу.' : 'Покупка не прошла. Попробуй ещё раз.';
     } else { profMsg = ''; await pkHandle(r.purchase, true); }
   } catch (e) { profMsg = 'Покупка не прошла. Попробуй ещё раз.'; }
-  PK.buying = false; renderProfile();
+  PK.buying = 0; renderProfile();
 }
 function pkReward(done) {
   if (adBusy) return; adBusy = true;
