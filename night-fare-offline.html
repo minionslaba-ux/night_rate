@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v110'; window.__errs = [];
+window.APP_VER = 'v111'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -842,6 +842,9 @@ const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if 
   return { pref: v === 'hd' && CRASH === 0 ? 'hd' : v === 'auto' || CRASH >= 1 || phone ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' || CRASH >= 1, crash: CRASH }; })();   // HD by default; «chosen» = the player picked it in the pause menu (or a crash picked «auto»)   // HD by default; «chosen» = the player picked it in the pause menu
 // the GPU name (where the browser tells it): phones with a weak GPU (Mali-G57 in Helio G99 — Tecno, Infinix, Redmi…) start lighter
 const GPU = (() => { try { const gl = renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return String((x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) || '').slice(0, 110); } catch (e) { return ''; } })();
+// computers with old integrated Intel graphics (HD Graphics, GMA): 15 fps at the lightest step on Pikabu — they start lighter
+const WEAK_DESK = !isTouch && /Intel/i.test(GPU) && /HD Graphics|GMA|G4[15]/i.test(GPU) && !/Iris|Arc/i.test(GPU);
+if (WEAK_DESK && !GFX.chosen) GFX.pref = 'auto';   // not HD by default there: the lighter steps work only in «auto»
 const WEAK_GPU = isTouch && (/Mali-(G31|G51|G52|G57|T\d)|Adreno \(TM\) ([345]\d\d|6[01]\d)\b|PowerVR|IMG BXM/i.test(GPU) || (navigator.deviceMemory || 8) <= 3);
 // old Apple devices (iOS 16 and older, or a 9.7-inch iPad 768×1024): 1000+ draw calls a frame is more than their processor can feed
 const OLD_IOS = IOS && ((IOS_VER > 0 && IOS_VER <= 16) || (Math.min(screen.width, screen.height) <= 768 && Math.max(screen.width, screen.height) <= 1024));
@@ -1014,23 +1017,25 @@ resize();
 // The step reached is remembered on the device, so the next start is already light. Phones never climb above the base resolution.
 let PERF_SAVED = 0;
 try { const o = JSON.parse(localStorage.getItem('nf-perf') || 'null'); if (o && o.l > 0) PERF_SAVED = o.v === window.APP_VER ? o.l : o.l - 1; } catch (e) { /* storage unavailable */ }
-const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(4, Math.max(OLD_IOS || LITE_MEM ? 3 : WEAK_GPU ? 1 : 0, PERF_SAVED)));
+const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(5, Math.max(OLD_IOS || LITE_MEM ? 3 : WEAK_DESK ? 2 : WEAK_GPU ? 1 : 0, PERF_SAVED)));
 const perf = { t: 0, frames: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0, view: 0, every: 1,
   st: 0, sf: 0, low: 99, sent: false };
 function perfSave() { try { localStorage.setItem('nf-perf', JSON.stringify({ l: perf.level, v: window.APP_VER })); } catch (e) { /* storage unavailable */ } }
 function perfShadow(sz) { if (moon.shadow.mapSize.x !== sz) { moon.shadow.mapSize.setScalar(sz); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } } }
 function perfApply() {
   perf.applied = true;
-  if (HD()) { perf.shadowSkip = false; perf.view = 0; camera.far = 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(1); scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = true; }); return; }
+  if (HD()) { moon.castShadow = true; perf.shadowSkip = false; perf.view = 0; camera.far = 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(1); scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = true; }); return; }
   const L = perf.level;
   if (bloomPass) bloomPass.enabled = L < 1;
   perfShadow(L >= 3 ? 512 : isTouch || L >= 1 ? 1024 : 2048);
   perf.shadowSkip = L >= 3; perf.every = L >= 4 ? 4 : 2; if (!perf.shadowSkip) renderer.shadowMap.autoUpdate = true;
   // draw distance: the far blocks hide in the fog (half the draw calls at 170 m); the sky dome shrinks with it so the stars stay
-  perf.view = L >= 3 ? 170 : L >= 2 ? 230 : 0; camera.far = perf.view || 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(perf.view ? (perf.view - 15) / 800 : 1);
+  // step 5 (still under 26 fps at step 4): no shadows at all, the city ends at 130 m, resolution 0.7
+  moon.castShadow = L < 5;
+  perf.view = L >= 5 ? 130 : L >= 3 ? 170 : L >= 2 ? 230 : 0; camera.far = perf.view || 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(perf.view ? (perf.view - 15) / 800 : 1);
   // parked cars, lamps and benches (instanced kit models, ~0.5 M triangles) stop casting shadows
   scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = L < 3; });
-  const pr = L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
+  const pr = L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
   if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
   if (L >= 4) composer = null;
 }
@@ -1065,7 +1070,8 @@ function checkPerf(raw) {
   if (perf.up && fps < 40) { perf.up = false; perf.noUp = true; perf.cool = 1; perfApply(); return; }
   if (fps >= 30) { perf.slow = 0; return; }
   if (perf.level === 3 && fps >= 22) { perf.slow = 0; return; }   // the last step (no post-processing at all) only when it is really bad
-  if (++perf.slow < 2 || perf.level >= 4) return;
+  if (perf.level === 4 && fps >= 26) { perf.slow = 0; return; }   // step 5 only when step 4 is still too slow
+  if (++perf.slow < 2 || perf.level >= 5) return;
   perf.slow = 0; perf.level++; perf.cool = 1; perfApply(); perfSave();
 }
 
@@ -9963,6 +9969,8 @@ const PIKABU = PLATFORM === 'pikabu';
 // which SDK: the platform's own (PkbSDK, games.pikabu.ru/sdk/sdk.js — direct publishing, the build says window.NF_PIKABU_SDK = 'pikabu')
 // or GamePush (window.NF_GP with the project)
 const PK_DIRECT = PIKABU && window.NF_PIKABU_SDK === 'pikabu';
+// no links to the site's pages (about, prices, offer, privacy, contacts) and no owner details inside a catalogue
+if (PIKABU) { const sl = document.querySelector('.site-legal'); if (sl) sl.remove(); }
 document.documentElement.classList.add('pf-' + PLATFORM);
 function loadScript(src) { return new Promise((ok) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = () => ok(true); s.onerror = () => ok(false); document.head.appendChild(s); }); }
 // Telegram and MAX bridges: ready/expand; the signed launch data also comes in the address (#tgWebAppData / #WebAppData)
@@ -14207,7 +14215,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
