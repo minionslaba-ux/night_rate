@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v119'; window.__errs = [];
+window.APP_VER = 'v120'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -4035,7 +4035,7 @@ function addPoliceLights(g, bar) {
 // car models from the garage pack (assets/models/cars/<key>.glb, the patrol car: assets/models/police.glb):
 // loaded when needed (the player's car, the police), used whenever ready; until then the old kit car stands in.
 // The body texture is grey where the paint goes, so the garage paint is the body material's color.
-const GLBC = {}, GLBC_LEN = { van: 5.0 };
+const GLBC = {}, GLBC_LEN = { van: 5.0 }, GLBC_ROT = { police: PI / 2 };   // the owner's patrol car (one piece, v120) has its nose at −x: turned to +z
 const POLM = { get scene() { return GLBC.police && GLBC.police.scene; }, get bar() { return GLBC.police && GLBC.police.bar; } };
 function glbCarLoad(key, then) {
   const G = GLBC[key]; if (G) { if (G.scene && then) then(); else if (then && G.wait) G.wait.push(then); return; }
@@ -4043,13 +4043,13 @@ function glbCarLoad(key, then) {
   GLBC[key] = { wait: then ? [then] : [] };
   const loader = new THREE.GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
   loader.load(key === 'police' ? 'assets/models/police.glb' : 'assets/models/cars/' + key + '.glb', (gl) => {
-    const sc = gl.scene; texCap(sc, gl); sc.updateMatrixWorld(true);
+    const sc = gl.scene; texCap(sc, gl); if (GLBC_ROT[key]) sc.rotation.y = GLBC_ROT[key]; sc.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(sc), sz = b.getSize(new V3()), s = (GLBC_LEN[key] || 4.6) / Math.max(sz.z, 0.1);
     // the roof: its highest part (the light bar of the patrol car)
     let top = -1e9; const v = new V3(), pts = [];
     sc.traverse((m) => { if (!m.isMesh || /wheel|window/i.test(m.name)) return; const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld); if (v.y > top) top = v.y; pts.push(v.x, v.y, v.z); } });
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
-    for (let i = 0; i < pts.length; i += 3) if (pts[i + 1] > top - 0.06) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); z0 = Math.min(z0, pts[i + 2]); z1 = Math.max(z1, pts[i + 2]); }
+    for (let i = 0; i < pts.length; i += 3) if (pts[i + 1] > top - 0.06 / s) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); z0 = Math.min(z0, pts[i + 2]); z1 = Math.max(z1, pts[i + 2]); }
     const cz = (b.min.z + b.max.z) / 2;
     sc.traverse((m) => { if (!m.isMesh) return; m.castShadow = true; for (const mt of [].concat(m.material)) if (/glass|window/i.test(mt.name)) { mt.metalness = 0.4; mt.roughness = 0.08; } });
     const wait = GLBC[key].wait;
