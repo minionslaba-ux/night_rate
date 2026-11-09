@@ -3,6 +3,8 @@
 #  - сообщает игре, что она на Пикабу (window.NF_PLATFORM = 'pikabu'): без нашего входа, ссылок на сайт и другие площадки, оплаты и рекламы сайта;
 #  - подставляет проект GamePush (tools/pikabu.json: {"id": "...", "token": "..."} — публичные номер проекта и токен; без них SDK не подключается);
 #  - убирает манифест и сервис-воркер (игра живёт на хостинге GamePush), ссылку canonical и метки соцсетей сайта.
+# Плюс страница для публикации напрямую через Пикабу (свой SDK Пикабу, игра на нашем сервере): pikabu/index.html в репозитории сайта —
+# https://nightfaregame.com/pikabu/ (модели и движок берутся из общих папок сайта через <base href="/">, поисковикам — noindex).
 # Запуск: python3 tools/build_pikabu.py
 import json, os, re, shutil, zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,3 +31,13 @@ with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as f:
         for n in files:
             p = os.path.join(base, n); f.write(p, os.path.relpath(p, OUT))
 print('pikabu build:', OUT, '| zip', round(os.path.getsize(z) / 1e6, 1), 'MB | GamePush project', cfg.get('id') or 'НЕ ЗАДАН')
+
+# ---- напрямую через Пикабу: pikabu/index.html на нашем сайте ----
+d = open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read()
+for pat in [r'<link rel="manifest"[^>]*>\n?', r'<link rel="canonical"[^>]*>\n?', r'<meta property="og:[^>]*>\n?', r'<meta name="twitter:[^>]*>\n?']: d = re.sub(pat, '', d)
+k = d.index('<meta charset="utf-8">') + len('<meta charset="utf-8">\n')
+d = d[:k] + '<base href="/">\n<meta name="robots" content="noindex">\n<script>window.NF_PLATFORM = "pikabu"; window.NF_PIKABU_SDK = "pikabu";</script>\n' + d[k:]
+assert '<link rel="manifest"' not in d
+os.makedirs(os.path.join(ROOT, 'pikabu'), exist_ok=True)
+open(os.path.join(ROOT, 'pikabu', 'index.html'), 'w', encoding='utf-8').write(d)
+print('pikabu direct page: pikabu/index.html (https://nightfaregame.com/pikabu/)')

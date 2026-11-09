@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v107'; window.__errs = [];
+window.APP_VER = 'v108'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6139,7 +6139,7 @@ let adBusy = false;
 function showAd(done) {
   if (PROF.noAds) { done(); return; }
   if (PLATFORM === 'vk') { vkReward(done); return; }
-  if (PIKABU) { gpReward(done); return; }
+  if (PIKABU) { if (PK_DIRECT) pkReward(done); else gpReward(done); return; }
   if (PROF.god) { done(); return; }
   adCountdown(done);
 }
@@ -6188,7 +6188,7 @@ function gpCloudApply(c) {
   GP.pending = null;
   try { store.set(profKey(null), c.p); loadProfile(); applyProgress(c.pr); updateProfChip(); updateBoostsHud(); if (typeof renderMenuPath === 'function') renderMenuPath(); toast('Прогресс загружен из облака', 2.5); } catch (e) { /* keep the local one */ }
 }
-function gpSaveSoon() { if (!PIKABU || !GP.sdk || GP.saveT) return; GP.saveT = setTimeout(gpSave, 3000); }
+function gpSaveSoon() { if (PK_DIRECT) { pkSave(); return; } if (!PIKABU || !GP.sdk || GP.saveT) return; GP.saveT = setTimeout(gpSave, 3000); }
 function gpSave() {
   GP.saveT = 0; const gp = GP.sdk; if (!gp || GP.pending) return;
   try { const { god, cloud, ...rest } = PROF; gp.player.set('nf', JSON.stringify({ v: 1, t: Date.now(), p: rest, pr: collectProgress() })); gp.player.sync(); } catch (e) { /* next time */ }
@@ -6210,6 +6210,58 @@ function gpReward(done) {
 function gpBetween() {   // between missions, from the 2nd one, at most every 5 minutes (the platform may hold it back as well)
   if (PROF.noAds || Date.now() - GP.lastAd < AD_GAP) return;
   GP.lastAd = Date.now(); gpAd('fullscreen');
+}
+// ---------- Пикабу Игры напрямую (PkbSDK). Works only inside the platform page or the Studio's test environment.
+const PK = { sdk: null, p: null, lastAd: 0, saveT: 0, pending: null, dead: false };
+function pkLoad() {
+  if (!PK_DIRECT || PK.p) return PK.p;
+  PK.p = new Promise((res) => {
+    const sc = document.createElement('script'); sc.async = true; sc.src = 'https://games.pikabu.ru/sdk/sdk.js';
+    sc.onload = async () => {
+      try {
+        const sdk = await window.PkbSDK.init(); PK.sdk = sdk;
+        try { sdk.gameStarted(); } catch (e) { /* old SDK */ }   // the first screen is already up
+        try { sdk.on('storageSaveError', (r) => { adLog('error', 'pikabu storage: ' + r); if (r === 'REVISION_CONFLICT' && !PK.dead) { PK.dead = true; toast('Прогресс изменён в другой вкладке — перезапусти игру, чтобы не потерять его', 5); } }); } catch (e) { /* no events */ }
+        try { sdk.on('userAuthorized', () => pkCloudLoad()); } catch (e) { /* no events */ }
+        pkCloudLoad(); res(sdk);
+      } catch (e) { adLog('error', 'pikabu sdk init: ' + String(e && e.message || e).slice(0, 120)); res(null); }
+    };
+    sc.onerror = () => { adLog('error', 'pikabu sdk не загрузился'); res(null); };
+    document.head.appendChild(sc); setTimeout(() => res(PK.sdk), 20000);
+  });
+  setInterval(() => { if (PK.pending && ['preview', 'select'].includes(state.mode)) { const c = PK.pending; PK.pending = null; gpCloudApply(c); } }, 1000);
+  return PK.p;
+}
+// cloud save: key «nf» = { v, t, p: the guest profile, pr: the story progress }; the side that went further wins at start
+// (and again after the player signs in — the platform may hand over the account's progress from another device)
+function pkCloudLoad() {
+  const sdk = PK.sdk; if (!sdk) return;
+  let c = null; try { c = sdk.storage.get('nf'); } catch (e) { c = null; }
+  if (c && c.p && gpScore(c.p) > gpScore(PROF)) { if (['preview', 'select'].includes(state.mode)) gpCloudApply(c); else PK.pending = c; }
+  else pkSave();
+}
+function pkSave() {
+  if (!PK.sdk || PK.pending || PK.dead || PK.saveT) return;
+  PK.saveT = setTimeout(() => { PK.saveT = 0; try { const { god, cloud, ...rest } = PROF; PK.sdk.storage.set('nf', { v: 1, t: Date.now(), p: rest, pr: collectProgress() }); } catch (e) { /* next time */ } }, 3000);
+}
+async function pkAd(kind) {   // 'rewarded' | 'fullscreen' → { shown, reward } or null when unavailable
+  const sdk = PK.sdk || await pkLoad(); const ad = sdk && sdk.ads && sdk.ads[kind];
+  if (!ad || !ad.isSupported) return null;
+  try { if (!(await ad.canShow())) { adLog('skip', 'pikabu ' + kind + ': недоступна'); return null; } } catch (e) { return null; }
+  const wasPaused = state.mode === 'paused'; if (!wasPaused && (state.mode === 'drive' || state.mode === 'foot')) pauseGame();
+  try { if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend(); } catch (e) { /* no audio */ }
+  try { adLog('try', 'pikabu ' + kind); const r = await ad.show(); adLog(r && r.rendered ? 'shown' : 'error', 'pikabu ' + kind + (r && r.reason ? ': ' + r.reason : '') + (r && 'reward' in r ? ' reward=' + r.reward : '')); return r && r.rendered ? { shown: true, reward: !!r.reward } : null; }
+  catch (e) { adLog('error', 'pikabu ' + kind + ': ' + String(e && e.message || e).slice(0, 120)); return null; }
+  finally { try { wakeAudio(); } catch (e) { /* no audio */ } }
+}
+function pkReward(done) {
+  if (adBusy) return; adBusy = true;
+  // the video was watched to the end — the reward; closed earlier (or an ad blocker) — none; no video at all — the reward without it
+  pkAd('rewarded').then((r) => { adBusy = false; if (!r) { toast('Реклама сейчас недоступна — награда без неё', 2); done(); return; } if (r.reward) done(); else toast('Награда — за просмотр рекламы до конца', 2); });
+}
+function pkBetween() {   // after a mission (not during play), from the 2nd one, at most every 5 minutes (the platform itself: 2 minutes)
+  if (PROF.noAds || Date.now() - PK.lastAd < AD_GAP) return;
+  PK.lastAd = Date.now(); pkAd('fullscreen');
 }
 function adCountdown(done) {
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
@@ -9111,7 +9163,7 @@ async function cloudLoadProfile(user) {
   return null;
 }
 async function cloudRestore() {
-  if (!cloudInit()) return false;
+  if (PIKABU || !cloudInit()) return false;   // on Пикабу the progress lives in the platform's cloud, not in our profiles
   try { const { data } = await CLOUD.sb.auth.getSession(); if (data && data.session) return !(await cloudLoadProfile(data.session.user)); } catch (e) { /* offline */ }
   return false;
 }
@@ -9390,7 +9442,7 @@ function adLog(ev, note) {
     body: JSON.stringify([{ ver: window.APP_VER, net: PLATFORM, ev, note: note ? String(note).slice(0, 190) : null, device: U.device, browser: U.browser }]) }).catch(() => {}); } catch (e) { /* no log */ }
 }
 function adBetween() {
-  if (PIKABU) { gpBetween(); return; }
+  if (PIKABU) { if (PK_DIRECT) pkBetween(); else gpBetween(); return; }
   if (!adCan()) return;
   if (Date.now() - (store.get('nf-ad-at') || 0) < AD_GAP) return;
   store.set('nf-ad-at', Date.now()); adLoad(); adLog('try');
@@ -9863,6 +9915,9 @@ const inMiniApp = PLATFORM !== 'web';
 // Пикабу Игры (через GamePush): no sign-in of ours, no links to the site or other platforms, no own payments or ad networks —
 // a guest with progress on the device; ads (and later sign-in and saves) through the GamePush SDK
 const PIKABU = PLATFORM === 'pikabu';
+// which SDK: the platform's own (PkbSDK, games.pikabu.ru/sdk/sdk.js — direct publishing, the build says window.NF_PIKABU_SDK = 'pikabu')
+// or GamePush (window.NF_GP with the project)
+const PK_DIRECT = PIKABU && window.NF_PIKABU_SDK === 'pikabu';
 document.documentElement.classList.add('pf-' + PLATFORM);
 function loadScript(src) { return new Promise((ok) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = () => ok(true); s.onerror = () => ok(false); document.head.appendChild(s); }); }
 // Telegram and MAX bridges: ready/expand; the signed launch data also comes in the address (#tgWebAppData / #WebAppData)
@@ -10312,7 +10367,7 @@ function startGate() {
     maxSiteWait().then((err) => { if (!PROF.login) return gateAgain(err || ''); finishGate(); if (err !== null) toast(err || `Привет, ${PROF.name}!`, 3.5); }); return;
   }
   if (TG_AUTH) { finishGate(); toast('Вход через Telegram…', 2); tgWidgetLogin(TG_AUTH).then((err) => { if (!PROF.login) return gateAgain(err || 'Не удалось войти через Telegram.'); toast(err || `Привет, ${PROF.name}!`, 3); updateProfChip(); }); return; }
-  if (PIKABU) { finishGate(); gpLoad(); return; }
+  if (PIKABU) { finishGate(); if (PK_DIRECT) pkLoad(); else gpLoad(); return; }
   if (inMiniApp) {
     if (!PROF.login) { gateStep = 'platform'; gateMsg = ''; $('gate').hidden = false; renderGate(); }
     platformLogin().then((err) => { updateProfChip(); if (!err && PROF.login) { finishGate(); toast(PROF.god ? 'Тестовый профиль' : `Привет, ${PROF.name}!`, 2); } else if (!PROF.login) gateAgain(err || 'Не удалось войти.'); });
