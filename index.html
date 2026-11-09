@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v113'; window.__errs = [];
+window.APP_VER = 'v114'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6227,7 +6227,7 @@ function pkLoad() {
         const sdk = await window.PkbSDK.init(); PK.sdk = sdk;
         try { sdk.gameStarted(); } catch (e) { /* old SDK */ }   // the first screen is already up
         try { sdk.on('storageSaveError', (r) => { adLog('error', 'pikabu storage: ' + r); if (r === 'REVISION_CONFLICT' && !PK.dead) { PK.dead = true; toast('Прогресс изменён в другой вкладке — перезапусти игру, чтобы не потерять его', 5); } }); } catch (e) { /* no events */ }
-        try { sdk.on('userAuthorized', () => pkCloudLoad()); } catch (e) { /* no events */ }
+        try { sdk.on('userAuthorized', () => { pkCloudLoad(); if (!$('prof').hidden) renderProfile(); }); } catch (e) { /* no events */ }
         pkCloudLoad(); res(sdk);
         setTimeout(pkStoreInit, 1500);   // prices and purchases not yet credited (after the cloud save is in place)
       } catch (e) { adLog('error', 'pikabu sdk init: ' + String(e && e.message || e).slice(0, 120)); res(null); }
@@ -6240,6 +6240,11 @@ function pkLoad() {
 }
 // cloud save: key «nf» = { v, t, p: the guest profile, pr: the story progress }; the side that went further wins at start
 // (and again after the player signs in — the platform may hand over the account's progress from another device)
+function pkSaveNote(short) {   // what the profile says about saving on Pikabu
+  const pl = PK.sdk && PK.sdk.player;
+  if (PK_DIRECT && pl && pl.isAuthorized === false) return short ? 'гость · войди в Пикабу, чтобы сохранить прогресс в аккаунте' : 'Прогресс сохраняется автоматически. Войди в аккаунт Пикабу, чтобы он был доступен на любом устройстве.';
+  return short ? 'прогресс сохраняется в аккаунте Пикабу' : 'Прогресс сохраняется в аккаунте Пикабу автоматически.';
+}
 function pkCloudLoad() {
   const sdk = PK.sdk; if (!sdk) return;
   let c = null; try { c = sdk.storage.get('nf'); } catch (e) { c = null; }
@@ -9851,7 +9856,7 @@ function renderProfile() {
   const tabs = [['me', 'Профиль'], ['garage', 'Гараж'], ['arms', 'Оружие'], ['shop', 'Магазин'], ['up', 'Прокачка'], ['ach', 'Достижения'], ['top', 'Рейтинг'], ['friends', 'Друзья']].filter(([id]) => !(PIKABU && (id === 'top' || id === 'friends')));
   if (PIKABU && (profTab === 'top' || profTab === 'friends')) profTab = 'me';
   $('profTabs').innerHTML = tabs.map(([k, t]) => `<button class="chip${profTab === k ? ' active' : ''}" data-tab="${k}" type="button">${t}</button>`).join('');
-  $('profName').textContent = PROF.name; $('profSub').textContent = PROF.god ? 'тестовый профиль · бессмертие · все покупки бесплатно' : PROF.login ? 'профиль ' + PROF.login : 'гость · прогресс хранится в этом браузере';
+  $('profName').textContent = PROF.name; $('profSub').textContent = PROF.god ? 'тестовый профиль · бессмертие · все покупки бесплатно' : PIKABU ? pkSaveNote(true) : PROF.login ? 'профиль ' + PROF.login : 'гость · прогресс хранится в этом браузере';
   $('profCoins').textContent = coinsText(); $('profAva').textContent = (PROF.name[0] || 'Г').toUpperCase();
   let h = '';
   const S = PROF.st;
@@ -9879,7 +9884,7 @@ function renderProfile() {
     <div class="plabel">Документы</div><div class="prow plegal"><a href="tseny.html" target="_blank" rel="noopener">Цены</a> · <a href="oferta.html" target="_blank" rel="noopener">Оферта</a> · <a href="politika.html" target="_blank" rel="noopener">Персональные данные</a> · <a href="pravila.html" target="_blank" rel="noopener">Правила</a> · <a href="kontakty.html" target="_blank" rel="noopener">Контакты</a></div>
     `}
     <div class="pmsg">${esc(profMsg)}</div>
-    <div class="note">${PROF.cloud ? 'Профиль хранится на сервере и доступен на любом устройстве.' : (PIKABU ? 'Прогресс хранится в этом браузере.' : 'Гость: прогресс хранится только в этом браузере. Войди или создай профиль, чтобы сохранить его на сервере.')}</div>`;
+    <div class="note">${PROF.cloud ? 'Профиль хранится на сервере и доступен на любом устройстве.' : (PIKABU ? pkSaveNote() : 'Гость: прогресс хранится только в этом браузере. Войди или создай профиль, чтобы сохранить его на сервере.')}</div>`;
   } else if (profTab === 'garage') {
     h = '<div class="pitems cars">' + Object.entries(CARS).map(([id, c]) => {
       const own = PROF.cars.includes(id), on = PROF.car === id;
