@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v104'; window.__errs = [];
+window.APP_VER = 'v105'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -831,6 +831,13 @@ const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') ||
 { const mark = (on) => { try { if (on) localStorage.setItem('nf-run', '1'); else localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } };
   addEventListener('pagehide', () => mark(false)); addEventListener('pageshow', () => mark(true)); document.addEventListener('visibilitychange', () => mark(!document.hidden));
   setTimeout(() => { try { localStorage.setItem('nf-crash', '0'); } catch (e) { /* storage unavailable */ } }, 120000); }   // two minutes without a crash: the count starts over
+// the browser took the GPU away from the game (webglcontextlost: on weak Android GPUs when its memory runs out). The page used to
+// start again at once — on a phone that keeps running out, round and round with nothing in the logs. Now each loss is reported;
+// the second within 5 minutes switches this device to the light set (small textures, light people, lower resolution, like iPhone);
+// the third stops the circle and says what happened, with a restart button.
+const GL_LOST = (() => { try { return JSON.parse(sessionStorage.getItem('nf-gllost') || '[]').filter((t) => Date.now() - t < 5 * 60e3); } catch (e) { return []; } })();
+let GL_DEAD = false;
+const LITE_MEM = (() => { try { return localStorage.getItem('nf-litemem') === '1'; } catch (e) { return false; } })();
 const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if (CRASH >= 2) localStorage.setItem('nf-gfx', 'auto'); } catch (e) { /* storage unavailable */ } const phone = isTouch && (Math.min(screen.width, screen.height) < 600 || IOS);   // phones and iPads start light (HD in the pause menu); tablets and computers in HD
   return { pref: v === 'hd' && CRASH === 0 ? 'hd' : v === 'auto' || CRASH >= 1 || phone ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' || CRASH >= 1, crash: CRASH }; })();   // HD by default; «chosen» = the player picked it in the pause menu (or a crash picked «auto»)   // HD by default; «chosen» = the player picked it in the pause menu
 // the GPU name (where the browser tells it): phones with a weak GPU (Mali-G57 in Helio G99 — Tecno, Infinix, Redmi…) start lighter
@@ -839,7 +846,7 @@ const WEAK_GPU = isTouch && (/Mali-(G31|G51|G52|G57|T\d)|Adreno \(TM\) ([345]\d\
 // old Apple devices (iOS 16 and older, or a 9.7-inch iPad 768×1024): 1000+ draw calls a frame is more than their processor can feed
 const OLD_IOS = IOS && ((IOS_VER > 0 && IOS_VER <= 16) || (Math.min(screen.width, screen.height) <= 768 && Math.max(screen.width, screen.height) <= 1024));
 const PHONE = isTouch && (Math.min(screen.width, screen.height) < 600 || IOS);
-const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 ? 1 : isTouch ? (WEAK_GPU || OLD_IOS ? 1.25 : 1.5) : 1.75), PR_HD = Math.min(DPR, 2);
+const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 || LITE_MEM ? 1 : isTouch ? (WEAK_GPU || OLD_IOS ? 1.25 : 1.5) : 1.75), PR_HD = Math.min(DPR, 2);
 const HD = () => GFX.pref === 'hd';
 if (CRASH >= 1) setTimeout(() => toast('Игра перезапустилась после сбоя: включена облегчённая графика. Вернуть HD можно в паузе.', 5), 6000);
 renderer.setPixelRatio(HD() ? PR_HD : PR_BASE);
@@ -858,7 +865,24 @@ $('stage').appendChild(renderer.domElement);
 let nfLeft = false;
 function leaveTo(url) { if (isTouch) { nfLeft = true; try { renderer.forceContextLoss(); } catch (e) { /* no context */ } } location.href = url; }
 window.addEventListener('pageshow', (e) => { if (e.persisted && nfLeft) location.reload(); });
-renderer.domElement.addEventListener('webglcontextrestored', () => { try { localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } location.reload(); });
+renderer.domElement.addEventListener('webglcontextlost', () => {
+  GL_DEAD = true;   // nothing can be drawn now: the static geometry keeps no copy in memory, the page starts again
+  if (nfLeft) return;   // our own release before a login or payment page
+  GL_LOST.push(Date.now());
+  try { sessionStorage.setItem('nf-gllost', JSON.stringify(GL_LOST)); if (GL_LOST.length >= 2) localStorage.setItem('nf-litemem', '1'); } catch (e) { /* storage unavailable */ }
+  let info = ''; try { const m = renderer.info.memory; info = ' geo=' + m.geometries + ' tex=' + m.textures; } catch (e) { /* no info */ }
+  const note = 'webgl lost #' + GL_LOST.length + ' up=' + Math.round(performance.now() / 1000) + 's lite=' + LITE_MEM + info + ' gpu=' + GPU + ' | ' + (localStorage.getItem('nf-crumb') || '');
+  try { fetch(SB_URL + '/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER, platform: 'gllost', browser: navigator.userAgent.slice(0, 200), msg: note.slice(0, 600) }]) }).catch(() => {}); } catch (e) { /* offline */ }
+});
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  try { localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ }
+  if (GL_LOST.length >= 3) {   // the third time in 5 minutes: no more automatic restarts
+    const l = $('loading'); window.__nfMsg = true;
+    if (l) { l.hidden = false; l.innerHTML = 'Видеокарте телефона не хватило памяти для игры, уже несколько раз подряд.<br>Закрой другие вкладки и приложения и перезапусти игру — она включит облегчённую графику.<br><button type="button" style="margin-top:14px;padding:12px 22px;font:700 15px sans-serif;border-radius:8px;border:0;background:#ffc43d;color:#111" onclick="nfHardReload()">Перезапустить игру</button>'; }
+    return;
+  }
+  location.reload();
+});
 
 const scene = new THREE.Scene();
 const FOG = new THREE.Color(0x251d3f);
@@ -953,6 +977,7 @@ function revealStep() {
 }
 function revealAll() { if (REV.q) for (const o of REV.q) if (o.layers.mask === 1 << 31) o.layers.mask = 1; REV.q = null; REV.seen = null; }
 function render() {
+  if (GL_DEAD) return;
   if (REV.q) { if (state.mode === 'preview' || state.mode === 'select') revealStep(); else revealAll(); }
   if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else { coverDrawn = 0; if (RS.pending) resize(); }
   if (perf.shadowSkip) { renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = (perf.fn++ % perf.every) === 0; }
@@ -989,7 +1014,7 @@ resize();
 // The step reached is remembered on the device, so the next start is already light. Phones never climb above the base resolution.
 let PERF_SAVED = 0;
 try { const o = JSON.parse(localStorage.getItem('nf-perf') || 'null'); if (o && o.l > 0) PERF_SAVED = o.v === window.APP_VER ? o.l : o.l - 1; } catch (e) { /* storage unavailable */ }
-const PERF_BASE = () => (HD() ? 0 : Math.min(4, Math.max(OLD_IOS ? 3 : WEAK_GPU ? 1 : 0, PERF_SAVED)));
+const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(4, Math.max(OLD_IOS || LITE_MEM ? 3 : WEAK_GPU ? 1 : 0, PERF_SAVED)));
 const perf = { t: 0, frames: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0, view: 0, every: 1,
   st: 0, sf: 0, low: 99, sent: false };
 function perfSave() { try { localStorage.setItem('nf-perf', JSON.stringify({ l: perf.level, v: window.APP_VER })); } catch (e) { /* storage unavailable */ } }
@@ -4893,7 +4918,7 @@ function liftDark(c) { const hsl = {}; c.getHSL(hsl); if (hsl.l < 0.06) c.setHSL
 const NR = { ready: false, G: {}, clips: {}, H: 2.0, carInfo: null };
 // iPhone: Safari ends the tab when memory runs out at start — the four heavy people (≈50 pictures of 1024 px, 6.6 MB of files)
 // are not loaded there; the characters made of them wear the light bodies
-const NR_LITE = IOS ? { man2: 'man', man3: 'man', woman2: 'woman', woman3: 'woman' } : {};
+const NR_LITE = IOS || LITE_MEM ? { man2: 'man', man3: 'man', woman2: 'woman', woman3: 'woman' } : {};
 const NR_SRC = ['man', 'man2', 'man3', 'woman', 'woman2', 'woman3', 'michelle', 'anims', 'car'].filter((k) => !NR_LITE[k]);
 const NR_BODY = { vik: 'man', gleb: 'man', artem: 'man', timur: 'man3', savva: 'man2', rustam: 'man2', kira: 'woman', maya: 'michelle', zoya: 'woman2', nika: 'woman2', olga: 'woman3', mark: 'man3', vera: 'woman3', thug1: 'man2', thug2: 'man', thug3: 'man2', boss: 'man', crow: 'man2' };
 const NR_FEM = { woman: 1, woman2: 1, woman3: 1, michelle: 1 };
@@ -4942,7 +4967,7 @@ function nrPlaceGear(f) {
 }
 // iPhone: Safari closes the tab when it runs out of memory («На странице повторно возникла проблема»); the people and car packs
 // bring ~60 textures of 1024 px (4 MB each in memory, more with mipmaps) — on iPhone they are scaled to 512 px when loaded
-const TEX_CAP = IOS ? 512 : 0, texCapDone = new WeakSet();
+const TEX_CAP = IOS || LITE_MEM ? 512 : 0, texCapDone = new WeakSet();
 function texCap(root, gl) {
   if (!TEX_CAP || !root) return;
   if (gl) gl.parser = null;   // its cache keeps the full-size pictures alive
