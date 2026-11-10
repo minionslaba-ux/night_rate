@@ -1,0 +1,3 @@
+-- Ежедневный пост «Мутации» в каналы «Ночного тарифа» (TG @nightfaregame, MAX): каждый день в 13:00 МСК (10:00 UTC).
+-- Владелец подтвердил 10.11.2026. Функция nf-promo {daily:'mutaciya'} берёт запись дня из mutaciya.com/promo/daily/posts.json.
+select cron.schedule('nf-mutaciya-daily', '0 10 * * *', $$select net.http_post(url := 'https://xqgibyazilueurdqufso.supabase.co/functions/v1/nf-promo', body := jsonb_build_object('key', (select v from public.nf_settings where k = 'cron_key'), 'daily', 'mutaciya'), headers := '{"Content-Type": "application/json"}'::jsonb, timeout_milliseconds := 60000)$$);

@@ -60,8 +60,50 @@ async function maxImage(url: string) {
   return payload ? { payload } : { error: 'upload result: ' + JSON.stringify(j).slice(0, 120) };
 }
 
+// Ежедневный пост «Мутации» (владелец подтвердил 10.11.2026: каждый день в 13:00 МСК, pg_cron nf-mutaciya-daily):
+// запись с сегодняшней датой (МСК) из posts.json проекта «Мутация»; нет такой — day = ((сегодня − start) mod 365) + 1.
+// Один пост в день в каждый канал (метка nf_settings promo_mut_<дата>); картинки — только с сайта «Мутации».
+// с 10.11.2026 у игры свой домен mutaciya.com; запасной адрес тех же файлов — raw.githubusercontent.com
+const MUT_SRC = ['https://mutaciya.com/promo/daily/', 'https://raw.githubusercontent.com/minionslaba-ux/mutaciya/main/promo/daily/'];
+const MUT_OK = /^https:\/\/(mutaciya\.com|minionslaba-ux\.github\.io\/mutaciya|raw\.githubusercontent\.com\/minionslaba-ux\/mutaciya)\//;
+const mutRaw = (u: string) => MUT_SRC[1] + u.split('/').pop();
+async function mutDaily(dry: boolean) {
+  const day = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10), mark = 'promo_mut_' + day;
+  if (!dry && await setting(mark)) return { skipped: 'already', day };
+  let J: any = null, src = '';
+  for (const base of MUT_SRC) { try { const r = await fetch(base + 'posts.json', { headers: { 'cache-control': 'no-cache' } }); if (r.ok) { J = await r.json(); src = base; break; } } catch (_) { /* next */ } }
+  if (!J) return { error: 'posts.json недоступен' };
+  const posts = J.posts || [];
+  let p = posts.find((x: any) => x.date === day);
+  if (!p && J.start) { const n = Math.floor((Date.parse(day) - Date.parse(J.start)) / 864e5); p = posts.find((x: any) => x.day === (((n % 365) + 365) % 365) + 1); }
+  if (!p || !p.tg_html || !p.max_text || !MUT_OK.test(String(p.image || ''))) return { error: 'нет записи на ' + day };
+  const tgText = String(p.tg_html).slice(0, 1000), maxText = String(p.max_text).slice(0, 3900);
+  if (dry) return { dry: true, src, day, n: p.day, image: p.image, tg: tgText, max: maxText };
+  await db.from('nf_settings').upsert({ k: mark, v: 'sending' });
+  const out: any = { day, n: p.day, tg: null, max: [] };
+  let t = await tg('sendPhoto', { chat_id: '@nightfaregame', photo: p.image, caption: tgText, parse_mode: 'HTML' });
+  if (!t.ok) t = await tg('sendPhoto', { chat_id: '@nightfaregame', photo: mutRaw(p.image), caption: tgText, parse_mode: 'HTML' });
+  if (!t.ok) { const e = t.description; t = await tg('sendMessage', { chat_id: '@nightfaregame', text: tgText, parse_mode: 'HTML' }); out.tg = t.ok ? { ok: true, id: t.result.message_id, note: 'без фото: ' + e } : { ok: false, error: e + ' / ' + t.description }; }
+  else out.tg = { ok: true, id: t.result.message_id };
+  if (MAXT) {
+    const { data: chats } = await db.from('nf_max_chats').select('chat_id, title').eq('enabled', true).eq('is_channel', true).limit(10);
+    let im: any = await maxImage(p.image); if ('error' in im) im = await maxImage(mutRaw(p.image));   // MAX берёт картинку только файлом
+    for (const c of chats || []) {
+      const body: any = { text: maxText };
+      if ('payload' in im) body.attachments = [{ type: 'image', payload: im.payload }];
+      let m = await maxApi(`/messages?chat_id=${c.chat_id}`, { method: 'POST', body: JSON.stringify(body) });
+      let note = 'error' in im ? 'без фото: ' + im.error : '';
+      if (!m?.message?.body?.mid && body.attachments) { note = 'без фото: ' + (m?.error || '?'); m = await maxApi(`/messages?chat_id=${c.chat_id}`, { method: 'POST', body: JSON.stringify({ text: maxText }) }); }
+      out.max.push({ chat: c.title || c.chat_id, mid: m?.message?.body?.mid || null, error: m?.message?.body?.mid ? null : (m?.error || '?'), note });
+    }
+  }
+  await db.from('nf_settings').upsert({ k: mark, v: JSON.stringify(out).slice(0, 900) });
+  return out;
+}
+
 Deno.serve(async (req) => {
   const b = await req.json().catch(() => null), key = await setting('cron_key');
+  if (b && key && b.key === key && b.daily === 'mutaciya') return json(await mutDaily(!!b.dry));
   if (!b || !key || b.key !== key || !PROMOS[b.promo]) return json({ error: 'forbidden' }, 403);
   const id = b.promo, P = PROMOS[id], mark = 'promo_' + id;
   if (await setting(mark)) return json({ skipped: 'already', at: await setting(mark) });
