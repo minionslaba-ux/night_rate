@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v123'; window.__errs = [];
+window.APP_VER = 'v124'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -818,6 +818,8 @@ const renderer = (() => {
     }
   }
 })();
+// v124: no debug checks of every new shader — they make the browser wait for each compile to finish (the stalls at the start)
+renderer.debug.checkShaderErrors = false;
 // graphics quality: «auto» adapts to the device (and climbs to HD when there is headroom); «hd» keeps the full screen resolution,
 // hardware anti-aliasing, sharper shadows and the detailed models on phones too
 // a tab the browser killed (iOS: «на странице повторно возникла проблема» — out of memory) leaves nf-run behind: the next start goes lighter
@@ -3775,7 +3777,7 @@ function initPeds() {
     const look = { model, skin: pick(['#e8c0a0', '#d9a98a', '#c08a6a', '#a87452', '#f0d0b8']), colors, noGun: true, face: { fem, brow: colors.Hair, iris: pick(['#3a2a1a', '#3a6a9a', '#4a6a3a']), mouth: pick(['neutral', 'smile']) } };
     look.ped = true; const h = makeHuman(look, rand(0.94, 1.04)); h.g.traverse((o) => { if (o.isMesh) o.castShadow = false; });   // passers-by: no shadow pass (half their draw calls)
     const p = Object.assign(h, { pos: new V3(), bx: 0, bz: 0, off: 28.6, u: 0, dir: 1, sp: rand(1.2, 1.6), panic: 0, dodge: 0, face: 0, act: '' });
-    p.g.visible = false; p.wakeAt = performance.now() + 600 + i * 350; LIFE.peds.push(p);   // v122: one at a time — all 14 in one frame (skeletons, textures, shaders) froze the start
+    p.g.visible = false; p.wakeAt = performance.now() + 300 + i * 150; LIFE.peds.push(p);   // v122: one at a time — all 14 in one frame (skeletons, textures, shaders) froze the start
   }
 }
 const BLOCKS = []; for (const bx of [-120, -40, 40, 120]) for (const bz of [-120, -40, 40, 120]) BLOCKS.push([bx, bz]);
@@ -5118,7 +5120,7 @@ function autoFirstRide() {
     if (missionsDone() > 0 || store.get('nf-autoride')) return;
     const calm = () => state.mode === 'preview' && $('gate').hidden && $('modal').hidden && $('prof').hidden && !PEOPLE.wait;
     if (!calm()) return;
-    const revDone = () => new Promise((r) => { const t = () => (REV.q ? setTimeout(t, 200) : r()); t(); });   // the whole city on the GPU first: a start in the middle of it piles it into one frame
+    const revDone = () => new Promise((r) => { const t = () => (REV.q || LIFE.peds.some((x) => x.wakeAt) ? setTimeout(t, 200) : setTimeout(r, 400)); t(); });   // and every passer-by already out (their shaders built in the menu, not at the wheel)   // the whole city on the GPU first: a start in the middle of it piles it into one frame
     peopleLoad().then(revDone).then(() => {
       if (!calm() || missionsDone() > 0 || store.get('nf-autoride')) return;
       store.set('nf-autoride', 1); trace('autoride');
@@ -5143,7 +5145,7 @@ const NR_TINT_GLSL = '\n#ifdef USE_MAP\n{ vec3 s = pow(max(diffuseColor.rgb, vec
   + 'diffuseColor.rgb = pow(mix(s, min(vec3(1.0), uTint * (0.3 + l * 1.15)), uTintMix), vec3(2.2)); }\n#endif\n';
 function nrTintMat(m, hex, mix) {
   if (!m || !m.map) return;
-  const U = { uTint: { value: new THREE.Color(hex) }, uTintMix: { value: mix } }; m.userData.tintU = U;
+  const U = { uTint: { value: new THREE.Color(hex).convertLinearToSRGB() }, uTintMix: { value: mix } };   // the shader works in sRGB like the old canvas tint m.userData.tintU = U;
   m.onBeforeCompile = (sh) => { sh.uniforms.uTint = U.uTint; sh.uniforms.uTintMix = U.uTintMix; sh.fragmentShader = 'uniform vec3 uTint;\nuniform float uTintMix;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>' + NR_TINT_GLSL); };
   m.customProgramCacheKey = () => 'nrtint';   // one shader for every tinted piece of clothing
   m.needsUpdate = true;
