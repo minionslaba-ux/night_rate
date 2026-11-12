@@ -751,7 +751,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v122'; window.__errs = [];
+window.APP_VER = 'v123'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -836,7 +836,7 @@ const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if 
 const GPU = (() => { try { const gl = renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return String((x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) || '').slice(0, 110); } catch (e) { return ''; } })();
 // computers with old integrated Intel graphics (HD Graphics, GMA): 15 fps at the lightest step on Pikabu — they start lighter
 const WEAK_DESK = !isTouch && /Intel/i.test(GPU) && /HD Graphics|GMA|G4[15]/i.test(GPU) && !/Iris|Arc/i.test(GPU);
-if (WEAK_DESK && !GFX.chosen) GFX.pref = 'auto';   // not HD by default there: the lighter steps work only in «auto»
+if ((WEAK_DESK || (!isTouch && (navigator.hardwareConcurrency || 4) <= 2)) && !GFX.chosen) GFX.pref = 'auto';   // not HD by default there: the lighter steps work only in «auto»
 const WEAK_GPU = isTouch && (/Mali-(G31|G51|G52|G57|T\d)|Adreno \(TM\) ([345]\d\d|6[01]\d)\b|PowerVR|IMG BXM/i.test(GPU) || (navigator.deviceMemory || 8) <= 3);
 // old Apple devices (iOS 16 and older, or a 9.7-inch iPad 768×1024): 1000+ draw calls a frame is more than their processor can feed
 const OLD_IOS = IOS && ((IOS_VER > 0 && IOS_VER <= 16) || (Math.min(screen.width, screen.height) <= 768 && Math.max(screen.width, screen.height) <= 1024));
@@ -1009,7 +1009,11 @@ resize();
 // The step reached is remembered on the device, so the next start is already light. Phones never climb above the base resolution.
 let PERF_SAVED = 0;
 try { const o = JSON.parse(localStorage.getItem('nf-perf') || 'null'); if (o && o.l > 0) PERF_SAVED = o.v === window.APP_VER ? o.l : o.l - 1; } catch (e) { /* storage unavailable */ }
-const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(5, Math.max(OLD_IOS || LITE_MEM ? 3 : WEAK_DESK ? 2 : WEAK_GPU ? 1 : 0, PERF_SAVED)));
+// v123: a weak office computer starts light right away (Intel HD: step 4; with 2 processor cores: the lightest, 5) — climbing
+// down from step 2 took ~27 s of lag on every start («сильно подвисает на старте»)
+const FEW_CORES = !isTouch && (navigator.hardwareConcurrency || 4) <= 2;
+const PERF_FLOOR = OLD_IOS || LITE_MEM ? 3 : FEW_CORES && (WEAK_DESK || WEAK_GPU) ? 5 : WEAK_DESK ? 4 : FEW_CORES ? 3 : WEAK_GPU ? 1 : 0;
+const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(5, Math.max(PERF_FLOOR, PERF_SAVED)));
 const perf = { t: 0, frames: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0, view: 0, every: 1,
   st: 0, sf: 0, low: 99, sent: false };
 function perfSave() { try { localStorage.setItem('nf-perf', JSON.stringify({ l: perf.level, v: window.APP_VER })); } catch (e) { /* storage unavailable */ } }
@@ -1046,7 +1050,8 @@ function checkPerf(raw) {
   if ((isTouch && coverOpen()) || document.hidden) { perf.t = 0; perf.frames = 0; return; }   // a window over the game or a hidden tab: nothing to measure
   if (raw > 2) return;   // a long stall (loading a model, the tab coming back): skipped, the window goes on; slower frames are real lag and count
   perf.t += raw; perf.frames++; perf.st += raw; perf.sf++;
-  if (perf.t < 3) return;
+  const early = perf.st < 20;   // the first 20 s of play: windows of 1.5 s and one slow window is enough — the start must not lag for long
+  if (perf.t < (early ? 1.5 : 3)) return;
   const fps = perf.frames / perf.t; perf.t = 0; perf.frames = 0;
   perf.low = Math.min(perf.low, fps); perf.win = (perf.win || 0) + 1; perf.last = fps; perfReport();
   if (perf.cool > 0) { perf.cool--; return; }   // just changed something: let it settle for one window
@@ -1063,7 +1068,7 @@ function checkPerf(raw) {
   if (fps >= 30) { perf.slow = 0; return; }
   if (perf.level === 3 && fps >= 22) { perf.slow = 0; return; }   // the last step (no post-processing at all) only when it is really bad
   if (perf.level === 4 && fps >= 26) { perf.slow = 0; return; }   // step 5 only when step 4 is still too slow
-  if (++perf.slow < 2 || perf.level >= 5) return;
+  if (++perf.slow < (early ? 1 : 2) || perf.level >= 5) return;
   perf.slow = 0; perf.level++; perf.cool = 1; perfApply(); perfSave();
 }
 
