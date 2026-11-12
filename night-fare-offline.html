@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v121'; window.__errs = [];
+window.APP_VER = 'v122'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -3770,7 +3770,7 @@ function initPeds() {
     const look = { model, skin: pick(['#e8c0a0', '#d9a98a', '#c08a6a', '#a87452', '#f0d0b8']), colors, noGun: true, face: { fem, brow: colors.Hair, iris: pick(['#3a2a1a', '#3a6a9a', '#4a6a3a']), mouth: pick(['neutral', 'smile']) } };
     look.ped = true; const h = makeHuman(look, rand(0.94, 1.04)); h.g.traverse((o) => { if (o.isMesh) o.castShadow = false; });   // passers-by: no shadow pass (half their draw calls)
     const p = Object.assign(h, { pos: new V3(), bx: 0, bz: 0, off: 28.6, u: 0, dir: 1, sp: rand(1.2, 1.6), panic: 0, dodge: 0, face: 0, act: '' });
-    p.g.visible = false; LIFE.peds.push(p);
+    p.g.visible = false; p.wakeAt = performance.now() + 600 + i * 350; LIFE.peds.push(p);   // v122: one at a time — all 14 in one frame (skeletons, textures, shaders) froze the start
   }
 }
 const BLOCKS = []; for (const bx of [-120, -40, 40, 120]) for (const bz of [-120, -40, 40, 120]) BLOCKS.push([bx, bz]);
@@ -3985,8 +3985,10 @@ function updateLife(dt) {
     const fx = Math.sin(m.h) * 3.2, fz = Math.cos(m.h) * 3.2;
     for (const k of [-1, 1]) { const o = { pos: { x: m.pos.x + fx * k, z: m.pos.z + fz * k }, wait: 0 }; bumpPlayer(o, 3.0); if (o.wait) m.wait = 1.5; }
   }
+  let woke = false;   // at most one new passer-by per frame, however slow the frame
   for (const p of LIFE.peds) {
     if (!active) { p.g.visible = false; continue; }
+    if (p.wakeAt) { if (woke || performance.now() < p.wakeAt) { p.g.visible = false; continue; } p.wakeAt = 0; woke = true; }
     if (p.zr) { routeAt(p.zr.r, p.zr.s, p.zr.off, _lq); if (Math.hypot(_lq.x - near.x, _lq.z - near.z) > 95 || (Math.abs(near.x) < 185 && Math.abs(near.z) < 185)) { p.zr = null; p.g.visible = false; } }
     if (!p.g.visible || (!p.zr && pedPos(p, _lq) === null) || (!p.zr && (Math.hypot(_lq.x - near.x, _lq.z - near.z) > 95 || inArena(_lq.x, _lq.z, 6)))) { if (!spawnPed(p, near)) continue; }
     if (p.zr) {
@@ -5099,7 +5101,7 @@ function peopleLoad() {
 function peopleReady() {
   PEOPLE.ready = true; window.__peopleT = Math.round(performance.now());
   try { initPeds(); } catch (e) { /* no passers-by */ }
-  if (state.mode === 'preview' || state.mode === 'select') setTimeout(renderPortraits, 300);
+  if (state.mode === 'select') setTimeout(renderPortraits, 300);   // v122: not on the menu — a second GL context compiling every hero there froze the start
   const w = PEOPLE.wait; PEOPLE.wait = null; $('peopleWait').hidden = true;
   if (w && document.contains(w)) { PEOPLE.replay = true; try { w.click(); } finally { PEOPLE.replay = false; } }
 }
@@ -5111,7 +5113,8 @@ function autoFirstRide() {
     if (missionsDone() > 0 || store.get('nf-autoride')) return;
     const calm = () => state.mode === 'preview' && $('gate').hidden && $('modal').hidden && $('prof').hidden && !PEOPLE.wait;
     if (!calm()) return;
-    peopleLoad().then(() => {
+    const revDone = () => new Promise((r) => { const t = () => (REV.q ? setTimeout(t, 200) : r()); t(); });   // the whole city on the GPU first: a start in the middle of it piles it into one frame
+    peopleLoad().then(revDone).then(() => {
       if (!calm() || missionsDone() > 0 || store.get('nf-autoride')) return;
       store.set('nf-autoride', 1); trace('autoride');
       toast('Поехали! Первая миссия', 1.6);
@@ -5128,17 +5131,17 @@ document.addEventListener('click', (e) => {
   e.preventDefault(); e.stopImmediatePropagation();
   PEOPLE.wait = t; const el = $('peopleWait'); el.hidden = false; peopleWaitShow();
 }, true);
-const nrTint = {};
-function nrTintTex(tex, hex, mix) {
-  if (!tex || !tex.image) return tex;
-  const key = tex.uuid + '|' + hex + '|' + mix; if (nrTint[key]) return nrTint[key];
-  const img = tex.image, w = img.width, h = img.height, c = document.createElement('canvas'); c.width = w; c.height = h;
-  const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, w, h), p = d.data, col3 = new THREE.Color(hex);
-  const tr = col3.r * 255, tg = col3.g * 255, tb = col3.b * 255;
-  for (let i = 0; i < p.length; i += 4) { const l = (p[i] * 0.3 + p[i + 1] * 0.59 + p[i + 2] * 0.11) / 255, k = 0.3 + l * 1.15; p[i] = p[i] * (1 - mix) + Math.min(255, tr * k) * mix; p[i + 1] = p[i + 1] * (1 - mix) + Math.min(255, tg * k) * mix; p[i + 2] = p[i + 2] * (1 - mix) + Math.min(255, tb * k) * mix; }
-  g.putImageData(d, 0, 0);
-  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.flipY = tex.flipY; t.wrapS = tex.wrapS; t.wrapT = tex.wrapT; t.anisotropy = 4;
-  return (nrTint[key] = t);
+// v122: the clothes are tinted by the GPU while drawing, not by recolouring a copy of the texture on the CPU. The copies
+// (getImageData over every pixel, then a new texture per passer-by) froze the start for seconds — Pikabu's moderation saw
+// «сильно тормозит на старте». Same formula, in sRGB space: out = tex·(1−mix) + min(1, tint·(0.3 + 1.15·luma))·mix.
+const NR_TINT_GLSL = '\n#ifdef USE_MAP\n{ vec3 s = pow(max(diffuseColor.rgb, vec3(0.0)), vec3(1.0 / 2.2)); float l = dot(s, vec3(0.3, 0.59, 0.11));\n'
+  + 'diffuseColor.rgb = pow(mix(s, min(vec3(1.0), uTint * (0.3 + l * 1.15)), uTintMix), vec3(2.2)); }\n#endif\n';
+function nrTintMat(m, hex, mix) {
+  if (!m || !m.map) return;
+  const U = { uTint: { value: new THREE.Color(hex) }, uTintMix: { value: mix } }; m.userData.tintU = U;
+  m.onBeforeCompile = (sh) => { sh.uniforms.uTint = U.uTint; sh.uniforms.uTintMix = U.uTintMix; sh.fragmentShader = 'uniform vec3 uTint;\nuniform float uTintMix;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>' + NR_TINT_GLSL); };
+  m.customProgramCacheKey = () => 'nrtint';   // one shader for every tinted piece of clothing
+  m.needsUpdate = true;
 }
 const nrBone = (root, n) => { let b = null; root.traverse((o) => { if (!b && o.isBone && o.name.replace(/^mixamorig:?/, '') === n) b = o; }); return b; };
 const nrClipCache = {};
@@ -5180,9 +5183,9 @@ function nrPerson(look) {
     o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); const m = o.material, id = o.name + ' ' + (m.name || '');
     if (m.metalness > 0.5) m.metalness = 0.1; m.envMapIntensity = 0.6;
     if (base === 'michelle') return;
-    if (/Outfit_Top|outfit_top|avaturn_look/i.test(id) && jacket) { if (base === 'man3') { m.map = null; m.color.set(jacket); } else m.map = nrTintTex(m.map, jacket, 0.85); }
-    else if (/Outfit_Bottom|outfit_bottom/i.test(id) && pants) m.map = nrTintTex(m.map, pants, 0.8);
-    else if (/hair/i.test(id)) { if (cast.bald) o.visible = false; else if (hair) m.map = nrTintTex(m.map, hair, 0.85); }
+    if (/Outfit_Top|outfit_top|avaturn_look/i.test(id) && jacket) { if (base === 'man3') { m.map = null; m.color.set(jacket); } else nrTintMat(m, jacket, 0.85); }
+    else if (/Outfit_Bottom|outfit_bottom/i.test(id) && pants) nrTintMat(m, pants, 0.8);
+    else if (/hair/i.test(id)) { if (cast.bald) o.visible = false; else if (hair) nrTintMat(m, hair, 0.85); }
     else if (/Glasses/i.test(id)) o.visible = !!cast.glasses;
   });
   const mixer = new THREE.AnimationMixer(model), act = {};
