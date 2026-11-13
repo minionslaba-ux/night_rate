@@ -751,7 +751,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v124'; window.__errs = [];
+window.APP_VER = 'v125'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6327,7 +6327,7 @@ function pkLoad() {
       try {
         const sdk = await window.PkbSDK.init(); PK.sdk = sdk;
         try { sdk.gameStarted(); } catch (e) { /* old SDK */ }   // the first screen is already up
-        try { sdk.on('storageSaveError', (r) => { adLog('error', 'pikabu storage: ' + r); if (r === 'REVISION_CONFLICT' && !PK.dead) { PK.dead = true; toast('Прогресс изменён в другой вкладке — перезапусти игру, чтобы не потерять его', 5); } }); } catch (e) { /* no events */ }
+        try { sdk.on('storageSaveError', (r) => { PK.serr = (PK.serr || 0) + 1; if (PK.serr === 1 || PK.serr === 20) adLog('error', 'pikabu storage: ' + r + ' ×' + PK.serr + (sdk.player && sdk.player.isAuthorized === false ? ' (гость)' : ''));   /* once, not on every save */ if (r === 'REVISION_CONFLICT' && !PK.dead) { PK.dead = true; toast('Прогресс изменён в другой вкладке — перезапусти игру, чтобы не потерять его', 5); } }); } catch (e) { /* no events */ }
         try { sdk.on('userAuthorized', () => { pkCloudLoad(); if (!$('prof').hidden) renderProfile(); }); } catch (e) { /* no events */ }
         pkCloudLoad(); res(sdk);
         setTimeout(pkStoreInit, 1500);   // prices and purchases not yet credited (after the cloud save is in place)
@@ -11683,6 +11683,7 @@ function dailyStart() { EPS[90] = { daily: true, chapters: [dailyChapter()] }; s
 async function dailyFinish() {
   const t = Math.max(1, Math.round(state.time - (MLOG.gt0 || 0))), day = dailyDay(), all = store.get('nf-daily') || {}, first = !all[day];
   if (!all[day] || t < all[day]) all[day] = t; store.set('nf-daily', all);
+  missionLog('win', null, { stars: null });   // v125: the daily's wins were never in the journal (the stats showed 0 wins)
   state.mode = 'end'; setEngine(0, false);
   if (first) setTimeout(() => addCoins(150), 400);
   let place = '';
@@ -11719,13 +11720,14 @@ function arriveBrake(dt, k) { if (!pc || pc.locked) return; const f = Math.pow(k
 Object.assign(GEN, {
   race(c, title, done) {
     beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
-    const P_ = c.pts.map(([x, z]) => new V3(x, 0, z)); let i = 0, left = c.secs, mk = null;
+    const daily = state.ep === 90, bonus = daily ? 3 : 2;   // v125: the daily race got 25% more time and +3 s a point — 18 fails in a row on a slow computer; the day's ranking is by finish time, so it stays fair
+    const P_ = c.pts.map(([x, z]) => new V3(x, 0, z)); let i = 0, left = daily ? Math.round(c.secs * 1.25) : c.secs, mk = null;
     const show = () => { if (mk) { scene.remove(mk); TMARKS.splice(TMARKS.indexOf(mk), 1); } mk = tMark(P_[i].x, P_[i].z, 0x4dffa6, 18); setBeam(P_[i]); setObjective(`Гонка: точка ${i + 1} из ${P_.length}.`); };
     show();
     return { title, chase: { max: 0 }, get navName() { return `Точка ${i + 1}/${P_.length}`; }, navGoal: () => P_[i],
       update(dt) {
         left -= dt; if (left <= 0) return failChapter('Не уложился', 'Время заезда вышло. Срезай повороты и держи газ.');
-        if (pc.pos.distanceTo(P_[i]) < 9) { i++; sfx.bell(); if (i >= P_.length) return done(); left += 2; toast(`Точка ${i}/${P_.length} · +2 с`, 0.9); show(); }
+        if (pc.pos.distanceTo(P_[i]) < 9) { i++; sfx.bell(); if (i >= P_.length) return done(); left += bonus; toast(`Точка ${i}/${P_.length} · +${bonus} с`, 0.9); show(); }
       },
       hud() { return { timer: `${fmt(left)} · точка ${i + 1}/${P_.length}`, bad: left < 10 }; } };
   },
