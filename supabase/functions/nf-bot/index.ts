@@ -243,7 +243,15 @@ async function exportUsers(chatId: number) {
 }
 
 async function adminCommand(cmd: string, rest: string, chatId: number, tg: number): Promise<boolean> {
-  const say = (text: string, extra: Record<string, unknown> = {}) => api('sendMessage', { chat_id: chatId, text: text.slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, ...extra });
+  // если Telegram не разобрал HTML (лишний «<», обрезанный тег) — шлём тот же текст без оформления, чтобы команда не молчала
+  const say = async (text: string, extra: Record<string, unknown> = {}) => {
+    const r = await api('sendMessage', { chat_id: chatId, text: text.slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, ...extra });
+    if (r && r.ok === false && /parse entities/i.test(String(r.description || ''))) {
+      const plain = text.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      return api('sendMessage', { chat_id: chatId, text: plain.slice(0, 4000), disable_web_page_preview: true, ...extra });
+    }
+    return r;
+  };
   const arg = rest.trim();
   switch (cmd) {
     case 'help': await say(HELP); return true;
@@ -518,7 +526,7 @@ async function pikabuReport(days: number) {
     + `👥 <b>Игроки</b>: ${sids.length} (устройств) · запусков ${L.length}\n${days_ || 'запусков нет'}\n`
     + `Устройства: ${[...dev].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${esc(k)} ${n}`).join(', ') || '—'}\n\n`
     + `⏱ <b>Загрузка</b>: до меню медиана ${sec(med(ok))}, первый раз ${sec(med(L.filter((r: any) => r.ok && r.t_first && !r.cached).map((r: any) => r.t_first)))}, худшее ${sec(ok.length ? Math.max(...ok) : null)}${fails ? ` · <b>сбоев ${fails}</b>` : ' · сбоев нет'}\n`
-    + `🏎 <b>Скорость игры</b>: ${F.length ? `${fpsMed} к/с (в просадках ${fpsLowMed}), медленно (<25) у ${slow} из ${F.length}` : 'данных пока нет (пишется с v115)'}\n\n`
+    + `🏎 <b>Скорость игры</b>: ${F.length ? `${fpsMed} к/с (в просадках ${fpsLowMed}), медленно (&lt;25) у ${slow} из ${F.length}` : 'данных пока нет (пишется с v115)'}\n\n`
     + `🎯 <b>Миссии</b>: начали ${mStart}, прошли ${mWin} · играли хоть одну: ${players((r) => r.ev === 'start')} · прошли хоть одну: ${players((r) => r.ev === 'win')} · дошли до 2-го эпизода: ${deep}\n`
     + `Чаще всего: ${[...topM].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${esc(k)} ${n}`).join(', ') || '—'}\n\n`
     + `📺 <b>Реклама</b>: за награду показана ${ac('shown', /rewarded/)} из ${ac('try', /rewarded/)} · между миссиями ${ac('shown', /fullscreen/)} из ${ac('try', /fullscreen/)} · ошибок ${A.filter((r: any) => r.ev === 'error').length}\n\n`
