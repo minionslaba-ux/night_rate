@@ -751,7 +751,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v128'; window.__errs = [];
+window.APP_VER = 'v129'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -7103,15 +7103,21 @@ function ch1(intro) {
     const t = makeScripted('tail', route, 104, -80, -PI / 2, { speed: 17, stops: { 2: 4, 5: 5, 8: 4, 11: 5 } });
     MIS = {
       title: 'Миссия 1 · Хвост', noFire: true, chase: null, sus: 0, lost: 0, target: t, navName: 'Серая машина',
+      // v129: softer for those who fail it (on Pikabu: 8 tries on a phone, «spotted» 2 s after a restart — the car starts 36 m
+      // behind the target and full throttle closes that in a second and a half): 4 s of grace at the start, spotted only closer
+      // than 12 m (instantly closer than 4 m), and after every failed try suspicion grows slower and the target may be farther
+      grace: 4, ease: Math.min(4, typeof diffTries === 'function' ? diffTries() : 0),
       navGoal: () => t.pos,
       update(dt) {
         setBeam(t.pos);
-        const d = pc.pos.distanceTo(t.pos);
-        if (d < 6) this.sus = 100;
-        else if (d < 15) this.sus += 24 * dt; else this.sus = Math.max(0, this.sus - 6 * dt);
-        if (d > 80) this.lost += dt; else this.lost = Math.max(0, this.lost - dt * 2);
-        if (this.sus >= 100) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 15 метров.'); }
-        if (this.lost > 7) return failChapter('Цель потеряна', 'Серая машина скрылась. Не отставай дальше 80 метров.');
+        const d = pc.pos.distanceTo(t.pos), far = 80 + 15 * this.ease, rate = 24 * Math.max(0.45, 1 - 0.15 * this.ease);
+        this.grace = Math.max(0, this.grace - dt);
+        if (this.grace > 0) this.sus = 0;
+        else if (d < 4) this.sus = 100;
+        else if (d < 12) this.sus += rate * dt; else this.sus = Math.max(0, this.sus - 6 * dt);
+        if (d > far) this.lost += dt; else this.lost = Math.max(0, this.lost - dt * 2);
+        if (this.sus >= 100) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 12 метров.'); }
+        if (this.lost > 9 + this.ease) return failChapter('Цель потеряна', `Серая машина скрылась. Не отставай дальше ${far} метров.`);
         if (t.arrived && d < 60) {
           finishChapter(1, 100, [
             ['hero', 'Порт. Контейнеры, тишина и ни одной камеры. Идеальное логово.'],
@@ -7122,10 +7128,10 @@ function ch1(intro) {
       },
       hud() {
         const d = pc.pos.distanceTo(t.pos);
-        return { bars: [{ label: 'Подозрение', frac: this.sus / 100, color: 'var(--neon)' }], timer: this.lost > 0.3 ? `Теряешь цель: ${Math.ceil(7 - this.lost)}` : d < 15 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: this.lost > 0.3 || d < 15 };
+        return { bars: [{ label: 'Подозрение', frac: this.sus / 100, color: 'var(--neon)' }], timer: this.lost > 0.3 ? `Теряешь цель: ${Math.ceil(9 + this.ease - this.lost)}` : d < 12 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: this.lost > 0.3 || d < 12 };
       },
     };
-    setObjective('Езжай за серой машиной «Шакалов». Держись дальше 15 м, но не отставай больше чем на 80 м.');
+    setObjective(`Езжай за серой машиной «Шакалов». Держись дальше 12 м, но не отставай больше чем на ${MIS.far0 = 80 + 15 * MIS.ease} м.`);
   };
   if (!intro) return go();
   // prologue at warehouse 7: Vera explains the deal
