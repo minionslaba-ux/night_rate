@@ -529,7 +529,8 @@ async function pikabuReport(days: number) {
     + `🏎 <b>Скорость игры</b>: ${F.length ? `${fpsMed} к/с (в просадках ${fpsLowMed}), медленно (&lt;25) у ${slow} из ${F.length}` : 'данных пока нет (пишется с v115)'}\n\n`
     + `🎯 <b>Миссии</b>: начали ${mStart}, прошли ${mWin} · играли хоть одну: ${players((r) => r.ev === 'start')} · прошли хоть одну: ${players((r) => r.ev === 'win')} · дошли до 2-го эпизода: ${deep}\n`
     + `Чаще всего: ${[...topM].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${esc(k)} ${n}`).join(', ') || '—'}\n\n`
-    + `📺 <b>Реклама</b>: за награду показана ${ac('shown', /rewarded/)} из ${ac('try', /rewarded/)} · между миссиями ${ac('shown', /fullscreen/)} из ${ac('try', /fullscreen/)} · ошибок ${A.filter((r: any) => r.ev === 'error').length}\n\n`
+    + `📺 <b>Реклама</b>: за награду показана ${ac('shown', /rewarded/)} из ${ac('try', /rewarded/)} · между миссиями ${ac('shown', /fullscreen/)} из ${ac('try', /fullscreen/)} · ошибок ${A.filter((r: any) => r.ev === 'error').length}\n`
+    + `🎁 <b>Предложения</b>: «Стартовый набор» показан ${ac('offer', /starter shown/)}, нажали «Купить» ${ac('offer', /starter click/)} · просьба оценить: ${ac('offer', /rate shown/)}, согласились ${ac('offer', /rate yes/)}\n\n`
     + `💰 <b>Покупки</b>: ${real.length} на ${rub(real)} ₽ (${byProd(real)}) · покупателей ${new Set(real.map((r: any) => r.player_id)).size}`
     + (test.length ? `\n🧪 тестовых: ${test.length} (${byProd(test)})` : '')
     + `\nЗа всё время: ${(buysAll || []).length} покупок на ${rub(buysAll || [])} ₽ (до вычета доли Пикабу и налога)`;

@@ -142,6 +142,9 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
 .btn.daily { background: linear-gradient(160deg, #ff5ad1, #8a2be2); color: #fff; border: 0; }
 .btn.rw-btn { font-size: 14px; padding: 8px 14px; background: rgba(255,210,58,.12); border: 1px solid rgba(255,210,58,.55); color: #ffd23a; font-weight: 700; } .btn.rw-btn:disabled { opacity: .55; }
+.dcal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 14px 0 6px; } .dcal div { border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 7px 2px; text-align: center; font-size: 11px; line-height: 1.25; color: #aab; background: rgba(255,255,255,.04); }
+.dcal div b { display: block; font-size: 12px; color: #fff; margin-bottom: 3px; } .dcal div.got { opacity: .45; } .dcal div.now { border-color: #ffd23a; background: rgba(255,210,58,.14); color: #ffd23a; } .dcal div.big b { color: #ffd23a; }
+@media (max-width: 420px) { .dcal { gap: 3px; } .dcal div { font-size: 9.5px; padding: 5px 1px; } }
 .daily-top { margin: 8px 0 4px; padding-left: 0; list-style: none; max-height: 34vh; overflow: auto; }
 .daily-top li { padding: 3px 0; } .daily-top li.me { color: var(--taxi); font-weight: 700; }
 .chip .stars { color: #ffc43d; letter-spacing: 1px; margin-left: 4px; font-size: .9em; }
@@ -759,7 +762,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v131'; window.__errs = [];
+window.APP_VER = 'v132'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6426,7 +6429,7 @@ async function pkHandle(purchase, loud) {
   if (!$('prof').hidden) renderProfile();
   return true;
 }
-async function pkBuy(id) {
+async function pkBuy(id, from = 'shop') {
   const st = PK.sdk && PK.sdk.store; if (!st) { profMsg = 'Магазин Пикабу ещё загружается — попробуй через пару секунд.'; renderProfile(); return; }
   if (PK.buying && Date.now() - PK.buying < 20000) return; PK.buying = Date.now(); profMsg = 'Открываю оплату…'; renderProfile();
   try {
@@ -6438,7 +6441,7 @@ async function pkBuy(id) {
       if (PK.sdk.player && PK.sdk.player.isAuthorized === false) { profMsg = 'Для покупки нужно войти в аккаунт Пикабу (кнопка «Войти» вверху страницы).'; PK.buying = 0; renderProfile(); return; }
       profMsg = 'Открываю оплату…'; renderProfile();
     }
-    const r = await st.purchase({ productId: id, developerPayload: JSON.stringify({ from: 'shop' }) });
+    const r = await st.purchase({ productId: id, developerPayload: JSON.stringify({ from }) });
     if (!r || !r.success) {
       const why = r && r.reason;
       if (why === 'NON_CONSUMABLE_ALREADY_OWNED') { profMsg = 'Этот набор уже куплен — возвращаю его.'; await pkStoreInit(); }
@@ -6467,6 +6470,65 @@ function rwUpdate() { const b = $('btnRw'); if (!b) return; b.hidden = !rwOn(); 
 function rewardCoins() {
   if (!rwOn() || rwWait() !== 0) { rwUpdate(); return; }
   showAd(() => { const o = rwState(); o.n++; o.at = Date.now(); store.set('nf-rw', o); addCoins(RWD.coins); toast(`+${RWD.coins} монет — спасибо!`, 2.4); rwUpdate(); if (!$('prof').hidden) renderProfile(); });
+}
+// v132: what the menu offers after a mission — one thing per visit, never during play, never before the first finished mission:
+// 1) Pikabu: the starter pack once, after the first win; 2) Pikabu: a soft request to rate the game (after 3 and after 8 missions, at most twice —
+// the SDK has no rating call, the stars are on the game page); 3) everywhere: the daily reward, a 7-day streak (a missed day starts it again)
+const LOGIN_DAYS = [[100], [150], [150, 'nitro', 1], [250], [200, 'medkit', 2], [400], [1000, 'shield', 1]];
+const INV_NAME = { nitro: 'нитро', medkit: 'аптечки', shield: 'щит' };
+const mskDate = (k = 0) => new Date(Date.now() + 3 * 3600e3 + k * 864e5).toISOString().slice(0, 10);
+function dailyState() {
+  const o = PROF.daily || {}, today = mskDate(), yest = mskDate(-1);
+  const streak = o.d === today ? o.s : o.d === yest ? (o.s || 0) + 1 : 1;   // streak = the day number being claimed (or already claimed today)
+  return { done: o.d === today, streak, idx: (streak - 1) % 7 };
+}
+function dailyCell(r, i, st) {
+  const [c, item, n] = r, cls = i < st.idx || (st.done && i === st.idx) ? 'got' : i === st.idx ? 'now' : '';
+  return `<div class="${cls}${i === 6 ? ' big' : ''}"><b>День ${i + 1}</b>${c}${item ? `<br>+${n} ${INV_NAME[item]}` : ''}${cls === 'got' ? '<br>✓' : ''}</div>`;
+}
+function dailyOffer() {
+  const st = dailyState(); if (st.done) return false;
+  const [c, item, n] = LOGIN_DAYS[st.idx];
+  showModal(`<div class="kicker">Награда за вход</div><h2 class="h2">День ${st.idx + 1} из 7</h2>
+    <p class="lead">Заходи каждый день — награда растёт. На 7-й день — <b>1000 монет и щит</b>. Пропустишь день — счёт начнётся заново.</p>
+    <div class="dcal">${LOGIN_DAYS.map((r, i) => dailyCell(r, i, st)).join('')}</div>
+    <div class="btns"><button id="dlTake" class="btn primary" type="button">Забрать: ${c} монет${item ? ` и ${n} ${INV_NAME[item]}` : ''}</button></div>`, {
+    dlTake: () => {
+      const s2 = dailyState(); if (s2.done) { hideModal(); return; }
+      PROF.daily = { d: mskDate(), s: s2.streak }; if (item) PROF.inv[item] = (PROF.inv[item] || 0) + n;
+      walletAdd(c); saveProfile(); hideModal(); sfx.coin(); toast(`+${c} монет${item ? ` и ${n} ${INV_NAME[item]}` : ''}. До завтра!`, 2.6);
+      if (typeof updateProfChip === 'function') updateProfChip(); if (typeof updateBoostsHud === 'function') updateBoostsHud();
+    } });
+  return true;
+}
+function starterOffer() {
+  if (!PIKABU || !PK_DIRECT || PROF.god || (PROF.pkOwn && PROF.pkOwn.starter) || store.get('nf-offer-starter')) return false;
+  store.set('nf-offer-starter', Date.now()); adLog('offer', 'pikabu starter shown');
+  const k = PACKS.starter, price = (PK.prices && PK.prices.starter) || k.rub + ' ₽';
+  showModal(`<div class="kicker">Первая миссия пройдена!</div><h2 class="h2">${k.name}</h2>
+    <p class="lead">Чтобы дальше было проще: хэтч «Шустрик» — быстрый и вёрткий, 3 нитро для погонь, 3 аптечки и 2000 монет на улучшения.</p>
+    <p class="lead" style="opacity:.75;font-size:14px">Это предложение показывается один раз. Потом набор останется в «Профиль и магазин».</p>
+    <div class="btns"><button id="stBuy" class="btn primary" type="button">Купить за ${price}</button><button id="stNo" class="btn" type="button">Не сейчас</button></div>`, {
+    stBuy: () => { hideModal(); adLog('offer', 'pikabu starter click'); pkBuy('starter', 'offer'); },
+    stNo: () => hideModal() });
+  return true;
+}
+function rateAsk() {
+  if (!PIKABU) return false;
+  const o = store.get('nf-rate') || { n: 0 }, done = missionsDone();
+  if (o.yes || o.n >= 2 || done < (o.n ? 8 : 3)) return false;
+  store.set('nf-rate', { n: o.n + 1, at: Date.now() }); adLog('offer', 'pikabu rate shown');
+  showModal(`<div class="kicker">Небольшая просьба</div><h2 class="h2">Нравится «Ночной тариф»?</h2>
+    <p class="lead">Поставь игре оценку на её странице на Пикабу. Оценки поднимают игру в каталоге — так её найдут новые водители, а у нас будет повод делать новые миссии.</p>
+    <div class="btns"><button id="rtYes" class="btn primary" type="button">Хорошо, оценю</button><button id="rtNo" class="btn" type="button">Позже</button></div>`, {
+    rtYes: () => { store.set('nf-rate', { n: o.n + 1, yes: 1, at: Date.now() }); adLog('offer', 'pikabu rate yes'); hideModal(); toast('Спасибо! Оценка — на странице игры, под окном с игрой.', 3.2); },
+    rtNo: () => hideModal() });
+  return true;
+}
+let nudgeAt = 0;
+function menuNudge() {
+  if (state.mode !== 'preview' || !$('modal').hidden || !PROF || !PROF.st || missionsDone() < 1 || Date.now() - nudgeAt < 20e3) return;
+  if (starterOffer() || rateAsk() || dailyOffer()) nudgeAt = Date.now();
 }
 function adCountdown(done) {
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
@@ -14122,7 +14184,7 @@ function showPreview() {
   pvEnemy.g.visible = true; pc.g.visible = true; showDisc.visible = false; arrow.visible = false; setBeam(null);
   if (showFig) showFig.g.visible = false;
   pv.x = -140; pv.shot = 0; pv.shotT = 0; snapCam = true;
-  renderMenuPath(); setTimeout(mrgPlace, 300);
+  renderMenuPath(); setTimeout(mrgPlace, 300); setTimeout(menuNudge, 1200);
 }
 function nextShot() { pv.shot = (pv.shot + 1) % 4; pv.shotT = 0; snapCam = true; }
 function updatePreview(dt) {
@@ -14429,7 +14491,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { menuNudge, dailyState, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
