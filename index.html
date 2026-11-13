@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v126'; window.__errs = [];
+window.APP_VER = 'v127'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1035,7 +1035,7 @@ try { const o = JSON.parse(localStorage.getItem('nf-perf') || 'null'); if (o && 
 // down from step 2 took ~27 s of lag on every start («сильно подвисает на старте»)
 const FEW_CORES = !isTouch && (navigator.hardwareConcurrency || 4) <= 2;
 const PERF_FLOOR = OLD_IOS || LITE_MEM ? 3 : FEW_CORES && (WEAK_DESK || WEAK_GPU) ? 5 : WEAK_DESK ? 4 : FEW_CORES ? 3 : WEAK_GPU ? 1 : 0;
-const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(5, Math.max(PERF_FLOOR, PERF_SAVED)));
+const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(6, Math.max(PERF_FLOOR, PERF_SAVED)));
 const perf = { t: 0, frames: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0, view: 0, every: 1,
   st: 0, sf: 0, low: 99, sent: false };
 function perfSave() { try { localStorage.setItem('nf-perf', JSON.stringify({ l: perf.level, v: window.APP_VER })); } catch (e) { /* storage unavailable */ } }
@@ -1050,10 +1050,13 @@ function perfApply() {
   // draw distance: the far blocks hide in the fog (half the draw calls at 170 m); the sky dome shrinks with it so the stars stay
   // step 5 (still under 26 fps at step 4): no shadows at all, the city ends at 130 m, resolution 0.7
   moon.castShadow = L < 5;
-  perf.view = L >= 5 ? 130 : L >= 3 ? 170 : L >= 2 ? 230 : 0; camera.far = perf.view || 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(perf.view ? (perf.view - 15) / 800 : 1);
+  // step 6 (v127, still under 22 fps at step 5 — Mali phones and Chromebooks, old Intel HD): the city ends at 90 m, resolution 0.55,
+  // at most 4 cars and 4 passers-by around
+  perf.cap = L >= 6 ? 4 : 99;
+  perf.view = L >= 6 ? 90 : L >= 5 ? 130 : L >= 3 ? 170 : L >= 2 ? 230 : 0; camera.far = perf.view || 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(perf.view ? (perf.view - 15) / 800 : 1);
   // parked cars, lamps and benches (instanced kit models, ~0.5 M triangles) stop casting shadows
   scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = L < 3; });
-  const pr = L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
+  const pr = L >= 6 ? Math.min(DPR, 0.55) : L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
   if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
   if (L >= 4) composer = null;
 }
@@ -1090,7 +1093,8 @@ function checkPerf(raw) {
   if (fps >= 30) { perf.slow = 0; return; }
   if (perf.level === 3 && fps >= 22) { perf.slow = 0; return; }   // the last step (no post-processing at all) only when it is really bad
   if (perf.level === 4 && fps >= 26) { perf.slow = 0; return; }   // step 5 only when step 4 is still too slow
-  if (++perf.slow < (early ? 1 : 2) || perf.level >= 5) return;
+  if (perf.level === 5 && fps >= 22) { perf.slow = 0; return; }   // step 6 only when step 5 is still under 22 fps
+  if (++perf.slow < (early ? 1 : 2) || perf.level >= 6) return;
   perf.slow = 0; perf.level++; perf.cool = 1; perfApply(); perfSave();
 }
 
@@ -3965,8 +3969,9 @@ function updateLife(dt) {
   const active = state.mode === 'drive' || state.mode === 'foot' || state.mode === 'preview' || state.mode === 'dialog';
   const near = focus;
   LIFE.shotT += dt;
+  let ci = 0;
   for (const m of LIFE.cars) {
-    if (!active) { m.g.visible = false; continue; }
+    if (!active || ci++ >= perf.cap) { m.g.visible = false; continue; }
     if (!m.g.visible || (!m.a && !m.zr) || Math.hypot(m.pos.x - near.x, m.pos.z - near.z) > 170 || inArena(m.pos.x, m.pos.z, 12) || (m.zr && Math.abs(near.x) < 185 && Math.abs(near.z) < 185)) { if (!spawnTraffic(m, near)) continue; }
     if (m.zr) {
       const Z = m.zr; let want = m.vmax * 0.8;
@@ -4005,8 +4010,9 @@ function updateLife(dt) {
     for (const k of [-1, 1]) { const o = { pos: { x: m.pos.x + fx * k, z: m.pos.z + fz * k }, wait: 0 }; bumpPlayer(o, 3.0); if (o.wait) m.wait = 1.5; }
   }
   let woke = false;   // at most one new passer-by per frame, however slow the frame
+  let pi = 0;
   for (const p of LIFE.peds) {
-    if (!active) { p.g.visible = false; continue; }
+    if (!active || pi++ >= perf.cap) { p.g.visible = false; continue; }
     if (p.wakeAt) { if (woke || performance.now() < p.wakeAt) { p.g.visible = false; continue; } p.wakeAt = 0; woke = true; }
     if (p.zr) { routeAt(p.zr.r, p.zr.s, p.zr.off, _lq); if (Math.hypot(_lq.x - near.x, _lq.z - near.z) > 95 || (Math.abs(near.x) < 185 && Math.abs(near.z) < 185)) { p.zr = null; p.g.visible = false; } }
     if (!p.g.visible || (!p.zr && pedPos(p, _lq) === null) || (!p.zr && (Math.hypot(_lq.x - near.x, _lq.z - near.z) > 95 || inArena(_lq.x, _lq.z, 6)))) { if (!spawnPed(p, near)) continue; }
@@ -6213,9 +6219,10 @@ function runEnd(result, reason) {
 
 // ---------------- damage ----------------
 let hurt = 0;
+const NOVICE = { on: false };   // the first ride of a player with no mission won (see startMission)
 function damagePlayer(d) {
   if (state.act === 1 && typeof ONL !== 'undefined' && ONL.on) { careWear(d); if (d >= 1.5) HITS.n++; }
-  else if (d > 0) { d *= diffMult(); DIFF.dmg += d; }
+  else if (d > 0) { d *= diffMult() * (NOVICE.on && state.ep === 1 ? 0.5 : 1); DIFF.dmg += d; }
   if (state.invuln > 0 || PROF.god) return;
   if (state.act === 1) { pc.hp -= d * P.carArmor; } else { hero.hp -= d * P.footArmor; }
   hurt = Math.min(1, hurt + d / 20); shake = Math.min(1.2, shake + 0.15);
@@ -6653,7 +6660,7 @@ function updateDrive(dt) {
   state.spawnT -= dt;
   const alive = enemyCars.filter((e) => !e.dead && !e.script).length;
   const progress = 1 - clamp(pc.pos.distanceTo(GATE) / 480, 0, 1);
-  const maxAlive = state.ep === 1 ? (progress > 0.55 ? 4 : progress > 0.25 ? 3 : 2) : (MIS && MIS.chase ? MIS.chase.max : 0);
+  const maxAlive = state.ep === 1 ? (NOVICE.on ? (progress > 0.4 ? 2 : 1) : progress > 0.55 ? 4 : progress > 0.25 ? 3 : 2) : (MIS && MIS.chase ? MIS.chase.max : 0);
   if (state.spawnT <= 0 && alive < maxAlive) { spawnEnemyCar(); state.spawnT = rand(3.5, 6); }
   for (const e of enemyCars) {
     if (e.dead) continue;
@@ -14116,6 +14123,9 @@ function startMission() {
   if (medkit) { scene.remove(medkit); medkit = null; }
   state.ep = 1; MIS = null; setMood('night');
   setupAct1(); state.act = state.act || 1; missionLog('start', null, { type: 'ep1', title: 'Эпизод 1 · Кейс' });
+  // v127: a player with no mission won yet gets a gentle first ride — the chase starts later, fewer pursuers, half the damage —
+  // so the first win comes in a couple of minutes (on Pikabu only 1 of 11 newcomers finished it)
+  NOVICE.on = missionsDone() === 0; if (NOVICE.on) state.spawnT = 14;
   state.mode = 'drive';
   // v126: a new player started by the game itself goes straight to the wheel — all of them quit during this dialog;
   // the gist of it in one line instead (the dialog stays for a start from the menu)
