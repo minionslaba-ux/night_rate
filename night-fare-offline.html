@@ -759,7 +759,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v130'; window.__errs = [];
+window.APP_VER = 'v131'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6129,7 +6129,7 @@ const MLOG = { sid: (() => { try { let v = localStorage.getItem('nf-sid'); if (!
 function missionLog(ev, reason, extra) {
   try {
     if (MIS && MIS.online) return;
-    if (ev === 'start') { MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
+    if (ev === 'start') { SECOND.used = false; SECOND.fn = null; MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
       MLOG.gt0 = state.time; MLOG.dmg0 = DIFF.dmg; MLOG.par = (extra && extra.par) || 150;
       { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 2500); } }
     else { if (!MLOG.open) return; MLOG.open = false; }
@@ -7099,11 +7099,31 @@ function finishChapter(n, coins, lines, next) {
   clearBullets(); setEngine(0, false); pc.vel.set(0, 0, 0);
   playDialog(lines, next);
 }
+// v131: «ещё шанс за рекламу» after a failed mission (time out, spotted, target lost): the mission that can go on hands over how to
+// (secondSet, called right at the fail check — +25 s, or the suspicion and the distance reset); once per try, from the same spot
+const SECOND = { fn: null, used: false, mode: 'drive' };
+function secondSet(fn) { SECOND.fn = fn; return true; }
 function failChapter(title, text) {
-  if (MIS && MIS.online) { taskFail(title); return; }
+  if (MIS && MIS.online) { SECOND.fn = null; taskFail(title); return; }
+  const second = !SECOND.used && SECOND.fn ? SECOND.fn : null; SECOND.fn = null;
+  SECOND.mode = state.mode === 'foot' ? 'foot' : 'drive';
   sfx.fail(); skid(0);
   runEnd('fail', title);
   state.mode = 'dead'; setEngine(0, false);
+  if (second) {
+    const timer = /Не успел|Не уложился|Время/.test(title + text);
+    showModal(`
+    <div class="kicker">${state.ep === 90 ? 'Задание дня' : `Эпизод ${state.ep} · ${MIS.title}`}</div>
+    <h2 class="h2 bad">${title}</h2>
+    <p class="lead">${text}</p>
+    <div class="btns"><button id="mSecond" class="btn primary" type="button">${PROF.noAds ? 'Ещё шанс' : 'Ещё шанс за рекламу'} · ${timer ? '+25 секунд' : 'с этого места'}</button><button id="mRetry" class="btn" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>
+    <div class="note">Ещё шанс — один раз за попытку: миссия продолжится с того же места.</div>`, {
+      mSecond: () => { hideModal(); showAd(() => { SECOND.used = true; try { second(); } catch (e) { /* the mission moved on */ } MLOG.open = true; state.mode = SECOND.mode; toast(timer ? '+25 секунд — жми!' : 'Ещё шанс — не упусти!', 2); }); },
+      mRetry: () => { hideModal(); startChapter(state.ch); },
+      mMenu: () => { hideModal(); showSelect(); },
+    });
+    return;
+  }
   showModal(`
     <div class="kicker">${state.ep === 90 ? 'Задание дня' : `Эпизод ${state.ep} · ${MIS.title}`}</div>
     <h2 class="h2 bad">${title}</h2>
@@ -7138,8 +7158,8 @@ function ch1(intro) {
         else if (d < 4) this.sus = 100;
         else if (d < 12) this.sus += rate * dt; else this.sus = Math.max(0, this.sus - 6 * dt);
         if (d > far) this.lost += dt; else this.lost = Math.max(0, this.lost - dt * 2);
-        if (this.sus >= 100) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 12 метров.'); }
-        if (this.lost > 9 + this.ease) return failChapter('Цель потеряна', `Серая машина скрылась. Не отставай дальше ${far} метров.`);
+        if (this.sus >= 100 && secondSet(((sp) => () => { this.sus = 0; this.lost = 0; this.grace = 4; t.speed = sp; })(t.speed))) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 12 метров.'); }
+        if (this.lost > 9 + this.ease && secondSet(() => { this.lost = 0; this.sus = 0; this.grace = 4; })) return failChapter('Цель потеряна', `Серая машина скрылась. Не отставай дальше ${far} метров.`);
         if (t.arrived && d < 60) {
           finishChapter(1, 100, [
             ['hero', 'Порт. Контейнеры, тишина и ни одной камеры. Идеальное логово.'],
@@ -8573,7 +8593,7 @@ const GEN = {
           if (loot < c.lootMin) return failChapter('Добыча потеряна', `Осталось меньше ${c.lootMin} млн: так не расплатиться с таксистами. Меньше подставляйся под пули и тараны.`);
         }
         lastHp = pc.hp;
-        if (left > 0) { left -= dt; if (left <= 0) return failChapter('Не успели', `Время вышло: «${P_[leg].name}» не дождались. Попробуй другой путь.`); }
+        if (left > 0) { left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успели', `Время вышло: «${P_[leg].name}» не дождались. Попробуй другой путь.`); }
         if (pc.pos.distanceTo(P_[leg].v) < 11) {
           const q = P_[leg]; leg++; pc.vel.set(0, 0, 0);
           if (leg >= P_.length) { if (c.loot) { addCoins(Math.round(loot * 10)); profMax('loot', loot); toast(`Довезли: ${loot.toFixed(1)} млн`, 2); } return done(); }
@@ -8606,8 +8626,8 @@ const GEN = {
         const d = pc.pos.distanceTo(t.pos);
         if (d < 6) sus = 100; else if (d < 15) sus += 24 * dt; else sus = Math.max(0, sus - 6 * dt);
         if (d > 80) lost += dt; else lost = Math.max(0, lost - dt * 2);
-        if (sus >= 100) { t.speed = 40; return failChapter('Тебя заметили', 'Цель поняла, что за ней хвост, и ушла переулками. Держись дальше 15 метров.'); }
-        if (lost > 7) return failChapter('Цель потеряна', 'Машина скрылась. Не отставай дальше 80 метров.');
+        if (sus >= 100 && secondSet(((sp) => () => { sus = 0; lost = 0; t.speed = sp; })(t.speed))) { t.speed = 40; return failChapter('Тебя заметили', 'Цель поняла, что за ней хвост, и ушла переулками. Держись дальше 15 метров.'); }
+        if (lost > 7 && secondSet(() => { lost = 0; sus = 0; })) return failChapter('Цель потеряна', 'Машина скрылась. Не отставай дальше 80 метров.');
         if (t.arrived && d < 60) done();
       },
       hud() { const d = pc.pos.distanceTo(t.pos); return { bars: [{ label: 'Подозрение', frac: sus / 100 }], timer: lost > 0.3 ? `Теряешь цель: ${Math.ceil(7 - lost)}` : d < 15 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: lost > 0.3 || d < 15 }; } };
@@ -11779,7 +11799,7 @@ Object.assign(GEN, {
     show();
     return { title, chase: { max: 0 }, get navName() { return `Точка ${i + 1}/${P_.length}`; }, navGoal: () => P_[i],
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Не уложился', 'Время заезда вышло. Срезай повороты и держи газ.');
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не уложился', 'Время заезда вышло. Срезай повороты и держи газ.');
         if (pc.pos.distanceTo(P_[i]) < 9) { i++; sfx.bell(); if (i >= P_.length) return done(); left += bonus; toast(`Точка ${i}/${P_.length} · +${bonus} с`, 0.9); show(); }
       },
       hud() { return { timer: `${fmt(left)} · точка ${i + 1}/${P_.length}`, bad: left < 10 }; } };
@@ -11794,7 +11814,7 @@ Object.assign(GEN, {
     setObjective(`Фотоохота: ${c.names.join(', ')}. Остановись у каждого места.`);
     return { title, chase: { max: 0 }, get navName() { const k = nextI(); return k >= 0 ? c.names[k] : ''; }, navGoal: () => { const k = nextI(); return k >= 0 ? P_[k] : pc.pos; },
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Свет ушёл', 'Время вышло — фотограф уехал без снимков.');
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Свет ушёл', 'Время вышло — фотограф уехал без снимков.');
         const k = nextI(); if (k < 0) return; setBeam(P_[k]);
         if (pc.pos.distanceTo(P_[k]) < 13) arriveBrake(dt, 0.15); if (pc.pos.distanceTo(P_[k]) < 13 && kmh() < 16) { hold += dt; if (hold > 1.0) { hold = 0; got[k] = true; scene.remove(marks[k]); sfx.key(); camFlash(); toast(`Снимок: ${c.names[k]}`, 1.2); if (got.every(Boolean)) return done(); } }
         else hold = 0;
@@ -11806,7 +11826,7 @@ Object.assign(GEN, {
     let left = c.secs, score = 0, combo = 0; setObjective(`Дрифт-шоу: набери ${c.score} очков заноса.`);
     return { title, chase: { max: 0 }, navName: 'Дрифт', driftShow: true, navGoal: () => pc.pos,
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Мало дыма', `Набрано ${Math.round(score)} из ${c.score}. Разгоняйся сильнее и держи занос дольше.`);
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Мало дыма', `Набрано ${Math.round(score)} из ${c.score}. Разгоняйся сильнее и держи занос дольше.`);
         const side = Math.abs(pc.vr || 0), sp = Math.abs(pc.vf || 0);
         if (side > 3 && sp > 8) { combo = Math.min(3, combo + dt * 0.4); score += side * sp * dt * 0.12 * (1 + combo); } else combo = Math.max(0, combo - dt);
         if (score >= c.score) done();
@@ -12111,7 +12131,7 @@ Object.assign(GEN, {
     show();
     return { title, noFire: true, noFireMsg: 'Тут не стреляют', chase: { max: 0 }, get spot() { return S[i]; }, get navName() { return S[i] ? S[i].name : ''; }, navGoal: () => (S[i] ? S[i].v : pc.pos),
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Не успел', 'Время вышло. Подъезжай медленно, выравнивай машину заранее, а в рамке — тормози.');
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успел', 'Время вышло. Подъезжай медленно, выравнивай машину заранее, а в рамке — тормози.');
         const q = S[i], f = new V3(Math.sin(q.hh), 0, Math.cos(q.hh)), r = new V3(Math.cos(q.hh), 0, -Math.sin(q.hh)), d = pc.pos.clone().sub(q.v);
         const along = d.dot(f), side = d.dot(r), w = q.w || 3.6, l = q.l || 6.8;
         let err = Math.abs(wrapA(pc.h - q.hh)); if (q.any) err = Math.min(err, PI - err); else if (q.rev) err = Math.abs(wrapA(pc.h - q.hh - PI));
@@ -12133,7 +12153,7 @@ Object.assign(GEN, {
     const stray = () => { let b = null, bd = 1e9; for (const g of geese) if (!g.pen) { const d = g.pos.distanceTo(pc.pos); if (d < bd) { bd = d; b = g; } } return b; };
     return { title, geese, gate, noFire: true, noFireMsg: 'Это гуси, а не бандиты', chase: { max: 0 }, navName: 'Гуси', navGoal: () => { const g = stray(); return g ? g.pos : gate; },
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Гуси разбежались', 'Время вышло. Подъезжай медленно и сзади: гуси бегут прочь от машины — направляй их к калитке.');
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Гуси разбежались', 'Время вышло. Подъезжай медленно и сзади: гуси бегут прочь от машины — направляй их к калитке.');
         const sp = Math.hypot(pc.vel.x, pc.vel.z);
         for (const g of geese) {
           const dx = g.pos.x - pc.pos.x, dz = g.pos.z - pc.pos.z, d = Math.hypot(dx, dz) || 1;
@@ -12167,7 +12187,7 @@ Object.assign(GEN, {
     const next = () => { let b = -1, bd = 1e9; boxes.forEach((m, k) => { if (!got[k]) { const d = Math.hypot(m.x - pc.pos.x, m.z - pc.pos.z); if (d < bd) { bd = d; b = k; } } }); return b; };
     return { title, noFire: true, noFireMsg: 'Тут не стреляют', chase: { max: 0 }, navName: 'Почтовый ящик', navGoal: () => { const k = next(); return k >= 0 ? vV([boxes[k].x, boxes[k].z]) : pc.pos; },
       update(dt) {
-        left -= dt; warn -= dt; if (left <= 0) return failChapter('Утро наступило', `Газеты не доехали до ${got.filter((g) => !g).length} домов. Держи скорость ниже ${c.maxKmh} и не пропускай ящики.`);
+        left -= dt; warn -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Утро наступило', `Газеты не доехали до ${got.filter((g) => !g).length} домов. Держи скорость ниже ${c.maxKmh} и не пропускай ящики.`);
         boxes.forEach((m, k) => {
           if (got[k] || Math.hypot(m.x - pc.pos.x, m.z - pc.pos.z) > 7.5) return;
           if (kmh() > c.maxKmh) { if (warn <= 0) { warn = 1.2; toast('Быстро! Газета улетела в кусты', 1); } return; }
@@ -12244,7 +12264,7 @@ Object.assign(GEN, {
     };
     return { title, noFire: true, noFireMsg: 'Тут не стреляют', chase: { max: 0 }, get navName() { return target().name; }, navGoal: () => target().v,
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Не успели', `Время вышло: ждут ещё ${total - saved - aboard}. Бери по ${cap} и не теряй ни секунды.`);
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успели', `Время вышло: ждут ещё ${total - saved - aboard}. Бери по ${cap} и не теряй ни секунды.`);
         if (fire) for (let k = 0; k < 2; k++) { if (Math.random() < dt * 40) spawnP(fire.clone().add(new V3(rand(-22, 22), rand(1, 7), rand(-14, 14))), { color: pick([0xff6a1a, 0xffa030, 0xffd060]), size: rand(0.8, 1.6), vel: new V3(rand(-1, 1), rand(4, 8), rand(-1, 1)), life: 0.9, add: true }); if (Math.random() < dt * 14) spawnP(fire.clone().add(new V3(rand(-20, 20), 9, rand(-12, 12))), { color: 0x2a2a30, size: 2.2, vel: new V3(rand(-1, 1), 5, rand(-1, 1)), life: 3, grow: 3, opacity: 0.55 }); }
         const slow = kmh() < 22;
         let at = null; for (const q of H) if (q.n > 0 && aboard < cap && q.v.distanceTo(pc.pos) < 12) at = q;
@@ -12267,7 +12287,7 @@ function GEN_many(c, title, done, smash) {
   setObjective(smash ? `Снеси преграды: ${P_.length}. Скорость больше ${c.minKmh} км/ч.` : `Собери всё: ${P_.length} меток.`);
   return { title, chase, get navName() { return smash ? 'Преграда' : 'Метка'; }, navGoal: () => { const k = nextI(); return k >= 0 ? P_[k] : pc.pos; },
     update(dt) {
-      left -= dt; warnT -= dt; if (left <= 0) return failChapter('Не успел', `Время вышло: осталось ${got.filter((g) => !g).length}.`);
+      left -= dt; warnT -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успел', `Время вышло: осталось ${got.filter((g) => !g).length}.`);
       const k = nextI(); if (k < 0) return; setBeam(P_[k]);
       if (pc.pos.distanceTo(P_[k]) < (smash ? 4.2 : 5)) {
         if (smash && kmh() < c.minKmh) { if (warnT <= 0) { warnT = 1.2; toast(`Слабо! Нужно больше ${c.minKmh} км/ч`, 1.1); } return; }
@@ -12518,7 +12538,7 @@ Object.assign(GEN, {
           let got = 0; for (const q of st.points) { if (q.done) { got++; continue; } if (nearPt(q)) { q.t += dt; if (q.t >= (g === 'bombs' ? 2.2 : 1.6)) { q.done = true; q.mark.g.visible = g === 'charges'; toast(g === 'bombs' ? 'Обезврежено!' : 'Заряд установлен', 1); sfx.key(); } } else q.t = Math.max(0, q.t - dt); }
           st.got = got; if (S.drip) spawnDrip(S.drip);
           const nx = st.points.find((q) => !q.done); setBeam(nx ? new V3(nx.x, 0, nx.z) : null);
-          if (g === 'bombs') { st.left -= dt; if (st.left <= 0) return failChapter('Взрыв', 'Не успел. Обезвреживай ближние бомбы первыми и не ввязывайся в перестрелки.'); }
+          if (g === 'bombs') { st.left -= dt; if (st.left <= 0 && secondSet(() => { st.left = 25; })) return failChapter('Взрыв', 'Не успел. Обезвреживай ближние бомбы первыми и не ввязывайся в перестрелки.'); }
           setObjective(`${S.obj || S3_GOAL_TEXT[g]} — ${got}/${S.n}${g === 'bombs' ? ' · ' + fmt(st.left) : ''}. Стой рядом.`);
           if (got >= S.n) { if (g === 'charges') { for (const q of st.points) explode(new V3(q.x, 0, q.z), 0.8); } goalDone(); }
         } else if (g === 'hack' || g === 'hold' || g === 'defend') {
@@ -12535,7 +12555,7 @@ Object.assign(GEN, {
         } else if (g === 'boss') { if (st.boss && st.boss.dead && clear && waveDone) goalDone(); }
         else if (g === 'elevator' || g === 'reach') {
           if (!st.exit) { const ex = S.exitAt; st.exit = new V3(ex[0], 0, ex[1]); openTo(st.exit); setBeam(st.exit); st.left = S.secs || 0; }
-          if (S.secs) { st.left -= dt; setObjective(`${S.obj || S3_GOAL_TEXT[g]} — ${fmt(st.left)}.`); if (st.left <= 0) return failChapter('Не успел', 'Двери закрылись. Беги, не останавливаясь у каждого врага.'); }
+          if (S.secs) { st.left -= dt; setObjective(`${S.obj || S3_GOAL_TEXT[g]} — ${fmt(st.left)}.`); if (st.left <= 0 && secondSet(() => { st.left = 25; })) return failChapter('Не успел', 'Двери закрылись. Беги, не останавливаясь у каждого врага.'); }
           if (S.drip) spawnDrip(S.drip);
           if (hero.pos.distanceTo(st.exit) < 3.2) { setBeam(null); st.exit = null; enter(); }
         }
@@ -13057,7 +13077,7 @@ Object.assign(GEN, {
     const onRoof = (p) => pieces.some(([x0, z0, x1, z1]) => p.x > x0 - 0.35 && p.x < x1 + 0.35 && p.z > z0 - 0.35 && p.z < z1 + 0.35);
     setObjective(c.obj || 'По крышам: иди по доскам и кровлям к зелёной метке. Шаг мимо — и падение.');
     return { title, update(dt) {
-      left -= dt; if (left <= 0) return failChapter('Не успел', 'Время вышло. Не останавливайся на каждой доске.');
+      left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успел', 'Время вышло. Не останавливайся на каждой доске.');
       if (fallT > 0) { fallT -= dt; if (fallT <= 0) { hero.pos.copy(checks[ci]); hero.g.position.copy(hero.pos); } return; }
       if (!onRoof(hero.pos)) { falls++; sfx.crash(4); toast(falls > (c.falls || 3) ? 'Сорвался…' : `Сорвался! Назад к трубе (${falls}/${c.falls || 3})`, 1.6); if (falls > (c.falls || 3)) return failChapter('Падение', 'Смотри под ноги: доски узкие, идти по ним надо ровно.'); fallT = 0.7; hero.hp = Math.max(1, hero.hp - 10); return; }
       const T = checks[ci + 1];
@@ -13079,7 +13099,7 @@ Object.assign(GEN, {
     setObjective(`Колокола: проезжай ворота, пока звонит колокол (они зелёные ${open} с из каждых ${per}). Красные — минус ${c.pen || 6} с.`);
     return { title, chase: { max: 0 }, noFire: true, navName: 'Ворота', navGoal: () => (gates[gi] ? new V3(gates[gi].x, 0, gates[gi].z) : pc.pos),
       update(dt) {
-        t += dt; left -= dt; if (left <= 0) return failChapter('Колокола отзвонили', 'Не успел. Подстраивай скорость под звон: подъезжай, когда колокол вот-вот ударит.');
+        t += dt; left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Колокола отзвонили', 'Не успел. Подстраивай скорость под звон: подъезжай, когда колокол вот-вот ударит.');
         const phase = t % per, green = phase < open, ring = Math.floor(t / per);
         if (ring !== lastRing) { lastRing = ring; sfx.bell(); }
         for (const q of gates) q.bar.material.color.setRGB(green ? 0.4 : 3, green ? 3 : 0.3, green ? 0.6 : 0.3);
@@ -13109,7 +13129,7 @@ Object.assign(GEN, {
     setObjective(`Здесь едут по ЛЕВОЙ стороне. Довези Гарри по ${S.length} адресам и не выезжай на правую полосу: нарушений можно не больше ${c.fouls}.`);
     return { title, noFire: true, noFireMsg: 'Гарри в машине: без стрельбы', chase: { max: 0 }, navName: 'Адрес', navGoal: () => S[Math.min(si, S.length - 1)].v,
       update(dt) {
-        left -= dt; cool -= dt; if (left <= 0) return failChapter('Не успели', 'Гарри опоздал на все вызовы. Держи левую сторону, но не сбавляй.');
+        left -= dt; cool -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успели', 'Гарри опоздал на все вызовы. Держи левую сторону, но не сбавляй.');
         const sd = laneSide(LONDON);
         if ((pc.vf || 0) > 4 && sd < -0.8) { wrongT += dt; if (wrongT > 1.3 && cool <= 0) { fouls++; wrongT = 0; cool = 2.5; sfx.crash(3); toast(fouls > c.fouls ? 'Опять по правой!' : `По правой стороне! Нарушение ${fouls}/${c.fouls}`, 1.6); if (fouls > c.fouls) return failChapter('Лицензия под угрозой', 'Слишком много езды по правой стороне. В Лондоне держатся левее: на перекрёстке поворачивай в ближнюю левую полосу.'); } }
         else wrongT = Math.max(0, wrongT - dt * 2);
@@ -13126,7 +13146,7 @@ Object.assign(GEN, {
     setObjective(`Туман. Навигатор ослеп: ищи маяки по сигналу. Чем чаще писк и полнее шкала — тем ближе. Маяков: ${P_.length}.`);
     return { title, fog: 1, noFire: true, chase: { max: 0 }, navName: 'Сигнал', navGoal: () => pc.pos,
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Заблудились в тумане', 'Следи за подсказкой «слева / справа» и за шкалой: если она пустеет, разворачивайся.');
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Заблудились в тумане', 'Следи за подсказкой «слева / справа» и за шкалой: если она пустеет, разворачивайся.');
         arrow.visible = false; setBeam(null);
         const p = P_[i], d = pc.pos.distanceTo(p.v); k = clamp(1 - d / 420, 0, 1); hint = sideWord(wrapA(Math.atan2(p.v.x - pc.pos.x, p.v.z - pc.pos.z) - pc.h));
         L[i].g.visible = true; L[i].l.scale.setScalar(1 + 0.4 * Math.sin(state.t * 6));
@@ -13144,7 +13164,7 @@ Object.assign(GEN, {
     setObjective(`Ночной автобус: ${S.length} остановок. Встань в жёлтый круг и постой 2 секунды. Резкие удары — пассажиры наверху падают (можно ${stars - 1}).`);
     return { title, speedCap: c.cap || 17, noFire: true, noFireMsg: 'Автобус с пассажирами: без стрельбы', chase: { max: 0 }, navName: 'Остановка', navGoal: () => S[Math.min(si, S.length - 1)].v,
       update(dt) {
-        left -= dt; bumpCd -= dt; if (left <= 0) return failChapter('Автобус выбился из графика', 'Не тормози задолго до остановки и не стой лишнего.');
+        left -= dt; bumpCd -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Автобус выбился из графика', 'Не тормози задолго до остановки и не стой лишнего.');
         const v = Math.abs(pc.vf || 0);
         if (prevV > 9 && prevV - v > 8 && bumpCd <= 0) { stars--; bumpCd = 1.5; toast(stars > 0 ? `Удар! Пассажиры недовольны (осталось ${stars})` : 'Удар! Пассажиры выходят', 1.6); if (stars <= 0) return failChapter('Пассажиры вышли', 'Двухэтажный автобус высокий: входи в повороты медленно и не бейся о бордюры.'); }
         prevV = v;
@@ -13259,7 +13279,7 @@ Object.assign(GEN, {
     for (let k = 0; k < (c.guards || 2); k++) { const [i, j] = pick(cells.slice(3)) || [nx >> 1, 1]; spawnEnemy(ox + (i + 0.5) * cs, oz + (j + 0.5) * cs, false, { look: factionLook('zero'), react: 1.6, speed: 0.6 }); }
     setObjective(`Лабиринт: найди ${pages.length} листа бухгалтерии Ноля в тупиках, потом выход в дальнем углу. Сторожа ходят по аллеям.`);
     return { title, update(dt) {
-      left -= dt; if (left <= 0) return failChapter('Рассвет в лабиринте', 'Держись одной рукой за изгородь — так обходится любой лабиринт.');
+      left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Рассвет в лабиринте', 'Держись одной рукой за изгородь — так обходится любой лабиринт.');
       for (const p of pages) { if (p.got) continue; p.m.rotation.y += dt * 2; if (hero.pos.distanceTo(p.v) < 1.6) { p.got = true; scene.remove(p.m); sfx.key(); toast(`Лист бухгалтерии ${pages.filter((q) => q.got).length}/${pages.length}`, 1.4); } }
       const got = pages.every((p) => p.got);
       if (got && !exitMk) { exitMk = tMark(exit.x, exit.z, 0x4dffa6, 4); setObjective('Все листы у тебя. Выход — в дальнем углу лабиринта.'); }
@@ -13276,7 +13296,7 @@ Object.assign(GEN, {
     setObjective(`${c.obj || 'Через разводной мост на ту сторону.'} Мост начнёт подниматься, когда подъедешь: успей до подъёма или прыгай на скорости от ${Math.round(jumpV * 3.6)} км/ч.`);
     return { title, chase: { max: c.chase || 0 }, navName: c.goalName || 'Цель', navGoal: () => (crossed ? goal : new V3(bx, 0, side0 < 0 ? gB + 40 : gA - 40)),
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Не успели', c.failText || 'Время вышло.');
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успели', c.failText || 'Время вышло.');
         if (!lifting && Math.abs(pc.pos.x - bx) < 40 && Math.abs(pc.pos.z - 400) < (c.near || 150)) { lifting = true; sfx.bell(); toast('Звонок на мосту: пролёты поднимаются!', 1.8); }
         if (lifting && L.up < 1.1) setUp(Math.min(1.1, L.up + dt * (c.rate || 0.05)));
         const onGap = Math.abs(pc.pos.x - bx) < 8.4 && pc.pos.z > gA && pc.pos.z < gB;
@@ -13372,7 +13392,7 @@ Object.assign(GEN, {
     setObjective(`Ночная смена: заработай $${c.target} за ${fmt(c.secs)}. Машут — подбирай; чаевые тают каждую секунду, так что вези быстро.`);
     return { title, noFire: true, chase: { max: 0 }, navName: 'Пассажир', navGoal: () => (ride ? ride.to : (hails.reduce((b, h) => (!b || h.p.distanceTo(pc.pos) < b.p.distanceTo(pc.pos) ? h : b), null) || { p: pc.pos }).p),
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Смена кончилась', `Заработано $${Math.round(cash)} из $${c.target}. Бери ближних пассажиров и не трать время на дальние вызовы.`);
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Смена кончилась', `Заработано $${Math.round(cash)} из $${c.target}. Бери ближних пассажиров и не трать время на дальние вызовы.`);
         for (let i = hails.length - 1; i >= 0; i--) { const h = hails[i]; h.life -= dt; if (h.life <= 0 && !ride || h.life <= 0 && ride && ride.h !== h) { scene.remove(h.mk); h.a.g.visible = false; hails.splice(i, 1); } }
         while (hails.length < 3) addHail();
         const v = Math.abs(pc.vf || 0);
@@ -13415,7 +13435,7 @@ Object.assign(GEN, {
     setObjective(`Пробки: ${c.n || 9} кварталов стоят намертво, а навигатор о них не знает. Красные огни — затор, объезжай по соседним улицам. Пробки перемещаются каждые ${c.every || 45} с.`);
     return { title, noFire: true, chase: { max: 0 }, navName: 'Адрес', navGoal: () => S[Math.min(si, S.length - 1)].v,
       update(dt) {
-        left -= dt; shuffleT -= dt; if (left <= 0) return failChapter('Застряли', 'Не жди, пока затор рассосётся: сворачивай заранее и объезжай квартал.');
+        left -= dt; shuffleT -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Застряли', 'Не жди, пока затор рассосётся: сворачивай заранее и объезжай квартал.');
         if (shuffleT <= 0) { shuffleT = c.every || 45; place(); toast('Пробки сдвинулись', 1.4); }
         const s = S[si]; setBeam(s.v);
         if (pc.pos.distanceTo(s.v) < 10) arriveBrake(dt); if (pc.pos.distanceTo(s.v) < 10 && Math.abs(pc.vf || 0) < 6.5) { si++; scene.remove(mk); addCoins(30); sfx.bell(); toast(`«${s.n}» — приехали`, 1.4); if (si >= S.length) return done(); mk = tMark(S[si].v.x, S[si].v.z, 0x4dffa6, 8); }
@@ -13429,7 +13449,7 @@ Object.assign(GEN, {
     setObjective(`Гололёд: машина скользит. Отвези кровь в ${S.length} больницы. Удары о стены портят груз — можно не больше ${c.hits}.`);
     return { title, wx: 'snow', noFire: true, chase: { max: 0 }, navName: 'Больница', navGoal: () => S[Math.min(si, S.length - 1)].v,
       update(dt) {
-        left -= dt; cd -= dt; if (left <= 0) return failChapter('Не довезли', 'На льду тормози заранее и входи в повороты медленно — машину несёт.');
+        left -= dt; cd -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не довезли', 'На льду тормози заранее и входи в повороты медленно — машину несёт.');
         // ice: the car keeps much of its old velocity — it turns and stops late
         const g = 1 - Math.pow(1 - (c.grip || 0.18), dt * 30); pc.vel.x = prev.x + (pc.vel.x - prev.x) * g; pc.vel.z = prev.z + (pc.vel.z - prev.z) * g; prev.copy(pc.vel);
         const v = pc.vel.length(); if (prevV - v > 6 && cd <= 0) { hits++; cd = 1.2; toast(hits > c.hits ? 'Пакеты разбились…' : `Удар! Груз под угрозой (${hits}/${c.hits})`, 1.6); if (hits > c.hits) return failChapter('Груз испорчен', 'На льду удар неизбежен, если входить в поворот на скорости. Сбрасывай газ за полквартала.'); } prevV = v;
@@ -13449,7 +13469,7 @@ Object.assign(GEN, {
     setObjective(`${c.obj || 'Отбуксируй машину в гараж.'} Трос ${L} м: на поворотах её заносит. Каждый удар о стену — минус прочность.`);
     return { title, noFire: true, chase: { max: c.chase || 0 }, navName: c.goalName || 'Гараж', navGoal: () => goal,
       update(dt) {
-        left -= dt; cd -= dt; if (left <= 0) return failChapter('Не дотянули', 'Тяни ровно: на прямых — газ, в поворотах — медленно, чтобы прицеп не бил о дома.');
+        left -= dt; cd -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не дотянули', 'Тяни ровно: на прямых — газ, в поворотах — медленно, чтобы прицеп не бил о дома.');
         // the towed car: a rope (no push) and a little inertia, then the walls
         tv.multiplyScalar(Math.pow(0.4, dt)); tp.addScaledVector(tv, dt);
         const hx = pc.pos.x - Math.sin(pc.h) * 2.4, hz = pc.pos.z - Math.cos(pc.h) * 2.4, dx = hx - tp.x, dz = hz - tp.z, d = Math.hypot(dx, dz);
@@ -13538,7 +13558,7 @@ Object.assign(GEN, {
     setObjective(`Парад: колонна платформ идёт по кругу через кварталы. Пересекай её только в просветы — задеть платформу нельзя. Адресов: ${S.length}.`);
     return { title, noFire: true, chase: { max: 0 }, navName: 'Адрес', navGoal: () => S[Math.min(si, S.length - 1)].v,
       update(dt) {
-        left -= dt; cd -= dt; if (left <= 0) return failChapter('Не успели', 'Не жди у колонны: подъезжай туда, где просвет вот-вот подойдёт.');
+        left -= dt; cd -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успели', 'Не жди у колонны: подъезжай туда, где просвет вот-вот подойдёт.');
         for (const f of F) { f.s += sp * dt; const q = at(f.s); f.g.position.copy(q.p); f.g.rotation.y = q.h; f.p = q.p; f.h = q.h;
           const dx = pc.pos.x - q.p.x, dz = pc.pos.z - q.p.z, fw = dx * Math.sin(q.h) + dz * Math.cos(q.h), sd = dx * Math.cos(q.h) - dz * Math.sin(q.h);
           if (Math.abs(fw) < 4.5 + 2 && Math.abs(sd) < 2.5 + 1.6) { const d = Math.hypot(dx, dz) || 1; pc.pos.x += dx / d * 3; pc.pos.z += dz / d * 3; pc.vel.set(0, 0, 0); pc.vf = 0; if (cd <= 0) { touches++; cd = 1.5; sfx.crash(5); toast(touches > (c.touches || 2) ? 'Парад остановлен!' : `Задел платформу! (${touches}/${c.touches || 2})`, 1.6); if (touches > (c.touches || 2)) return failChapter('Въехал в парад', 'Колонна не остановится. Жди просвет между платформами и проскакивай сразу за хвостом одной из них.'); } } }
@@ -13563,7 +13583,7 @@ Object.assign(GEN, {
     setObjective(`Съёмка трюков: в каждые ворота — на своей скорости (км/ч на табло). Не попал в диапазон — дубль испорчен; можно испортить ${c.strikes}.`);
     return { title, noFire: true, chase: { max: 0 }, navName: 'Ворота', navGoal: () => { const q = G_[Math.min(gi, G_.length - 1)]; return new V3(q.x, 0, q.z); },
       update(dt) {
-        left -= dt; if (left <= 0) return failChapter('Съёмочный день кончился', 'Набирай нужную скорость заранее, за полквартала до ворот.');
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Съёмочный день кончился', 'Набирай нужную скорость заранее, за полквартала до ворот.');
         const q = G_[gi]; if (!q) return; const k = kmh(), ok = k >= q.lo && k <= q.hi; q.bar.material.color.setRGB(ok ? 0.4 : 3, ok ? 3 : 2.4, ok ? 0.6 : 0.4); setBeam(new V3(q.x, 0, q.z));
         if (Math.hypot(pc.pos.x - q.x, pc.pos.z - q.z) < 7.5) {
           q.g.visible = false; gi++; if (G_[gi + 1]) G_[gi + 1].g.visible = true;
@@ -13594,7 +13614,7 @@ Object.assign(GEN, {
           if (k >= 1) { ph = 'island'; pc.locked = false; pc.ghost = false; pc.pos.set(land.x + 22, 0, land.z); pc.g.position.y = 0; mk2 = tMark(goal.x, goal.z, 0x4dffa6, 8); toast('Причалили. К маяку!', 1.4); left = c.secs || 40; }
           return;
         }
-        left -= dt; setBeam(goal); if (left <= 0) return failChapter('Не успели', 'На острове — прямо к маяку.');
+        left -= dt; setBeam(goal); if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успели', 'На острове — прямо к маяку.');
         if (pc.pos.distanceTo(goal) < 9) { if (mk2) scene.remove(mk2); return done(); }
       },
       hud() { return { timer: ph === 'drive' ? `Паром через ${fmt(Math.max(0, left))}` : ph === 'sail' ? 'На пароме…' : `${fmt(Math.max(0, left))} · к маяку`, bad: ph !== 'sail' && left < 20 }; } };
@@ -13614,7 +13634,7 @@ Object.assign(GEN, {
     const inR = (p, x0, z0, x1, z1) => p.x > x0 - 0.35 && p.x < x1 + 0.35 && p.z > z0 - 0.35 && p.z < z1 + 0.35;
     setObjective('Стройка: перебирайся по качающимся балкам. Встань на балку — она понесёт тебя. Сходи, когда она у следующей площадки.');
     return { title, update(dt) {
-      left -= dt; if (left <= 0) return failChapter('Не успел', 'Балки ходят по кругу — не жди лишний такт.');
+      left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успел', 'Балки ходят по кругу — не жди лишний такт.');
       for (const b of B_) { const o = Math.sin((state.t + b.ph) * 2 * PI / b.per) * b.amp, nx = b.x + (b.ax === 'x' ? o : 0), nz = b.z + (b.ax === 'z' ? o : 0); b.dx = nx - b.cx; b.dz = nz - b.cz; b.cx = nx; b.cz = nz; b.m.position.set(nx, -0.25, nz); b.cab.position.set(nx, 10, nz); }
       if (fallT > 0) { fallT -= dt; if (fallT <= 0) { hero.pos.copy(checks[ci]); hero.g.position.copy(hero.pos); } return; }
       ride = B_.find((b) => inR(hero.pos, b.cx - b.w / 2, b.cz - b.d / 2, b.cx + b.w / 2, b.cz + b.d / 2)) || null;
