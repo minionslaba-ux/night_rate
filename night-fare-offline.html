@@ -758,7 +758,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v127'; window.__errs = [];
+window.APP_VER = 'v128'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -14330,6 +14330,16 @@ function uaInfo() {
   const browser = /VKAndroidApp|vkclient|VKApp/i.test(ua) ? 'ВК-приложение' : /Telegram/i.test(ua) ? 'Telegram' : /YaBrowser|YaApp/.test(ua) ? 'Яндекс ' + m(/YaBrowser\/(\d+)/) : /SamsungBrowser/.test(ua) ? 'Samsung ' + m(/SamsungBrowser\/(\d+)/) : /EdgA?\//.test(ua) ? 'Edge ' + m(/EdgA?\/(\d+)/) : /OPR\/|Opera/.test(ua) ? 'Opera' : /Firefox|FxiOS/.test(ua) ? 'Firefox ' + m(/(?:Firefox|FxiOS)\/(\d+)/) : /CriOS/.test(ua) ? 'Chrome iOS ' + m(/CriOS\/(\d+)/) : /Chrome\//.test(ua) ? 'Chrome ' + m(/Chrome\/(\d+)/) : /Safari/.test(ua) ? 'Safari ' + m(/Version\/(\d+)/) : 'другой';
   return { device, os, browser };
 }
+// who is in the game right now (table nf_online through nf_ping, bot /online_pikabu): one small ping a minute while the tab is shown
+function onlinePing() {
+  try {
+    if (document.hidden) return;
+    const U = uaInfo(), m = state.mode, inMis = ['drive', 'foot', 'dialog', 'paused', 'cine', 'end', 'dead', 'dying'].includes(m);
+    fetch(SB_URL + '/rest/v1/rpc/nf_ping', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY },
+      body: JSON.stringify({ p_sid: MLOG.sid, p_app: typeof PLATFORM !== 'undefined' ? PLATFORM : '?', p_device: U.device, p_browser: U.browser, p_ver: window.APP_VER, p_mode: m,
+        p_ep: inMis ? state.ep : null, p_ch: inMis ? (state.ch || 0) : null, p_title: inMis && MLOG.title ? String(MLOG.title).slice(0, 80) : null }) }).catch(() => {});
+  } catch (e) { /* no ping */ }
+}
 function loadReport(ok, stage, note) {
   if (window.__loadSent) return; window.__loadSent = true;
   try {
@@ -14354,7 +14364,8 @@ BOOT_LOAD.then(() => {
   revealPrep();   // only the nearest part of the city goes to the GPU in the first frame, the rest over the next frames
   warmShaders();   // every shader of the menu scene handed to the GPU at once (after the cars: their lights change the shaders)
   const firstFrame = shadersReady(8000);   // the first frame only once they are built (in parallel where the browser can)
-  firstFrame.then(() => requestAnimationFrame(() => requestAnimationFrame(() => { crumbStage('first'); loadReport(true, 'menu'); peopleLoad(); })));
+  firstFrame.then(() => requestAnimationFrame(() => requestAnimationFrame(() => { crumbStage('first'); loadReport(true, 'menu'); peopleLoad();
+    setTimeout(onlinePing, 5000); setInterval(onlinePing, 60000); document.addEventListener('visibilitychange', () => { if (!document.hidden) onlinePing(); }); })));
   // a signed-in player skips the entry screen; wait for the server at most 4 s
   diffLoad();
   const restoring = cloudRestore();

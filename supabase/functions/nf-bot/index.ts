@@ -67,6 +67,7 @@ const ADMIN_COMMANDS = [
   { command: 'loads', description: 'Загрузка игры по устройствам за сутки' },
   { command: 'missions', description: 'Миссии: где бросают и где проваливают' },
   { command: 'pikabu', description: 'Пикабу Игры: игроки, миссии, реклама, покупки (за 7 дней)' },
+  { command: 'online_pikabu', description: 'Кто сейчас играет на Пикабу' },
   { command: 'logins', description: 'Вход гостей сайта: показали окно → нажали → вошли (за 7 дней)' },
   { command: 'dailytask', description: 'Пост о задании дня: превью (/dailytask now — опубликовать)' },
   { command: 'stats', description: 'Отчёт за сегодня' },
@@ -103,6 +104,7 @@ const HELP = `🛠 <b>Команды владельца «Ночного тар�
 ⏱ /loads — как грузится игра: устройства, браузеры, время до меню, сбои (сводка приходит сама каждое утро)
 📅 /dailytask — пост о задании дня (сам выходит раз в 5 дней в 15:00 МСК): превью · /dailytask now — опубликовать сейчас
 🎯 /missions — миссии за 7 дней: сколько начали, прошли, провалили, бросили; где скучно и где сложно (/missions 1 — за сутки)
+🟢 /online_pikabu — кто сейчас в игре на Пикабу: устройство, что делает, сколько минут играет (и сколько онлайн на других площадках)
 🟠 /pikabu — Пикабу Игры за 7 дней (за сутки приходит сама каждый день в 20:00 МСК): игроки, загрузка, скорость, миссии, реклама, покупки и выручка (/pikabu 1 — за сутки, /pikabu 30 — за месяц)
 🔑 /logins — вход гостей сайта за 7 дней: сколько увидели окно входа, нажали кнопку, вошли, отказались, какие ошибки
 🚨 О сбоях бот пишет сам (проверка раз в 2 минуты, не чаще раза в 5 минут) — с кнопкой перезагрузки
@@ -338,6 +340,7 @@ async function adminCommand(cmd: string, rest: string, chatId: number, tg: numbe
     case 'loads': await say(await loadsReport(Number(rest) || 24)); return true;
     case 'logins': await say(await loginsReport(Number(rest) || 7)); return true;
     case 'pikabu': await say(await pikabuReport(Number(rest) || 7)); return true;
+    case 'online_pikabu': await say(await onlineReport('pikabu')); return true;
     case 'missions': await say(await missionsReport(Number(rest) || 7)); return true;
     case 'dailytask': {
       if (arg === 'now') { const r = await dtaskRun(true); await say(r.ok ? `✅ Пост о задании дня опубликован.\n${r.vk}\n${r.max}` : `Не вышло: ${esc(r.error || r.skipped || '')}`); return true; }
@@ -446,6 +449,30 @@ async function loadsReport(hours: number) {
   const fl = fails.slice(0, 5).map((r) => `• ${esc(r.device)} · ${esc(r.stage || '')} · ${esc(String(r.note || '').slice(0, 90))} · ${esc(r.ver || '')}`);
   return `⏱ <b>Загрузка игры за ${hours} ч</b>: ${L.length} запусков, сбоев ${fails.length}, медиана до меню ${sec(med(all))}\n\n${rows.join('\n')}`
     + (slow.length ? `\n\n🐢 <b>Дольше 20 с</b>\n${slow.join('\n')}` : '') + (fl.length ? `\n\n❌ <b>Не загрузились</b>\n${fl.join('\n')}` : '');
+}
+// кто сейчас в игре (таблица nf_online: игра шлёт nf_ping раз в минуту, пока вкладка открыта): онлайн — сигнал за последние 2 минуты
+const APP_NAME: Record<string, string> = { pikabu: 'Пикабу', web: 'сайт', vk: 'ВК', max: 'MAX', tg: 'Telegram' };
+function onlineWhat(r: any) {
+  const m = r.mode || '';
+  if (m === 'preview' || m === 'select') return 'в меню';
+  const t = r.title || (r.ep === 90 ? 'Задание дня' : r.ep ? `эпизод ${r.ep}` : 'город');
+  if (m === 'paused') return `пауза · ${t}`;
+  if (m === 'end') return `итоги · ${t}`;
+  if (m === 'dead' || m === 'dying') return `разбился · ${t}`;
+  return t;
+}
+async function onlineReport(app: string) {
+  const since2 = new Date(Date.now() - 2 * 60e3).toISOString(), since15 = new Date(Date.now() - 15 * 60e3).toISOString();
+  const { data } = await db.from('nf_online').select('sid, app, device, browser, ver, mode, ep, ch, title, started_at, updated_at').gte('updated_at', since15).order('updated_at', { ascending: false }).limit(500);
+  const R = data || [], base = (a: string) => String(a || '').replace(/·.*$/, ''), now = R.filter((r: any) => r.updated_at >= since2);
+  const mine = now.filter((r: any) => base(r.app) === app), recent = R.filter((r: any) => base(r.app) === app && r.updated_at < since2);
+  const mins = (r: any) => Math.max(1, Math.round((Date.parse(r.updated_at) - Date.parse(r.started_at)) / 60e3));
+  const rows = mine.map((r: any) => `• ${esc(r.device)} · ${esc(r.browser || '')} — ${esc(onlineWhat(r))} · ${mins(r)} мин`);
+  const other = new Map<string, number>(); for (const r of now) { const b = base(r.app); if (b !== app) other.set(b, (other.get(b) || 0) + 1); }
+  return `🟢 <b>Сейчас в игре на ${APP_NAME[app] || app}: ${mine.length}</b>` + (rows.length ? `\n${rows.join('\n')}` : '')
+    + `\n\nЗаходили за 15 минут, сейчас не в игре: ${recent.length}`
+    + (other.size ? `\nДругие площадки сейчас: ${[...other].map(([k, n]) => `${APP_NAME[k] || k} ${n}`).join(', ')}` : '')
+    + `\n<i>«Сейчас» — игра открыта и прислала сигнал за последние 2 минуты.</i>`;
 }
 // всё про Пикабу Игры: запуски (nf_loads.app = 'pikabu'), игроки и миссии (по sid этих запусков), реклама (nf_ads.net), скорость (nf_fps.app), покупки (nf_pk_purchases)
 const PK_PRICE: Record<string, number> = { starter: 99, coins5: 149, coins20: 449, noads: 199, pass: 299 };
