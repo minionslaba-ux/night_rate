@@ -141,6 +141,7 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 .boss .bar-track { margin-top: 5px; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
 .btn.daily { background: linear-gradient(160deg, #ff5ad1, #8a2be2); color: #fff; border: 0; }
+.btn.rw-btn { font-size: 14px; padding: 8px 14px; background: rgba(255,210,58,.12); border: 1px solid rgba(255,210,58,.55); color: #ffd23a; font-weight: 700; } .btn.rw-btn:disabled { opacity: .55; }
 .daily-top { margin: 8px 0 4px; padding-left: 0; list-style: none; max-height: 34vh; overflow: auto; }
 .daily-top li { padding: 3px 0; } .daily-top li.me { color: var(--taxi); font-weight: 700; }
 .chip .stars { color: #ffc43d; letter-spacing: 1px; margin-left: 4px; font-size: .9em; }
@@ -685,7 +686,7 @@ setTimeout(function () {
     <div class="kicker pv-k">Порт-Северный · 02:47</div>
     <h1 class="logo pv-logo">Ночной тариф<span>Эпизод 1. Кейс</span></h1>
     <p class="pv-tag">Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».</p>
-    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnDaily" class="btn big daily" type="button">Задание дня</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
+    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnDaily" class="btn big daily" type="button">Задание дня</button><button id="btnRw" class="btn linkish rw-btn" type="button" hidden>🎁 +150 монет за рекламу</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
     <p id="pvPath" class="pv-path"></p>
   </div>
   <div id="mrgBox" class="mrg-box" hidden><div class="mrg-label">Реклама</div><div id="mrgSlot"></div>
@@ -758,7 +759,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v129'; window.__errs = [];
+window.APP_VER = 'v130'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6271,8 +6272,9 @@ function hideModal() { $('modal').hidden = true; }
 // в остальных местах пока трёхсекундная заставка. Купившим «без рекламы» — сразу награда.
 // Тестерам в ВК реклама показывается (чтобы владелец мог её проверить), на сайте — нет.
 let adBusy = false;
-function showAd(done) {
-  if (PROF.noAds) { done(); return; }
+function showAd(done0) {
+  const done = () => { store.set('nf-rw-at', Date.now()); done0(); };
+  if (PROF.noAds) { done0(); return; }
   if (PLATFORM === 'vk') { vkReward(done); return; }
   if (PIKABU) { if (PK_DIRECT) pkReward(done); else gpReward(done); return; }
   if (PROF.god) { done(); return; }
@@ -6453,6 +6455,18 @@ function pkReward(done) {
 function pkBetween() {   // after a mission (not during play), from the 2nd one, at most every 5 minutes (the platform itself: 2 minutes)
   if (PROF.noAds || Date.now() - PK.lastAd < AD_GAP) return;
   PK.lastAd = Date.now(); pkAd('fullscreen');
+}
+// v130: «coins for an ad» — only where a real rewarded video exists (Pikabu, VK); +150 coins, at most every 3 minutes and 5 times a day.
+// Opt-in, so it does not annoy; a player who bought «Без рекламы» does not see it (the ad would be skipped and the coins free)
+const RWD = { gap: 3 * 60e3, perDay: 5, coins: 150 };
+const rwOn = () => (PIKABU || PLATFORM === 'vk') && !PROF.noAds && !PROF.god;
+function rwState() { const d = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10), o = store.get('nf-rw') || {}; return o.d === d ? o : { d, n: 0, at: 0 }; }
+function rwWait() { const o = rwState(); if (o.n >= RWD.perDay) return -1; return Math.max(0, RWD.gap - (Date.now() - (o.at || 0))); }   // -1: no more today
+function rwLabel() { const w = rwWait(); return w < 0 ? '🎁 На сегодня всё — завтра снова' : w > 0 ? `🎁 Монеты за рекламу — через ${Math.ceil(w / 60e3)} мин` : `🎁 +${RWD.coins} монет за рекламу`; }
+function rwUpdate() { const b = $('btnRw'); if (!b) return; b.hidden = !rwOn(); b.textContent = rwLabel(); b.disabled = rwWait() !== 0; }
+function rewardCoins() {
+  if (!rwOn() || rwWait() !== 0) { rwUpdate(); return; }
+  showAd(() => { const o = rwState(); o.n++; o.at = Date.now(); store.set('nf-rw', o); addCoins(RWD.coins); toast(`+${RWD.coins} монет — спасибо!`, 2.4); rwUpdate(); if (!$('prof').hidden) renderProfile(); });
 }
 function adCountdown(done) {
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
@@ -7441,6 +7455,7 @@ const PV_TEXT = { 1: 'Город спит, а ты нет. Довези кейс
 // main screen: the next step on the big button, the rank and progress, the side lines open or locked
 function renderMenuPath() {
   if (typeof PROF === 'undefined' || !PROF || !PROF.st) return;
+  rwUpdate();
   checkRank(true);
   const s = nextStep(), first = missionsDone() === 0, logo = document.querySelector('.pv-logo span'), tag = document.querySelector('.pv-tag');
   if (s) { if (logo) logo.textContent = `Эпизод ${s.ep}. ${EP_NAMES[s.ep]}`; if (tag) tag.textContent = (EPS[s.ep] && EPS[s.ep].logline) || PV_TEXT[s.ep] || ''; }
@@ -9609,7 +9624,7 @@ setTimeout(async () => {
 // Только на сайте и на телефоне, только между миссиями (со второй пройденной миссии), не чаще раза в 5 минут.
 // В мини-приложениях Telegram, ВКонтакте и MAX не показывается (в ВК по правилам — только реклама ВК), тестовому профилю — тоже.
 // Пока сайт не прошёл модерацию РСЯ, Яндекс просто ничего не покажет.
-const AD_BLOCK = 'R-A-20345213-1', AD_GAP = 5 * 60e3;
+const AD_BLOCK = 'R-A-20345213-1', AD_GAP = 4 * 60e3;   // v130: 5 → 4 min between missions; never within 3 min after a rewarded video the player chose to watch
 let adLoaded = false;
 const adCan = () => PLATFORM === 'web' && !PROF.god && (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window);
 function adLoad() {
@@ -9644,6 +9659,7 @@ function adLog(ev, note) {
     body: JSON.stringify([{ ver: window.APP_VER, net: PLATFORM, ev, note: note ? String(note).slice(0, 190) : null, device: U.device, browser: U.browser }]) }).catch(() => {}); } catch (e) { /* no log */ }
 }
 function adBetween() {
+  if (Date.now() - (store.get('nf-rw-at') || 0) < 3 * 60e3) return;
   if (PIKABU) { if (PK_DIRECT) pkBetween(); else gpBetween(); return; }
   if (!adCan()) return;
   if (Date.now() - (store.get('nf-ad-at') || 0) < AD_GAP) return;
@@ -10048,6 +10064,7 @@ function renderProfile() {
     if (PLATFORM === 'web' && !PAY.checked) payCheck();
     const payShow = PLATFORM === 'web' && PAY.ready && (!PAY.test || PROF.god);
     h = `${payShow ? `<div class="plabel">Монеты${PAY.test ? ' · тестовый режим' : ''}</div><div class="pitems">${COIN_PACKS.map(([id, rub, coins, bonus]) => `<div class="pitem shop coin-pack"><b>${coins.toLocaleString('ru-RU')} монет${bonus ? ` <em>+${bonus}%</em>` : ''}</b><span>${bonus ? 'Выгоднее, чем по 3 монеты за рубль' : '3 монеты за рубль'}</span><button class="btn sm primary" data-act="buy-coins" data-id="${id}" type="button">${rub} ₽</button></div>`).join('')}</div><div class="note">Оплата через Робокассу. Монеты придут в профиль после оплаты — на всех устройствах.${PROF.cloud ? '' : ' Чтобы купить, войди в профиль.'}</div>` : ''}
+    ${rwOn() ? `<div class="plabel">Бесплатно</div><div class="pitems"><div class="pitem shop"><b>${RWD.coins} монет</b><span>за просмотр рекламы · до ${RWD.perDay} раз в день</span><button class="btn sm primary" data-act="rw-coins" type="button" ${rwWait() !== 0 ? 'disabled' : ''}>${rwWait() < 0 ? 'Завтра' : rwWait() > 0 ? `Через ${Math.ceil(rwWait() / 60e3)} мин` : 'Смотреть'}</button></div></div>` : ''}
     ${PIKABU ? `<div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass) || (PK_DIRECT && id === 'starter' && PROF.pkOwn && PROF.pkOwn.starter); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : PK_DIRECT ? 'Купить за ' + ((PK.prices && PK.prices[id]) || k.rub + ' ₽') : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
     <div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button">${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>` : `<div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button">${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
     <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass) || (PK_DIRECT && id === 'starter' && PROF.pkOwn && PROF.pkOwn.starter); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : PK_DIRECT ? 'Купить за ' + ((PK.prices && PK.prices[id]) || k.rub + ' ₽') : k.rub + ' ₽'}</button></div>`; }).join('')}</div>`}
@@ -10094,6 +10111,7 @@ function profAction(act, id) {
   else if (act === 'buy-up') { const l = PROF.up[id]; if (l < UP_MAX && pay(upPrice(l), 'Улучшение')) { PROF.up[id]++; saveProfile(); applyLoadout(); checkAch(); } }
   else if (act === 'buy-coins') { payBuy(id); return; }
   else if (act === 'gologin') { gateAgain('Войди, чтобы получить свою ссылку-приглашение и попасть в рейтинг.'); return; }
+  else if (act === 'rw-coins') { rewardCoins(); return; }
   else if (act === 'refshare') { refShare(); return; }
   else if (act === 'refcopy') { refCopy(); return; }
   else if (act === 'refenter') { const v = ($('refIn') && $('refIn').value || '').trim().toUpperCase(); if (!/^[A-Z0-9]{6}$/.test(v)) { profMsg = 'Код — 6 латинских букв и цифр.'; renderProfile(); return; } store.set('nf-ref', { code: v, t: Date.now() }); refTry(true); return; }
@@ -14215,6 +14233,8 @@ $('btnS3').addEventListener('click', () => openLine(LINES[1]));
 setInterval(() => { if (state.mode === 'preview') { renderMenuPath(); mrgPlace(); } }, 3000);   // the cloud profile may arrive after the menu is up
 $('btnCities').addEventListener('click', () => openLine(LINES[2]));
 $('btnDaily').addEventListener('click', () => { initAudio(); dailyOpen(); });
+$('btnRw').addEventListener('click', () => { initAudio(); rewardCoins(); });
+setInterval(rwUpdate, 20000);
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
 $('btnOnline').addEventListener('click', startOnline);
