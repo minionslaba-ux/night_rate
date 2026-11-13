@@ -8,6 +8,24 @@ const json = (x: unknown, status = 200) => new Response(JSON.stringify(x), { sta
 const setting = async (k: string) => ((await db.from('nf_settings').select('v').eq('k', k).maybeSingle()).data?.v ?? null) as string | null;
 
 const PROMOS: Record<string, { img: string[]; tg: string; max: string }> = {
+  // анонс: «Ночной тариф» на Пикабу Играх (владелец подтвердил 13.11.2026)
+  pikabu: {
+    img: ['https://nightfaregame.com/promo/pikabu/cover-1920x1080.jpg'],
+    tg: `<b>🚕 «Ночной тариф» теперь и на Пикабу Играх!</b>
+
+Ночное такси, погони и перестрелки — та же игра, теперь в каталоге Пикабу. Прогресс там сохраняется в аккаунте Пикабу.
+
+Если вы на Пикабу — заходите, ставьте оценку и пишите в комментариях, что понравилось и что поправить. Каждый отзыв помогает игре подняться в каталоге.
+
+<a href="https://games.pikabu.ru/game/nochnoy-tarif">▶️ Открыть на Пикабу Играх</a>`,
+    max: `🚕 «Ночной тариф» теперь и на Пикабу Играх!
+
+Ночное такси, погони и перестрелки — та же игра, теперь в каталоге Пикабу. Прогресс там сохраняется в аккаунте Пикабу.
+
+Если вы на Пикабу — заходите, ставьте оценку и пишите в комментариях, что понравилось и что поправить. Каждый отзыв помогает игре подняться в каталоге.
+
+Открыть на Пикабу Играх: https://games.pikabu.ru/game/nochnoy-tarif`,
+  },
   mutaciya: {
     img: ['1-mutaciya', '2-mutanty', '3-skrimer', '4-ispytaniya'].map((n) => `https://minionslaba-ux.github.io/mutaciya/promo/${n}.jpg`),
     tg: `<b>🧪 «Мутация» — хоррор-головоломка прямо в браузере</b>
@@ -110,11 +128,11 @@ Deno.serve(async (req) => {
   await db.from('nf_settings').upsert({ k: mark, v: 'sending ' + new Date().toISOString() });
   const out: any = { tg: null, max: [] };
   // Telegram: альбом из 4 фото, подпись у первого; не вышло — одно фото с подписью; не вышло — текст
-  let r = await tg('sendMediaGroup', { chat_id: '@nightfaregame', media: P.img.map((u, i) => (i ? { type: 'photo', media: u } : { type: 'photo', media: u, caption: P.tg, parse_mode: 'HTML' })) });
+  let r: any = P.img.length < 2 ? { ok: false, description: 'одна картинка' } : await tg('sendMediaGroup', { chat_id: '@nightfaregame', media: P.img.map((u, i) => (i ? { type: 'photo', media: u } : { type: 'photo', media: u, caption: P.tg, parse_mode: 'HTML' })) });
   if (r.ok) out.tg = { ok: true, ids: r.result.map((m: any) => m.message_id) };
   else {
     const e1 = r.description; r = await tg('sendPhoto', { chat_id: '@nightfaregame', photo: P.img[0], caption: P.tg, parse_mode: 'HTML' });
-    out.tg = r.ok ? { ok: true, ids: [r.result.message_id], note: 'одно фото (альбом: ' + e1 + ')' } : { ok: false, error: e1 + ' / ' + r.description };
+    out.tg = r.ok ? { ok: true, ids: [r.result.message_id], note: P.img.length < 2 ? '' : 'одно фото (альбом: ' + e1 + ')' } : { ok: false, error: e1 + ' / ' + r.description };
   }
   // MAX: каждый подключённый канал, фото 1 + текст; без фото — только текст
   if (MAXT) {
