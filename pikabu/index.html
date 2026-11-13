@@ -751,7 +751,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v125'; window.__errs = [];
+window.APP_VER = 'v126'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -810,8 +810,6 @@ const renderer = (() => {
     }
   }
 })();
-// v124: no debug checks of every new shader — they make the browser wait for each compile to finish (the stalls at the start)
-renderer.debug.checkShaderErrors = false;
 // graphics quality: «auto» adapts to the device (and climbs to HD when there is headroom); «hd» keeps the full screen resolution,
 // hardware anti-aliasing, sharper shadows and the detailed models on phones too
 // a tab the browser killed (iOS: «на странице повторно возникла проблема» — out of memory) leaves nf-run behind: the next start goes lighter
@@ -851,6 +849,21 @@ renderer.outputEncoding = THREE.sRGBEncoding;
 // no synchronous error check after every shader link: with it the page waited for each of ~60 shaders in turn before the first
 // frame (≈10 s frozen on a Mali-G57 phone). Without it the browser's GPU process compiles them in the background (see warmShaders)
 renderer.debug.checkShaderErrors = false;
+// v126: the browser builds them in parallel (KHR_parallel_shader_compile: switched on just by asking for it), and the first frame
+// waits for them without freezing the page — on Pikabu a new player waited 5–10 s between the menu and its first frame
+const PSC = (() => { try { return renderer.getContext().getExtension('KHR_parallel_shader_compile'); } catch (e) { return null; } })();
+function shadersReady(maxMs) {
+  return new Promise((res) => {
+    if (!PSC) return res();
+    const gl = renderer.getContext(), t0 = performance.now();
+    const tick = () => {
+      let done = true;
+      try { for (const p of renderer.info.programs || []) if (p.program && !gl.getProgramParameter(p.program, PSC.COMPLETION_STATUS_KHR)) { done = false; break; } } catch (e) { done = true; }
+      if (done || performance.now() - t0 > maxMs) { window.__shadersMs = Math.round(performance.now() - t0); res(); } else setTimeout(tick, 16);
+    };
+    tick();
+  });
+}
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
@@ -5107,6 +5120,7 @@ function peopleReady() {
 // a new player goes straight to the wheel (v121): only 22% of the website's guests ever pressed «Играть» and chose a driver,
 // so the very first mission starts by itself, once per device, as soon as the heroes are loaded — unless the player is already
 // busy with something (pressed a button, opened the profile, a sign-in or a window is on screen). The menu comes after it.
+const AUTO_RIDE = { skip: false };
 function autoFirstRide() {
   try {
     if (missionsDone() > 0 || store.get('nf-autoride')) return;
@@ -5117,7 +5131,7 @@ function autoFirstRide() {
       if (!calm() || missionsDone() > 0 || store.get('nf-autoride')) return;
       store.set('nf-autoride', 1); trace('autoride');
       toast('Поехали! Первая миссия', 1.6);
-      setTimeout(() => { if (calm()) startMission(); }, 1100);
+      setTimeout(() => { if (calm()) { AUTO_RIDE.skip = true; startMission(); } }, 1100);
     }).catch(() => {});
   } catch (e) { /* the menu stays */ }
 }
@@ -14096,6 +14110,9 @@ function startMission() {
   state.ep = 1; MIS = null; setMood('night');
   setupAct1(); state.act = state.act || 1; missionLog('start', null, { type: 'ep1', title: 'Эпизод 1 · Кейс' });
   state.mode = 'drive';
+  // v126: a new player started by the game itself goes straight to the wheel — all of them quit during this dialog;
+  // the gist of it in one line instead (the dialog stays for a start from the menu)
+  if (AUTO_RIDE.skip) { AUTO_RIDE.skip = false; setTimeout(() => toast('Довези кейс до склада №7 на Северной. «Шакалы» уже выехали — жми газ!', 4.5), 400); return; }
   playDialog([
     ['mark', `${CH.name}, приём. Кейс у тебя в багажнике. Довези его до склада номер семь на Северной. Без остановок.`],
     ['hero', 'Что внутри?'],
@@ -14318,13 +14335,14 @@ BOOT_LOAD.then(() => {
   showPreview(); $('ageBadge').hidden = PLATFORM !== 'vk';
   revealPrep();   // only the nearest part of the city goes to the GPU in the first frame, the rest over the next frames
   warmShaders();   // every shader of the menu scene handed to the GPU at once (after the cars: their lights change the shaders)
-  requestAnimationFrame(() => requestAnimationFrame(() => { crumbStage('first'); loadReport(true, 'menu'); peopleLoad(); }));
+  const firstFrame = shadersReady(8000);   // the first frame only once they are built (in parallel where the browser can)
+  firstFrame.then(() => requestAnimationFrame(() => requestAnimationFrame(() => { crumbStage('first'); loadReport(true, 'menu'); peopleLoad(); })));
   // a signed-in player skips the entry screen; wait for the server at most 4 s
   diffLoad();
   const restoring = cloudRestore();
   restoring.then(() => { if (PROF.login && !$('gate').hidden && gateStep === 'register' && !CLOUD.busy) { finishGate(); updateProfChip(); } }).catch(() => {});
   Promise.race([restoring, new Promise((r) => setTimeout(() => r(false), 4000))]).then(() => { updateProfChip(); startGate(); autoFirstRide(); });
-  requestAnimationFrame(loop);
+  firstFrame.then(() => requestAnimationFrame(loop));
 }).catch((err) => { console.error(err); $('loading').textContent = 'Не удалось загрузить 3D-модели. Проверьте интернет и обновите страницу.'; });
 
 // test hook for automated checks
@@ -14336,7 +14354,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
