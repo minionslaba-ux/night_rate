@@ -135,6 +135,7 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
 .btn.daily { background: linear-gradient(160deg, #ff5ad1, #8a2be2); color: #fff; border: 0; }
 .btn.rw-btn { font-size: 14px; padding: 8px 14px; background: rgba(255,210,58,.12); border: 1px solid rgba(255,210,58,.55); color: #ffd23a; font-weight: 700; } .btn.rw-btn:disabled { opacity: .55; }
+.btn.x2 { background: linear-gradient(160deg, #ffd23a, #ff9f1c); color: #1a1205; border: 0; font-weight: 800; font-size: 16px; padding: 12px 18px; box-shadow: 0 0 18px rgba(255,190,40,.45); } .btn.x2:disabled { background: rgba(255,210,58,.14); color: #ffd23a; box-shadow: none; opacity: .8; }
 .dcal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 14px 0 6px; } .dcal div { border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 7px 2px; text-align: center; font-size: 11px; line-height: 1.25; color: #aab; background: rgba(255,255,255,.04); }
 .dcal div b { display: block; font-size: 12px; color: #fff; margin-bottom: 3px; } .dcal div.got { opacity: .45; } .dcal div.now { border-color: #ffd23a; background: rgba(255,210,58,.14); color: #ffd23a; } .dcal div.big b { color: #ffd23a; }
 @media (max-width: 420px) { .dcal { gap: 3px; } .dcal div { font-size: 9.5px; padding: 5px 1px; } }
@@ -279,7 +280,7 @@ body.voice-on .tbtn.talk { display: grid; }
 .pstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; } .pstats div { background: rgba(255,255,255,.05); border-radius: 8px; padding: 8px; display: grid; } .pstats small { opacity: .7; font-size: 11px; } .pstats b { font-size: 16px; }
 .pitems { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
 .pitem { background: rgba(255,255,255,.05); border: 1px solid transparent; border-radius: 8px; padding: 10px; display: grid; gap: 6px; align-content: start; } .pitem.on { border-color: var(--go); } .pitem span { font-size: 12px; opacity: .75; } .pitem em { font-style: normal; color: var(--taxi); } .pitem .btn { justify-self: start; } .pitem small { font-size: 11px; opacity: .7; }
-.pitem.prem { background: rgba(255,196,61,.08); } .pitem.ach.on b { color: var(--taxi); }
+.pitem.prem { background: rgba(255,196,61,.08); } .pitem.starter-top { border: 1px solid rgba(90,209,255,.6); box-shadow: 0 0 16px rgba(90,209,255,.25); } .pitem.ach.on b { color: var(--taxi); }
 .cstat { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; } .cstat small { font-size: 11px; opacity: .7; }
 .swatches { display: flex; flex-wrap: wrap; gap: 5px; } .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); cursor: pointer; padding: 0; } .swatch.on { border-color: #fff; box-shadow: 0 0 0 2px var(--go); } .swatch.locked { opacity: .45; }
 .pitem .pips { display: flex; gap: 4px; } .pitem .pips i { width: 18px; height: 6px; border-radius: 2px; background: rgba(255,255,255,.15); } .pitem .pips i.on { background: var(--go); }
@@ -682,7 +683,7 @@ setTimeout(function () {
     <div class="kicker pv-k">Порт-Северный · 02:47</div>
     <h1 class="logo pv-logo">Ночной тариф<span>Эпизод 1. Кейс</span></h1>
     <p class="pv-tag">Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».</p>
-    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnDaily" class="btn big daily" type="button">Задание дня</button><button id="btnRw" class="btn linkish rw-btn" type="button" hidden>🎁 +150 монет за рекламу</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
+    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnDaily" class="btn big daily" type="button">Задание дня</button><button id="btnRw" class="btn linkish rw-btn" type="button" hidden>🎁 +150 монет за рекламу</button><button id="btnChest" class="btn linkish rw-btn" type="button" hidden>🧰 Сундук дня — открыть за рекламу</button><button id="btnTd" class="btn linkish rw-btn td" type="button" hidden>🚗 Тест-драйв</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
     <p id="pvPath" class="pv-path"></p>
   </div>
   <div id="mrgBox" class="mrg-box" hidden><div class="mrg-label">Реклама</div><div id="mrgSlot"></div>
@@ -755,7 +756,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v135'; window.__errs = [];
+window.APP_VER = 'v136'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6137,7 +6138,8 @@ const MLOG = { sid: (() => { try { let v = localStorage.getItem('nf-sid'); if (!
 function missionLog(ev, reason, extra) {
   try {
     if (MIS && MIS.online) return;
-    if (ev === 'start') { SECOND.used = false; SECOND.fn = null; MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
+    if ((ev === 'win' || ev === 'quit') && TD.car && TD.used) setTimeout(tdEnd, 1500);
+    if (ev === 'start') { SECOND.used = false; SECOND.fn = null; if (TD.car) TD.used = true; MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
       MLOG.gt0 = state.time; MLOG.dmg0 = DIFF.dmg; MLOG.par = (extra && extra.par) || 150;
       { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 2500); } }
     else { if (!MLOG.open) return; MLOG.open = false; }
@@ -6336,7 +6338,7 @@ function gpCloudApply(c) {
 function gpSaveSoon() { if (PK_DIRECT) { pkSave(); return; } if (!PIKABU || !GP.sdk || GP.saveT) return; GP.saveT = setTimeout(gpSave, 3000); }
 function gpSave() {
   GP.saveT = 0; const gp = GP.sdk; if (!gp || GP.pending) return;
-  try { const { god, cloud, ...rest } = PROF; gp.player.set('nf', JSON.stringify({ v: 1, t: Date.now(), p: rest, pr: collectProgress() })); gp.player.sync(); } catch (e) { /* next time */ }
+  try { const { god, cloud, ...rest } = PROF; if (TD.car && TD.prev) rest.car = TD.prev; gp.player.set('nf', JSON.stringify({ v: 1, t: Date.now(), p: rest, pr: collectProgress() })); gp.player.sync(); } catch (e) { /* next time */ }
 }
 async function gpAd(kind) {   // 'reward' | 'fullscreen' → true when shown to the end
   const gp = GP.sdk || await gpLoad(); if (!gp || !gp.ads) return null;
@@ -6393,7 +6395,7 @@ function pkCloudLoad() {
 }
 function pkSave() {
   if (!PK.sdk || PK.pending || PK.dead || PK.saveT) return;
-  PK.saveT = setTimeout(() => { PK.saveT = 0; try { const { god, cloud, ...rest } = PROF; PK.sdk.storage.set('nf', { v: 1, t: Date.now(), p: rest, pr: collectProgress() }); } catch (e) { /* next time */ } }, 3000);
+  PK.saveT = setTimeout(() => { PK.saveT = 0; try { const { god, cloud, ...rest } = PROF; if (TD.car && TD.prev) rest.car = TD.prev; PK.sdk.storage.set('nf', { v: 1, t: Date.now(), p: rest, pr: collectProgress() }); } catch (e) { /* next time */ } }, 3000);
 }
 async function pkAd(kind) {   // 'rewarded' | 'fullscreen' → { shown, reward } or null when unavailable
   const sdk = PK.sdk || await pkLoad(); const ad = sdk && sdk.ads && sdk.ads[kind];
@@ -6534,6 +6536,46 @@ let nudgeAt = 0;
 function menuNudge() {
   if (state.mode !== 'preview' || !$('modal').hidden || !PROF || !PROF.st || missionsDone() < 1 || Date.now() - nudgeAt < 20e3) return;
   if (starterOffer() || rateAsk() || dailyOffer()) nudgeAt = Date.now();
+}
+
+// v135: two more ads the player chooses to watch (Pikabu, VK), once a day each, from the second finished mission:
+// the chest of the day (a random prize) and a test drive (an expensive car the player doesn't have, for one mission).
+// The test car is never saved as the player's own: after the mission the old car comes back, and the garage shows its price.
+const CHEST = [[300, null], [500, null], [800, null], [200, 'nitro', 2], [200, 'medkit', 2], [250, 'shield', 1], [400, 'repair', 2]];
+const TD_CARS = ['police', 'van', 'sedan', 'wagon2', 'nine'];
+const TD = { car: null, prev: null, used: false };
+const adDay = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+const extrasOn = () => rwOn() && missionsDone() >= 1;
+function tdPick() { const free = TD_CARS.filter((id) => CARS[id] && !PROF.cars.includes(id)); return free.length ? free[Math.floor(Date.now() / 864e5) % free.length] : null; }
+function extrasUpdate() {
+  const c = $('btnChest'), t = $('btnTd'); if (!c || !t) return;
+  c.hidden = !extrasOn() || store.get('nf-chest') === adDay();
+  const id = tdPick(); t.hidden = !extrasOn() || !id || !!TD.car || store.get('nf-td') === adDay();
+  if (id) t.textContent = `🚗 Тест-драйв: «${CARS[id].name.replace(/^[^«]*«|»$/g, '')}» на 1 миссию за рекламу`;
+}
+function chestOpen() {
+  if (!extrasOn() || store.get('nf-chest') === adDay()) { extrasUpdate(); return; }
+  showAd(() => {
+    store.set('nf-chest', adDay()); adLog('offer', 'chest opened');
+    const [c, item, n] = CHEST[Math.floor(Math.random() * CHEST.length)];
+    if (item) PROF.inv[item] = (PROF.inv[item] || 0) + n; walletAdd(c); saveProfile(); sfx.coin(); updateBoostsHud(); extrasUpdate();
+    const nm = { nitro: 'нитро', medkit: 'аптечки', shield: 'щит', repair: 'ремкомплекта' };
+    showModal(`<div class="kicker">Сундук дня</div><h2 class="h2 good">+${c} монет${item ? ` и ${n} ${nm[item]}` : ''}</h2><p class="lead">Завтра — новый сундук.</p><div class="btns"><button id="chOk" class="btn primary" type="button">Забрать</button></div>`, { chOk: () => hideModal() });
+  });
+}
+function tdStart() {
+  const id = tdPick(); if (!extrasOn() || !id || TD.car || store.get('nf-td') === adDay()) { extrasUpdate(); return; }
+  showAd(() => {
+    store.set('nf-td', adDay()); adLog('offer', 'testdrive ' + id);
+    TD.car = id; TD.prev = PROF.car; TD.used = false; PROF.car = id; applyLoadout(); extrasUpdate();
+    toast(`«${CARS[id].name}» — твоя на одну миссию. Выбирай миссию и жми газ!`, 3.5);
+    const s = nextStep(); if (s) goStep(s); else showSelect();
+  });
+}
+function tdEnd() {
+  if (!TD.car || !TD.used || ['drive', 'foot', 'dialog', 'paused', 'cine'].includes(state.mode)) return;   // a restart: the test goes on
+  const id = TD.car; PROF.car = PROF.cars.includes(TD.prev) ? TD.prev : PROF.cars[0]; TD.car = null; TD.prev = null; TD.used = false; applyLoadout(); saveProfile();
+  setTimeout(() => toast(`Понравился «${CARS[id].name}»? В гараже — за ${CARS[id].price.toLocaleString('ru-RU')} монет.`, 4), 800);
 }
 function adCountdown(done) {
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
@@ -7556,7 +7598,7 @@ const PV_TEXT = { 1: 'Город спит, а ты нет. Довези кейс
 // main screen: the next step on the big button, the rank and progress, the side lines open or locked
 function renderMenuPath() {
   if (typeof PROF === 'undefined' || !PROF || !PROF.st) return;
-  rwUpdate();
+  rwUpdate(); extrasUpdate();
   checkRank(true);
   const s = nextStep(), first = missionsDone() === 0, logo = document.querySelector('.pv-logo span'), tag = document.querySelector('.pv-tag');
   if (s) { if (logo) logo.textContent = `Эпизод ${s.ep}. ${EP_NAMES[s.ep]}`; if (tag) tag.textContent = (EPS[s.ep] && EPS[s.ep].logline) || PV_TEXT[s.ep] || ''; }
@@ -7641,7 +7683,7 @@ function showEnd2() {
       <div><small>Монеты</small><b>${state.coins}</b></div>
     </div>
     <div class="btns">
-      <button id="mDouble" class="btn" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mDouble" class="btn x2" type="button" ${state.doubled || !state.coins ? 'disabled' : ''}>${state.doubled ? '✓ Награда удвоена' : `🎬 Ещё +${state.coins} монет за рекламу (×2)`}</button>
       <button id="mNext" class="btn primary" type="button">Эпизод 3 →</button>
       <button id="mAgain" class="btn" type="button">В меню</button>
     </div>
@@ -8906,7 +8948,7 @@ function showEndGen(ep) {
       <div><small>Монеты</small><b>${state.coins}</b></div>
     </div>
     <div class="btns">
-      <button id="mDouble" class="btn" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mDouble" class="btn x2" type="button" ${state.doubled || !state.coins ? 'disabled' : ''}>${state.doubled ? '✓ Награда удвоена' : `🎬 Ещё +${state.coins} монет за рекламу (×2)`}</button>
       ${endPathBtns(ep)}
       <button id="mAgain" class="btn" type="button">В меню</button>
     </div>
@@ -9487,7 +9529,7 @@ async function cloudRestore() {
 }
 async function cloudSave() {
   CLOUD.saveT = 0; if (!CLOUD.sb || !CLOUD.user || !PROF.cloud || CLOUD.hold) return;
-  const { god, cloud, login, name, ...data } = PROF;
+  const { god, cloud, login, name, ...data } = PROF; if (TD.car && TD.prev) data.car = TD.prev;
   try { await CLOUD.sb.from('profiles').update({ name: String(name || '').slice(0, 24), data, progress: collectProgress() }).eq('id', CLOUD.user.id); } catch (e) { /* will retry on the next save */ }
 }
 function cloudSaveSoon() { if (PIKABU) gpSaveSoon(); if (!PROF.cloud || CLOUD.saveT) return; CLOUD.saveT = setTimeout(cloudSave, 2500); }
@@ -9575,7 +9617,7 @@ function loadProfile() {
   PROF.god = false; PROF.cloud = false; PROF.login = null; CLOUD.user = null;
   applyLoadout();
 }
-function saveProfile() { if (PROF.cloud) { cloudSaveSoon(); return; } const { god, cloud, ...rest } = PROF; store.set(profKey(null), rest); if (PIKABU) gpSaveSoon(); }
+function saveProfile() { if (PROF.cloud) { cloudSaveSoon(); return; } const { god, cloud, ...rest } = PROF; if (TD.car && TD.prev) rest.car = TD.prev; store.set(profKey(null), rest); if (PIKABU) gpSaveSoon(); }
 async function profLogin(login, pass) {
   const l = (login || '').trim().toLowerCase();
   if (!l || !pass) return 'Введи логин и пароль.';
@@ -10164,9 +10206,11 @@ function renderProfile() {
   } else if (profTab === 'shop') {
     if (PLATFORM === 'web' && !PAY.checked) payCheck();
     const payShow = PLATFORM === 'web' && PAY.ready && (!PAY.test || PROF.god);
-    h = `${payShow ? `<div class="plabel">Монеты${PAY.test ? ' · тестовый режим' : ''}</div><div class="pitems">${COIN_PACKS.map(([id, rub, coins, bonus]) => `<div class="pitem shop coin-pack"><b>${coins.toLocaleString('ru-RU')} монет${bonus ? ` <em>+${bonus}%</em>` : ''}</b><span>${bonus ? 'Выгоднее, чем по 3 монеты за рубль' : '3 монеты за рубль'}</span><button class="btn sm primary" data-act="buy-coins" data-id="${id}" type="button">${rub} ₽</button></div>`).join('')}</div><div class="note">Оплата через Робокассу. Монеты придут в профиль после оплаты — на всех устройствах.${PROF.cloud ? '' : ' Чтобы купить, войди в профиль.'}</div>` : ''}
+    // v135: the starter pack on top of the Pikabu shop for those who don't have it (it used to sit at the bottom, under the free coins)
+    const stTop = PIKABU && PK_DIRECT && !PROF.god && !(PROF.pkOwn && PROF.pkOwn.starter);
+    h = `${stTop ? `<div class="plabel">Для новичков</div><div class="pitems"><div class="pitem prem shop starter-top">${pimg('pack', 'starter', 9999, false)}<b>${PACKS.starter.name}</b><span>${PACKS.starter.desc}. Быстрая машина и запас на первые эпизоды.</span><button class="btn sm primary" data-act="buy-pack" data-id="starter" type="button">Купить за ${(PK.prices && PK.prices.starter) || PACKS.starter.rub + ' ₽'}</button></div></div>` : ''}${payShow ? `<div class="plabel">Монеты${PAY.test ? ' · тестовый режим' : ''}</div><div class="pitems">${COIN_PACKS.map(([id, rub, coins, bonus]) => `<div class="pitem shop coin-pack"><b>${coins.toLocaleString('ru-RU')} монет${bonus ? ` <em>+${bonus}%</em>` : ''}</b><span>${bonus ? 'Выгоднее, чем по 3 монеты за рубль' : '3 монеты за рубль'}</span><button class="btn sm primary" data-act="buy-coins" data-id="${id}" type="button">${rub} ₽</button></div>`).join('')}</div><div class="note">Оплата через Робокассу. Монеты придут в профиль после оплаты — на всех устройствах.${PROF.cloud ? '' : ' Чтобы купить, войди в профиль.'}</div>` : ''}
     ${rwOn() ? `<div class="plabel">Бесплатно</div><div class="pitems"><div class="pitem shop"><b>${RWD.coins} монет</b><span>за просмотр рекламы · до ${RWD.perDay} раз в день</span><button class="btn sm primary" data-act="rw-coins" type="button" ${rwWait() !== 0 ? 'disabled' : ''}>${rwWait() < 0 ? 'Завтра' : rwWait() > 0 ? `Через ${Math.ceil(rwWait() / 60e3)} мин` : 'Смотреть'}</button></div></div>` : ''}
-    ${PIKABU ? `<div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass) || (PK_DIRECT && id === 'starter' && PROF.pkOwn && PROF.pkOwn.starter); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : PK_DIRECT ? 'Купить за ' + ((PK.prices && PK.prices[id]) || k.rub + ' ₽') : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
+    ${PIKABU ? `<div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).filter(([id]) => !(stTop && id === 'starter')).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass) || (PK_DIRECT && id === 'starter' && PROF.pkOwn && PROF.pkOwn.starter); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : PK_DIRECT ? 'Купить за ' + ((PK.prices && PK.prices[id]) || k.rub + ' ₽') : k.rub + ' ₽'}</button></div>`; }).join('')}</div>
     <div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button">${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>` : `<div class="plabel">Расходники</div><div class="pitems">${Object.entries(ITEMS).map(([id, it]) => `<div class="pitem shop">${pimg('item', id, it.price)}<b>${it.name} <em>×${PROF.inv[id]}</em></b><span>${it.desc}</span><button class="btn sm primary" data-act="buy-item" data-id="${id}" type="button">${PROF.god ? 'Взять' : it.price + ' монет'}</button></div>`).join('')}</div>
     <div class="plabel">Наборы и премиум</div><div class="pitems">${Object.entries(PACKS).map(([id, k]) => { const owned = (id === 'noads' && PROF.noAds) || (id === 'pass' && PROF.pass) || (PK_DIRECT && id === 'starter' && PROF.pkOwn && PROF.pkOwn.starter); return `<div class="pitem prem shop">${pimg('pack', id, k.rub ? 9999 : 0, id === 'pass')}<b>${k.name}</b><span>${k.desc}</span><button class="btn sm ${owned ? '' : 'primary'}" data-act="buy-pack" data-id="${id}" type="button" ${owned ? 'disabled' : ''}>${owned ? 'Куплено' : PROF.god ? 'Взять (тест)' : PK_DIRECT ? 'Купить за ' + ((PK.prices && PK.prices[id]) || k.rub + ' ₽') : k.rub + ' ₽'}</button></div>`; }).join('')}</div>`}
     <div class="pmsg">${esc(profMsg)}</div>`;
@@ -14203,7 +14247,7 @@ function showPreview() {
   pvEnemy.g.visible = true; pc.g.visible = true; showDisc.visible = false; arrow.visible = false; setBeam(null);
   if (showFig) showFig.g.visible = false;
   pv.x = -140; pv.shot = 0; pv.shotT = 0; snapCam = true;
-  renderMenuPath(); setTimeout(mrgPlace, 300); setTimeout(menuNudge, 1200);
+  tdEnd(); renderMenuPath(); setTimeout(mrgPlace, 300); setTimeout(menuNudge, 1200);
 }
 function nextShot() { pv.shot = (pv.shot + 1) % 4; pv.shotT = 0; snapCam = true; }
 function updatePreview(dt) {
@@ -14312,7 +14356,7 @@ function showEnd() {
       <div><small>Монеты</small><b>${state.coins}</b></div>
     </div>
     <div class="btns">
-      <button id="mDouble" class="btn" type="button" ${state.doubled ? 'disabled' : ''}>${state.doubled ? 'Награда удвоена' : 'Удвоить монеты за рекламу'}</button>
+      <button id="mDouble" class="btn x2" type="button" ${state.doubled || !state.coins ? 'disabled' : ''}>${state.doubled ? '✓ Награда удвоена' : `🎬 Ещё +${state.coins} монет за рекламу (×2)`}</button>
       <button id="mEp2" class="btn primary" type="button">Эпизод 2 →</button>
       <button id="mAgain" class="btn" type="button">Сменить водителя</button>
     </div>
@@ -14337,6 +14381,8 @@ setInterval(() => { if (state.mode === 'preview') { renderMenuPath(); mrgPlace()
 $('btnCities').addEventListener('click', () => openLine(LINES[2]));
 $('btnDaily').addEventListener('click', () => { initAudio(); dailyOpen(); });
 $('btnRw').addEventListener('click', () => { initAudio(); rewardCoins(); });
+$('btnChest').addEventListener('click', () => { initAudio(); chestOpen(); });
+$('btnTd').addEventListener('click', () => { initAudio(); tdStart(); });
 setInterval(rwUpdate, 20000);
 $('btnBack').addEventListener('click', showPreview);
 $('btnGo').addEventListener('click', startSelected);
@@ -14512,7 +14558,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { menuNudge, dailyState, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { menuNudge, dailyState, TD, tdEnd, extrasUpdate, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
