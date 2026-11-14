@@ -755,7 +755,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v134'; window.__errs = [];
+window.APP_VER = 'v135'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6817,7 +6817,11 @@ function updateDrive(dt) {
 
 function arriveAtYard() {
   pc.vel.set(0, 0, 0); arrow.visible = false; setEngine(0, false);
-  for (const e of enemyCars) { explode(e.pos, 0.6); scene.remove(e.g); } enemyCars.length = 0; clearBullets();
+  const nCh = enemyCars.length;
+  for (const e of enemyCars) { explode(e.pos, NOVICE.on ? 1 : 0.6); scene.remove(e.g); } enemyCars.length = 0; clearBullets();
+  // v135: a newcomer gets the show (the pursuers crash into the gate) and a short way on to the yard
+  if (NOVICE.on) { if (nCh) { addCoins(100); toast('«Шакалы» влетели в ворота! +100 монет', 2.6); }
+    playDialog([['hero', 'Склад семь. А вот и встречающие — с оружием. Дальше пешком.']], setupAct2); return; }
   playDialog([
     ['hero', 'Склад семь. Ворота открыты, а заказчика не видно.'],
     ['mark', 'Странно. Мне сказали, тебя встретят прямо у ворот.'],
@@ -6836,7 +6840,7 @@ function setupAct2() {
   yardGate.position.y = 0; if (!gateCollider) gateCollider = addBox(120, -88, 16, 1, 2.6);
   warehouseDoor.position.y = 0;
   if (medkit) { scene.remove(medkit); medkit = null; }
-  [[95, -131], [110, -131], [130, -131], [146, -131], [120, -119]].forEach(([x, z]) => spawnEnemy(x, z, false));
+  (NOVICE.on ? [[110, -131], [130, -131], [120, -119]] : [[95, -131], [110, -131], [130, -131], [146, -131], [120, -119]]).forEach(([x, z]) => spawnEnemy(x, z, false));
   setBeam(null);
   setObjective('Зачисти двор склада от «Шакалов».');
   $('hpLabel').textContent = 'Здоровье';
@@ -6962,13 +6966,17 @@ function updateFoot(dt) {
         ['hero', 'Счётчик уже включён. Платить будешь ты.'],
       ], () => {
         state.mode = 'foot';
-        spawnQueue = [{ x: 116, z: -130, t: 0.2 }, { x: 124, z: -130, t: 0.6 }, { x: 120, z: -130, t: 1.6, boss: true }, { x: 117, z: -130, t: 3.2 }];
+        spawnQueue = NOVICE.on ? [{ x: 116, z: -130, t: 0.2 }, { x: 120, z: -130, t: 1.2, boss: true, cfg: { hp: 170 } }] : [{ x: 116, z: -130, t: 0.2 }, { x: 124, z: -130, t: 0.6 }, { x: 120, z: -130, t: 1.6, boss: true }, { x: 117, z: -130, t: 3.2 }];
         setObjective('Останови бригадира «Шакалов». Аптечка во дворе.');
       });
     } else if (state.wave === 2) {
       state.wave = 3; setBeam(DOOR); setObjective('Войди на склад и отдай кейс.'); toast('Двор чист', 1.6);
     } else if (state.wave === 3 && hero.pos.distanceTo(DOOR) < 4) {
       state.wave = 4; setBeam(null);
+      if (NOVICE.on) { playDialog([
+        ['vera', `Браво, ${CH.name}. Кейс пустой — груз это ты. Нам нужен был водитель, который проедет через весь город и выживет.`],
+        ['hero', 'Кто меня сдал?'],
+        ['mark', `…${CH.name}, прости. Они не оставили мне выбора.`]], showEnd); return; }
       playDialog([
         ['vera', `Браво, ${CH.name}. Ты ${gx('сделал', 'сделала')} всё ровно так, как мы рассчитали.`],
         ['hero', 'Вы заказчица? Вот ваш кейс. И с вас за ожидание.'],
@@ -14243,7 +14251,7 @@ function startMission() {
   setupAct1(); state.act = state.act || 1; missionLog('start', null, { type: 'ep1', title: 'Эпизод 1 · Кейс' });
   // v127: a player with no mission won yet gets a gentle first ride — the chase starts later, fewer pursuers, half the damage —
   // so the first win comes in a couple of minutes (on Pikabu only 1 of 11 newcomers finished it)
-  NOVICE.on = missionsDone() === 0; if (NOVICE.on) state.spawnT = 14;
+  NOVICE.on = missionsDone() === 0; if (NOVICE.on) state.spawnT = 7;   // v135: 14 s of empty streets was the boring part — 7 s
   state.mode = 'drive';
   // v126: a new player started by the game itself goes straight to the wheel — all of them quit during this dialog;
   // the gist of it in one line instead (the dialog stays for a start from the menu)
@@ -14289,7 +14297,9 @@ function revive() {
 }
 function showEnd() {
   state.mode = 'end'; setEngine(0, false);
-  state.coins += 150; walletAdd(150); profStat('chapters'); profEp(1); $('hud').hidden = true; $('touch').hidden = true;
+  const firstWin = NOVICE.on; NOVICE.on = false;
+  state.coins += 150 + (firstWin ? 300 : 0); walletAdd(150 + (firstWin ? 300 : 0)); profStat('chapters'); profEp(1);
+  if (firstWin) setTimeout(() => toast('Первая победа! +300 монет бонусом', 3), 600); $('hud').hidden = true; $('touch').hidden = true;
   const t = Math.round(state.time), mm2 = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   const render = () => showModal(`
     <div class="kicker">Эпизод 1 пройден</div>
