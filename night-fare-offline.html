@@ -762,7 +762,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v132'; window.__errs = [];
+window.APP_VER = 'v133'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -831,7 +831,7 @@ function crashReport(msg) {   // straight to the error table, right now (the pag
   try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER, platform: 'boot', browser: navigator.userAgent.slice(0, 200), msg: String(msg).slice(0, 300), place: 'crash' }]) }).catch(() => {}); } catch (e) { /* no fetch */ }
 }
 try { localStorage.setItem('nf-crumb-prev', localStorage.getItem('nf-crumb') || ''); } catch (e) { /* storage unavailable */ }
-const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') || 0; if (localStorage.getItem('nf-run') === '1') { CRASH_CRUMB = localStorage.getItem('nf-crumb'); n++; crashReport('crash x' + n + ': ' + (CRASH_CRUMB || 'no note')); localStorage.setItem('nf-crash', String(n)); } localStorage.setItem('nf-run', '1'); } catch (e) { /* storage unavailable */ } crumbStage('boot'); return n; })();
+const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') || 0; if (localStorage.getItem('nf-run') === '1') { CRASH_CRUMB = localStorage.getItem('nf-crumb'); window.__crashNow = true; n++; crashReport('crash x' + n + ': ' + (CRASH_CRUMB || 'no note')); localStorage.setItem('nf-crash', String(n)); } localStorage.setItem('nf-run', '1'); } catch (e) { /* storage unavailable */ } crumbStage('boot'); return n; })();
 { const mark = (on) => { try { if (on) localStorage.setItem('nf-run', '1'); else localStorage.removeItem('nf-run'); } catch (e) { /* storage unavailable */ } };
   addEventListener('pagehide', () => mark(false)); addEventListener('pageshow', () => mark(true)); document.addEventListener('visibilitychange', () => mark(!document.hidden));
   setTimeout(() => { try { localStorage.setItem('nf-crash', '0'); } catch (e) { /* storage unavailable */ } }, 120000); }   // two minutes without a crash: the count starts over
@@ -841,7 +841,17 @@ const CRASH = (() => { let n = 0; try { n = +localStorage.getItem('nf-crash') ||
 // the third stops the circle and says what happened, with a restart button.
 const GL_LOST = (() => { try { return JSON.parse(sessionStorage.getItem('nf-gllost') || '[]').filter((t) => Date.now() - t < 5 * 60e3); } catch (e) { return []; } })();
 let GL_DEAD = false;
-const LITE_MEM = (() => { try { return localStorage.getItem('nf-litemem') === '1'; } catch (e) { return false; } })();
+// v133: the light set also for phones whose app or browser keeps killing the page (Pikabu app on Android, Mali-G52, 4 GB: 4 crashes in a night —
+// the crash count above starts over after 2 minutes, so the light set never came): 2 crashes in 48 hours on a touch device, and phones with 2 GB or less
+const LITE_MEM = (() => { try {
+  if (localStorage.getItem('nf-litemem') === '1') return true;
+  const list = (JSON.parse(localStorage.getItem('nf-crashes') || '[]') || []).filter((t) => Date.now() - t < 48 * 3600e3);
+  if (window.__crashNow) list.push(Date.now());
+  localStorage.setItem('nf-crashes', JSON.stringify(list.slice(-5)));
+  const lite = isTouch && (list.length >= 2 || (navigator.deviceMemory || 8) <= 2);
+  if (lite && list.length >= 2) localStorage.setItem('nf-litemem', '1');
+  return lite;
+} catch (e) { return false; } })();
 const GFX = (() => { let v = null; try { v = localStorage.getItem('nf-gfx'); if (CRASH >= 2) localStorage.setItem('nf-gfx', 'auto'); } catch (e) { /* storage unavailable */ } const phone = isTouch && (Math.min(screen.width, screen.height) < 600 || IOS);   // phones and iPads start light (HD in the pause menu); tablets and computers in HD
   return { pref: v === 'hd' && CRASH === 0 ? 'hd' : v === 'auto' || CRASH >= 1 || phone ? 'auto' : 'hd', chosen: v === 'hd' || v === 'auto' || CRASH >= 1, crash: CRASH }; })();   // HD by default; «chosen» = the player picked it in the pause menu (or a crash picked «auto»)   // HD by default; «chosen» = the player picked it in the pause menu
 // the GPU name (where the browser tells it): phones with a weak GPU (Mali-G57 in Helio G99 — Tecno, Infinix, Redmi…) start lighter
