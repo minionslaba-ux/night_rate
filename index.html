@@ -762,7 +762,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v133'; window.__errs = [];
+window.APP_VER = 'v134'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5153,12 +5153,15 @@ function autoFirstRide() {
     if (missionsDone() > 0 || store.get('nf-autoride')) return;
     const calm = () => state.mode === 'preview' && $('gate').hidden && $('modal').hidden && $('prof').hidden && !PEOPLE.wait;
     if (!calm()) return;
-    const revDone = () => new Promise((r) => { const t = () => (REV.q || LIFE.peds.some((x) => x.wakeAt) ? setTimeout(t, 200) : setTimeout(r, 400)); t(); });   // and every passer-by already out (their shaders built in the menu, not at the wheel)   // the whole city on the GPU first: a start in the middle of it piles it into one frame
+    // v134: at most 3 s for the passers-by (they kept a newcomer waiting 13–35 s after the first picture, and 12 of 30 Pikabu players
+    // never started a mission); the rest come out one per frame while the car is already on the road
+    const revDone = () => new Promise((r) => { const t0 = performance.now(); const t = () => ((REV.q || LIFE.peds.some((x) => x.wakeAt)) && performance.now() - t0 < 3000 ? setTimeout(t, 200) : setTimeout(r, 300)); t(); });
+    toast('Готовим первую поездку…', 2.5);
     peopleLoad().then(revDone).then(() => {
       if (!calm() || missionsDone() > 0 || store.get('nf-autoride')) return;
       store.set('nf-autoride', 1); trace('autoride');
       toast('Поехали! Первая миссия', 1.6);
-      setTimeout(() => { if (calm()) { AUTO_RIDE.skip = true; startMission(); } }, 1100);
+      setTimeout(() => { if (calm()) { AUTO_RIDE.skip = true; startMission(); } }, 600);
     }).catch(() => {});
   } catch (e) { /* the menu stays */ }
 }
@@ -7223,14 +7226,20 @@ function ch1(intro) {
       navGoal: () => t.pos,
       update(dt) {
         setBeam(t.pos);
-        const d = pc.pos.distanceTo(t.pos), far = 80 + 15 * this.ease, rate = 24 * Math.max(0.45, 1 - 0.15 * this.ease);
+        // v134: softer from the very first try (on Pikabu all 3 newcomers who got here lost the target at ~45 s, 2 of them left):
+        // the target may be 110 m away (the lightest graphics step draws 90 m), it slows down when the player falls behind,
+        // 14 s to catch up instead of 9, and a warning as soon as the target starts getting away
+        const d = pc.pos.distanceTo(t.pos), far = 110 + 15 * this.ease, rate = 24 * Math.max(0.45, 1 - 0.15 * this.ease);
+        if (t.speed < 30) t.speed = d > 80 ? 10 : d > 55 ? 13 : 17;
         this.grace = Math.max(0, this.grace - dt);
         if (this.grace > 0) this.sus = 0;
         else if (d < 4) this.sus = 100;
         else if (d < 12) this.sus += rate * dt; else this.sus = Math.max(0, this.sus - 6 * dt);
         if (d > far) this.lost += dt; else this.lost = Math.max(0, this.lost - dt * 2);
         if (this.sus >= 100 && secondSet(((sp) => () => { this.sus = 0; this.lost = 0; this.grace = 4; t.speed = sp; })(t.speed))) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 12 метров.'); }
-        if (this.lost > 9 + this.ease && secondSet(() => { this.lost = 0; this.sus = 0; this.grace = 4; })) return failChapter('Цель потеряна', `Серая машина скрылась. Не отставай дальше ${far} метров.`);
+        if (this.lost > 2 && !this.warned) { this.warned = true; toast('Серая машина уходит — прибавь газу! Стрелка ведёт к ней.', 3.2); }
+        if (this.lost <= 0) this.warned = false;
+        if (this.lost > 14 + this.ease && secondSet(() => { this.lost = 0; this.sus = 0; this.grace = 4; })) return failChapter('Цель потеряна', `Серая машина скрылась. Не отставай дальше ${far} метров.`);
         if (t.arrived && d < 60) {
           finishChapter(1, 100, [
             ['hero', 'Порт. Контейнеры, тишина и ни одной камеры. Идеальное логово.'],
@@ -7241,10 +7250,10 @@ function ch1(intro) {
       },
       hud() {
         const d = pc.pos.distanceTo(t.pos);
-        return { bars: [{ label: 'Подозрение', frac: this.sus / 100, color: 'var(--neon)' }], timer: this.lost > 0.3 ? `Теряешь цель: ${Math.ceil(9 + this.ease - this.lost)}` : d < 12 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: this.lost > 0.3 || d < 12 };
+        return { bars: [{ label: 'Подозрение', frac: this.sus / 100, color: 'var(--neon)' }], timer: this.lost > 0.3 ? `Теряешь цель: ${Math.ceil(14 + this.ease - this.lost)}` : d < 12 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: this.lost > 0.3 || d < 12 };
       },
     };
-    setObjective(`Езжай за серой машиной «Шакалов». Держись дальше 12 м, но не отставай больше чем на ${MIS.far0 = 80 + 15 * MIS.ease} м.`);
+    setObjective(`Езжай за серой машиной «Шакалов». Держись дальше 12 м, но не отставай больше чем на ${MIS.far0 = 110 + 15 * MIS.ease} м.`);
   };
   if (!intro) return go();
   // prologue at warehouse 7: Vera explains the deal
