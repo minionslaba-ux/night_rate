@@ -766,7 +766,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v137'; window.__errs = [];
+window.APP_VER = 'v138'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1011,8 +1011,37 @@ function revealStep() {
   if (!REV.q.length) { REV.q = null; REV.seen = null; window.__revealMs = Math.round(performance.now() - REV.t0); }
 }
 function revealAll() { if (REV.q) for (const o of REV.q) if (o.layers.mask === 1 << 31) o.layers.mask = 1; REV.q = null; REV.seen = null; }
+// v137: on the two lightest steps (weak phones, Chromebooks, old Intel HD: 15–18 fps on Pikabu) the city parts beyond the draw
+// distance are hidden whole, twice a second — three.js then does not walk their ~2000 meshes every frame (of 653 top-level parts
+// ~600 lie farther than 150 m, and these steps draw 90–130 m). Only the parts buildWorld made, never the huge ones (instanced kit,
+// ground), and only what this code itself hid is shown again.
+const FARC = { list: [], n: 0, on: false };
+function farCullInit(pre) {
+  try {
+    const box = new THREE.Box3(), c = new V3();
+    for (const o of scene.children) {
+      if (pre.has(o) || o.isLight || o.isCamera) continue;
+      let lit = false; o.traverse((x) => { if (x.isLight) lit = true; }); if (lit) continue;   // hiding a light changes the light count: every shader would rebuild
+      box.setFromObject(o); if (box.isEmpty()) continue; box.getCenter(c);
+      const r = Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
+      if (r > 120) continue;
+      FARC.list.push({ o, x: c.x, z: c.z, r });
+    }
+  } catch (e) { FARC.list = []; }
+}
+function farCull() {
+  const on = !HD() && perf.level >= 5 && perf.view > 0 && state.mode !== 'preview' && state.mode !== 'select';
+  if (!on) { if (FARC.on) { FARC.on = false; for (const q of FARC.list) if (q.hid) { q.o.visible = true; q.hid = false; } } return; }
+  FARC.on = true; if (FARC.n++ % 15) return;
+  const cx = camera.position.x, cz = camera.position.z, lim = perf.view + 25;
+  for (const q of FARC.list) {
+    const far = Math.hypot(q.x - cx, q.z - cz) - q.r > lim;
+    if (far && q.o.visible) { q.o.visible = false; q.hid = true; } else if (!far && q.hid) { q.o.visible = true; q.hid = false; }
+  }
+}
 function render() {
   if (GL_DEAD) return;
+  farCull();
   if (REV.q) { if (state.mode === 'preview' || state.mode === 'select') revealStep(); else revealAll(); }
   if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else { coverDrawn = 0; if (RS.pending) resize(); }
   if (perf.shadowSkip) { renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = (perf.fn++ % perf.every) === 0; }
@@ -1077,6 +1106,12 @@ function perfApply() {
   const pr = L >= 6 ? Math.min(DPR, 0.55) : L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
   if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
   if (L >= 4) composer = null;
+  const lc = lightPlayerCar(); if (perf.lightCar !== lc) { const had = perf.lightCar !== undefined; perf.lightCar = lc; if (had) pcRebuild(); }
+}
+const lightPlayerCar = () => !HD() && (perf.level >= 5 || LITE_MEM);
+// only the player's car mesh (applyLoadout would also drop the hero — not in the middle of a mission)
+function pcRebuild() {
+  try { if (!pc || !pc.g || !KIT.car) return; const m = makeCar(0, true), vis = pc.g.visible; m.g.position.copy(pc.g.position); m.g.rotation.copy(pc.g.rotation); m.g.visible = vis; scene.remove(pc.g); pc.g = m.g; pc.wheels = m.wheels; } catch (e) { /* keep the old one */ }
 }
 // one report per session after a minute of play: how fast the game really runs on this device (table nf_fps)
 function perfReport() {
@@ -4924,7 +4959,8 @@ function makeCar(color, kind, forceModel) {
   const name = forceModel || (player ? PLAYER_CAR.model : wreck ? 'car_sedan' : pol ? 'car_police' : kind === 'van' ? 'car_stationwagon' : pick(['car_sedan', 'car_hatchback', 'car_stationwagon', 'nine']));
   // the realistic sports car for the taxi, the gangs, traffic and wrecks; the police, vans and garage cars keep their own
   // detailed model: the player's taxi always; the gang cars on computers (on phones they would cost too much speed); traffic and wrecks stay light
-  const real = NR.carOk && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' && !(PLAYER_CAR.glb && GLBC[PLAYER_CAR.glb] && GLBC[PLAYER_CAR.glb].scene) : kind === false && (!isTouch || HD()) && perf.level === 0);
+  // v138: not on the two lightest steps / the light set — the realistic taxi alone is 224k triangles, more than half of a frame there
+  const real = NR.carOk && !forceModel && (player ? PLAYER_CAR.model === 'car_taxi' && !lightPlayerCar() && !(PLAYER_CAR.glb && GLBC[PLAYER_CAR.glb] && GLBC[PLAYER_CAR.glb].scene) : kind === false && (!isTouch || HD()) && perf.level === 0);
   // the gangs on computers: the pack's cars in dark paint (light enough: 17–20k triangles); phones keep the kit cars
   const gang = null;   // the gangs keep the realistic sports car (the «real» path below)
   const gkey = forceModel && forceModel.indexOf('glb:') === 0 ? forceModel.slice(4) : player ? PLAYER_CAR.glb : pol && !forceModel ? 'police' : gang;
@@ -14580,7 +14616,7 @@ function loadReport(ok, stage, note) {
   } catch (e) { /* no report */ }
 }
 BOOT_LOAD.then(() => {
-  crumbStage('world'); buildWorld(); perfApply();   // the city's parked cars and lamps now exist: apply the shadow and distance settings to them
+  crumbStage('world'); const preWorld = new Set(scene.children); buildWorld(); farCullInit(preWorld); perfApply();   // the city's parked cars and lamps now exist: apply the shadow and distance settings to them
   crumbStage('profile'); loadProfile();   // a guest until the server session (if any) is restored
   initLife();
   buildRoster();
@@ -14612,7 +14648,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { FARC, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
