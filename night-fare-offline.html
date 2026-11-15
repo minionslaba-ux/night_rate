@@ -142,6 +142,40 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
 .btn.daily { background: linear-gradient(160deg, #ff5ad1, #8a2be2); color: #fff; border: 0; }
 .btn.rw-btn { font-size: 14px; padding: 8px 14px; background: rgba(255,210,58,.12); border: 1px solid rgba(255,210,58,.55); color: #ffd23a; font-weight: 700; } .btn.rw-btn:disabled { opacity: .55; }
+/* v140: UX motion — windows slide in, menu buttons one after another, HUD panels from the edges at the start of a mission */
+#modal.ux-in { animation: uxFade .2s ease-out both; } #modal.ux-in #modalCard { animation: uxCard .32s cubic-bezier(.2,1.2,.4,1) both; }
+@keyframes uxFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes uxCard { from { opacity: 0; transform: translateY(22px) scale(.96); } to { opacity: 1; transform: none; } }
+.preview.ux-enter .btns > *, .preview.ux-enter .pv-path, .preview.ux-enter .dq-box { animation: uxUp .42s cubic-bezier(.2,1.1,.4,1) both; }
+.preview.ux-enter .btns > :nth-child(2) { animation-delay: .06s; } .preview.ux-enter .btns > :nth-child(3) { animation-delay: .12s; } .preview.ux-enter .btns > :nth-child(4) { animation-delay: .18s; }
+.preview.ux-enter .btns > :nth-child(5) { animation-delay: .24s; } .preview.ux-enter .btns > :nth-child(n+6) { animation-delay: .3s; } .preview.ux-enter .pv-path { animation-delay: .32s; } .preview.ux-enter .dq-box { animation-delay: .38s; }
+@keyframes uxUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.hud.ux-enter .hud-tl { animation: uxLeft .45s cubic-bezier(.2,1.1,.4,1) both; } .hud.ux-enter .hud-tr { animation: uxRight .45s .05s cubic-bezier(.2,1.1,.4,1) both; }
+@keyframes uxLeft { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: none; } }
+@keyframes uxRight { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+#touch.ux-enter > * { animation: uxUp .45s .1s cubic-bezier(.2,1.1,.4,1) both; }
+body.ux-lite #modal.ux-in, body.ux-lite #modal.ux-in #modalCard, body.ux-lite .ux-enter *, body.ux-lite .ux-enter > * { animation-duration: .01s !important; animation-delay: 0s !important; }
+@media (prefers-reduced-motion: reduce) { #modal.ux-in #modalCard, .ux-enter > *, .ux-enter .btns > * { animation: none !important; } }
+/* v140: motion graphics — only transform/opacity (cheap on weak GPUs), no extra files */
+.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9000; overflow: hidden; }
+.fx-coin { position: absolute; left: 0; top: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff6c4, #ffd23a 45%, #c98a12); box-shadow: 0 0 10px rgba(255,200,60,.8); will-change: transform, opacity; }
+.fx-bump { animation: fxBump .35s ease-out; } @keyframes fxBump { 0% { transform: scale(1); } 40% { transform: scale(1.35); color: #fff3a0; } 100% { transform: scale(1); } }
+.fx-title { position: absolute; left: 0; right: 0; top: 30%; text-align: center; color: #fff; font-family: var(--font-display); text-transform: uppercase; }
+.fx-title .k { display: inline-block; font-size: clamp(12px, 2.4vw, 16px); letter-spacing: .35em; color: #ffd23a; opacity: 0; animation: fxIn .35s .05s ease-out forwards, fxOut .4s 1.7s ease-in forwards; }
+.fx-title .t { display: block; font-size: clamp(30px, 7.5vw, 64px); letter-spacing: .04em; text-shadow: 0 0 22px rgba(255,61,110,.65), 0 3px 6px #000; opacity: 0; animation: fxSlam .45s .15s cubic-bezier(.2,1.4,.4,1) forwards, fxOut .4s 1.75s ease-in forwards; }
+.fx-title .bar { display: block; height: 3px; margin: 10px auto 0; width: min(420px, 70vw); background: linear-gradient(90deg, transparent, #ff3d6e, #ffd23a, transparent); transform: scaleX(0); animation: fxBar .5s .25s ease-out forwards, fxOut .4s 1.8s ease-in forwards; }
+@keyframes fxIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fxSlam { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes fxBar { to { transform: scaleX(1); } }
+@keyframes fxOut { to { opacity: 0; transform: translateY(-12px); } }
+.fx-stars { position: absolute; left: 0; right: 0; top: 14%; text-align: center; font-size: clamp(40px, 10vw, 76px); line-height: 1; }
+.fx-stars span { display: inline-block; margin: 0 6px; color: rgba(255,255,255,.22); opacity: 0; transform: scale(.2) rotate(-40deg); animation: fxStar .45s cubic-bezier(.2,1.6,.4,1) forwards, fxOut .5s 2.6s ease-in forwards; }
+.fx-stars span.on { color: #ffd23a; text-shadow: 0 0 24px rgba(255,200,60,.9); }
+@keyframes fxStar { to { opacity: 1; transform: none; } }
+.fx-big { position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%); padding: 14px 26px; border-radius: 16px; background: linear-gradient(160deg, rgba(255,210,58,.95), rgba(255,140,30,.95)); color: #1a1205; font: 800 clamp(18px, 4vw, 30px)/1.15 var(--font-display); text-align: center; box-shadow: 0 0 40px rgba(255,190,40,.6); white-space: nowrap; animation: fxPop .5s cubic-bezier(.2,1.5,.4,1) both, fxOut .45s 2.2s ease-in forwards; }
+@keyframes fxPop { from { opacity: 0; transform: translate(-50%, -50%) scale(.3); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+.fx-lite .fx-title .t, .fx-lite .fx-big { animation-name: fxIn, fxOut; }
+@media (prefers-reduced-motion: reduce) { .fx-title .t, .fx-big, .fx-stars span { animation-name: fxIn, fxOut !important; } }
 .goal-next { margin: 10px 0 4px; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); font-size: 13px; text-align: left; } .goal-next > b { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #ffd23a; margin-bottom: 4px; } .goal-next div { padding: 2px 0; } .goal-next i { display: block; height: 4px; border-radius: 2px; margin-top: 4px; background: linear-gradient(90deg, #ffd23a var(--f), rgba(255,255,255,.12) var(--f)); }
 .dq-box { margin: 10px auto 0; max-width: 420px; background: rgba(11,13,31,.72); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 8px 12px; font-size: 13px; text-align: left; } .dq-box b { display: block; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: #ffd23a; margin-bottom: 4px; } .dq-box div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; color: #dde; } .dq-box div.ok { color: #7aff9a; } .dq-box div small { color: #ffd23a; white-space: nowrap; } .dq-box div.ok small { color: #7aff9a; }
 .btn.x2 { background: linear-gradient(160deg, #ffd23a, #ff9f1c); color: #1a1205; border: 0; font-weight: 800; font-size: 16px; padding: 12px 18px; box-shadow: 0 0 18px rgba(255,190,40,.45); } .btn.x2:disabled { background: rgba(255,210,58,.14); color: #ffd23a; box-shadow: none; opacity: .8; }
@@ -484,7 +518,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .lead { color: #c9c8cf; font: 400 15.5px/1.55 var(--font-body); }
 .btn { min-height: 46px; padding: 0 20px; border: 1px solid var(--hair-2); background: rgba(255,255,255,.03); color: var(--text); font: 600 13px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; border-radius: var(--r); transition: background .12s, border-color .12s, transform .08s; }
 .btn:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.28); }
-.btn:active { transform: translateY(1px); }
+.btn:active { transform: scale(.96); }
 .btn.sm { min-height: 36px; padding: 0 14px; font-size: 11.5px; }
 .btn.primary { position: relative; background: var(--taxi); color: var(--taxi-ink); border-color: var(--taxi); font: 700 13px/1 var(--font-display); letter-spacing: .08em; border-radius: 0; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
 .btn.primary.sm { font-size: 11px; --cut: 7px; }
@@ -766,7 +800,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v139'; window.__errs = [];
+window.APP_VER = 'v140'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1043,7 +1077,7 @@ function farCull() {
 }
 function render() {
   if (GL_DEAD) return;
-  farCull();
+  farCull(); if (FX.pend) fxPending();
   if (REV.q) { if (state.mode === 'preview' || state.mode === 'select') revealStep(); else revealAll(); }
   if (isTouch && coverOpen()) { if (coverDrawn++ > 1) return; } else { coverDrawn = 0; if (RS.pending) resize(); }
   if (perf.shadowSkip) { renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = (perf.fn++ % perf.every) === 0; }
@@ -6188,7 +6222,8 @@ function missionLog(ev, reason, extra) {
   try {
     if (MIS && MIS.online) return;
     if ((ev === 'win' || ev === 'quit') && TD.car && TD.used) setTimeout(tdEnd, 1500);
-    if (ev === 'start') { SECOND.used = false; SECOND.fn = null; if (TD.car) TD.used = true; MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
+    if (ev === 'start') { FX.pend = { ex: String((extra && extra.title) || ''), ep: state.ep, t: performance.now() };
+      SECOND.used = false; SECOND.fn = null; if (TD.car) TD.used = true; MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
       MLOG.gt0 = state.time; MLOG.dmg0 = DIFF.dmg; MLOG.par = (extra && extra.par) || 150;
       { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 2500); } }
     else { if (!MLOG.open) return; MLOG.open = false; }
@@ -6214,6 +6249,7 @@ function missionStars() {
   PROF.stars[key] = { s: Math.max(s, old.s), t: rec ? Math.round(t) : old.t }; saveProfile();
   setTimeout(() => toast(`${'★'.repeat(s)}${'☆'.repeat(3 - s)} · ${fmtT(t)}${rec && old.t ? ' — рекорд!' : ''}${!fast ? ` · быстрее ${fmtT(MLOG.par)} — ещё ★` : ''}${!clean ? ' · без урона — ещё ★' : ''}`, 3.2), 300);
   if (gain > 0) setTimeout(() => addCoins(25 * gain), 1400);
+  fxStars(s);
   return s;
 }
 // ---- replay conditions: a mission already passed gets (70%) one twist and a bigger reward, so the same mission plays differently
@@ -6308,7 +6344,7 @@ function damageEnemy(e, d) {
     for (let i = 0; i < 6; i++) spawnP(e.pos.clone().add(new V3(0, 1.2, 0)), { color: 0xffd060, size: 0.15, vel: rv().multiplyScalar(5), life: 0.4, add: true });
   }
 }
-function addCoins(n) { n = Math.round(n * P.coins * (state.x2 ? 2 : 1)); state.coins += n; walletAdd(n); toast('+' + n + ' монет'); if (n > 0) sfx.coin(); }
+function addCoins(n) { n = Math.round(n * P.coins * (state.x2 ? 2 : 1)); state.coins += n; walletAdd(n); toast('+' + n + ' монет'); if (n > 0) { sfx.coin(); fxCoins(n); } }
 
 // ---------------- UI helpers ----------------
 let toastT = 0;
@@ -6316,7 +6352,7 @@ function toast(text, sec) { const el = $('toast'); el.textContent = text; el.hid
 let objT = 0;   // когда (performance.now)  свернуть подсказку задания в одну строку (в открытом городе)
 function setObjective(t) { $('objText').textContent = t; $('objective').classList.remove('min'); objT = performance.now() + 8000; }
 function showModal(html, handlers) {
-  $('modalCard').innerHTML = html; $('modal').hidden = false; $('modal').classList.remove('over');
+  const wasHidden = $('modal').hidden; $('modalCard').innerHTML = html; $('modal').hidden = false; $('modal').classList.remove('over'); fxCount($('modalCard')); if (wasHidden) uxEnter($('modal'), 'ux-in');
   for (const id in handlers) { const b = $(id); if (b) b.addEventListener('click', handlers[id]); }
   // a guest on the website: under the mission summary, a short button to keep the progress (opens the sign-in)
   if ($('mDouble') && !inMiniApp && !PROF.login && !$('mSave')) {
@@ -6656,7 +6692,7 @@ function dqAdd(kind, n) {
     const [name, need, coins] = DQ_KINDS[kind]; q.p[kind] = Math.min(need, (q.p[kind] || 0) + (n || 1));
     if (q.p[kind] >= need) {
       q.got[kind] = 1; PROF.coins += coins; let msg = `Задание дня выполнено: ${name}. +${coins} монет`;
-      if (q.k.every((k) => q.got[k]) && !q.got.all) { q.got.all = 1; PROF.coins += DQ_BONUS; msg += ` · все три — ещё +${DQ_BONUS}!`; }
+      if (q.k.every((k) => q.got[k]) && !q.got.all) { q.got.all = 1; PROF.coins += DQ_BONUS; msg += ` · все три — ещё +${DQ_BONUS}!`; setTimeout(() => fxBig(`Все задания дня! +${DQ_BONUS}`), 1000); }
       setTimeout(() => { toast(msg, 3.2); try { sfx.coin(); } catch (e) { /* no sound */ } }, 900); updateProfChip();
     }
     saveProfile(); if (state.mode === 'preview') dqRender();
@@ -6668,6 +6704,55 @@ function dqRender() {
   const q = dqToday(); el.hidden = false;
   el.innerHTML = `<b>Задания на сегодня${q.got.all ? ' — все выполнены ✓' : ` · за все три +${DQ_BONUS}`}</b>` + q.k.map((k) => { const [name, need, coins] = DQ_KINDS[k], v = q.p[k] || 0, ok = q.got[k];
     return `<div class="${ok ? 'ok' : ''}"><span>${ok ? '✓' : '▢'} ${name}${ok ? '' : ` · ${k === 'earned' ? v.toLocaleString('ru-RU') : v}/${k === 'earned' ? need.toLocaleString('ru-RU') : need}`}</span><small>+${coins}</small></div>`; }).join('');
+}
+
+// ---- v140: motion graphics (CSS only; nothing to download). On the lightest graphics step and with «reduce motion»:
+// no flying coins, the titles just fade.
+const FX = { el: null, coinT: 0, pend: null };
+// the title card waits for the moment the player takes the wheel (after the mission's dialog), checked every frame in render()
+function fxPending() {
+  const q = FX.pend; if (state.mode !== 'drive' && state.mode !== 'foot') { if (performance.now() - q.t > 120e3) FX.pend = null; return; }
+  FX.pend = null; uxEnter($('hud')); if (isTouch) uxEnter($('touch')); if (MIS && MIS.online) return;
+  const mt = String((MIS && MIS.title) || ''), t0 = / · /.test(mt) && !/^Пролог/.test(mt) ? mt : q.ex, ttl = t0.replace(/^(Эпизод \d+|Миссия \d+)\s*·\s*/i, '');
+  const kick = q.ep >= 90 ? 'Задание дня' : q.ep === 1 ? 'Эпизод 1' : `Эпизод ${q.ep}` + (state.ch ? ` · миссия ${state.ch}` : '');
+  if (ttl && !/^миссия \d+$/i.test(ttl)) fxTitle(kick, ttl);
+}
+const fxLite = () => (typeof perf !== 'undefined' && perf.level >= 6 && !HD()) || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+function fxLayer() { if (!FX.el) { FX.el = document.createElement('div'); FX.el.className = 'fx-layer'; document.body.appendChild(FX.el); } FX.el.classList.toggle('fx-lite', fxLite()); return FX.el; }
+function fxAdd(html, ms) { const d = document.createElement('div'); d.innerHTML = html; const n = d.firstElementChild; fxLayer().appendChild(n); setTimeout(() => n.remove(), ms); return n; }
+function fxBump(el) { if (!el) return; el.classList.remove('fx-bump'); void el.offsetWidth; el.classList.add('fx-bump'); }
+// coins fly from the middle of the screen into the coin counter (HUD), then it bumps
+function fxCoins(n) {
+  try {
+    const target = !$('hud').hidden ? $('coins') : $('selProfile'); if (!target || n < 5) return;
+    const now = performance.now(); if (now - FX.coinT < 350) { fxBump(target); return; } FX.coinT = now;
+    if (fxLite() || !target.getBoundingClientRect) { fxBump(target); return; }
+    const r = target.getBoundingClientRect(); if (!r.width) return;
+    const x0 = innerWidth / 2, y0 = innerHeight * 0.36, x1 = r.left + r.width / 2, y1 = r.top + r.height / 2, k = Math.min(8, 3 + Math.floor(n / 40));
+    for (let i = 0; i < k; i++) {
+      const c = document.createElement('div'); c.className = 'fx-coin'; fxLayer().appendChild(c);
+      const sx = x0 + (Math.random() - 0.5) * 90, sy = y0 + (Math.random() - 0.5) * 50, mx = (sx + x1) / 2 + (Math.random() - 0.5) * 120, my = Math.min(sy, y1) - 60 - Math.random() * 60;
+      const a = c.animate([{ transform: `translate(${sx}px,${sy}px) scale(.4)`, opacity: 0 }, { transform: `translate(${sx}px,${sy}px) scale(1)`, opacity: 1, offset: 0.15 },
+        { transform: `translate(${mx}px,${my}px) scale(1)`, opacity: 1, offset: 0.55 }, { transform: `translate(${x1}px,${y1}px) scale(.5)`, opacity: 0.9 }], { duration: 650 + i * 60, easing: 'cubic-bezier(.5,0,.6,1)' });
+      a.onfinish = () => { c.remove(); if (i === k - 1) fxBump(target); };
+    }
+  } catch (e) { /* decoration only */ }
+}
+// the mission title card: kicker + big title + a neon bar
+function fxTitle(kicker, title) {
+  if (!title) return;
+  fxAdd(`<div class="fx-title"><span class="k">${esc(kicker)}</span><span class="t">${esc(title)}</span><span class="bar"></span></div>`, 2400);
+}
+function fxStars(s) {
+  fxAdd(`<div class="fx-stars">${[0, 1, 2].map((i) => `<span class="${i < s ? 'on' : ''}" style="animation-delay:${0.15 + i * 0.3}s, 2.6s">★</span>`).join('')}</div>`, 3300);
+  for (let i = 0; i < s; i++) setTimeout(() => { try { sfx.coin(); } catch (e) { /* no sound */ } }, 250 + i * 300);
+}
+function uxEnter(el, cls) { if (!el) return; cls = cls || 'ux-enter'; document.body.classList.toggle('ux-lite', fxLite()); el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+function fxBig(text) { fxAdd(`<div class="fx-big">${esc(text)}</div>`, 2800); }
+// end screens: the numbers of the summary count up
+function fxCount(root) {
+  try { if (fxLite()) return; for (const b of root.querySelectorAll('.summary b')) { const v = parseInt(b.textContent.replace(/\s/g, ''), 10); if (!(v > 9) || /[:]/.test(b.textContent)) continue;
+    const t0 = performance.now(), dur = 800; b.textContent = '0'; const step = () => { const k = Math.min(1, (performance.now() - t0) / dur), e = 1 - Math.pow(1 - k, 3); b.textContent = Math.round(v * e).toLocaleString('ru-RU'); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); } } catch (e) { /* decoration only */ }
 }
 function adCountdown(done) {
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
@@ -14339,7 +14424,7 @@ function showPreview() {
   pvEnemy.g.visible = true; pc.g.visible = true; showDisc.visible = false; arrow.visible = false; setBeam(null);
   if (showFig) showFig.g.visible = false;
   pv.x = -140; pv.shot = 0; pv.shotT = 0; snapCam = true;
-  tdEnd(); renderMenuPath(); setTimeout(mrgPlace, 300); setTimeout(menuNudge, 1200);
+  tdEnd(); renderMenuPath(); uxEnter($('preview')); setTimeout(mrgPlace, 300); setTimeout(menuNudge, 1200);
 }
 function nextShot() { pv.shot = (pv.shot + 1) % 4; pv.shotT = 0; snapCam = true; }
 function updatePreview(dt) {
@@ -14435,7 +14520,7 @@ function showEnd() {
   state.mode = 'end'; setEngine(0, false);
   const firstWin = NOVICE.on; NOVICE.on = false;
   state.coins += 150 + (firstWin ? 300 : 0); walletAdd(150 + (firstWin ? 300 : 0)); profStat('chapters'); profEp(1);
-  if (firstWin) setTimeout(() => toast('Первая победа! +300 монет бонусом', 3), 600); $('hud').hidden = true; $('touch').hidden = true;
+  if (firstWin) setTimeout(() => { toast('Первая победа! +300 монет бонусом', 3); fxBig('Первая победа! +300'); }, 600); $('hud').hidden = true; $('touch').hidden = true;
   const t = Math.round(state.time), mm2 = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   const render = () => showModal(`
     <div class="kicker">Эпизод 1 пройден</div>
@@ -14650,7 +14735,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { FARC, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
