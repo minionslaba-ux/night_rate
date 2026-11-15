@@ -153,9 +153,9 @@ body.ux-lite #modal.ux-in, body.ux-lite #modal.ux-in #modalCard, body.ux-lite .u
 .fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9000; overflow: hidden; }
 .fx-coin { position: absolute; left: 0; top: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff6c4, #ffd23a 45%, #c98a12); box-shadow: 0 0 10px rgba(255,200,60,.8); will-change: transform, opacity; }
 .fx-bump { animation: fxBump .35s ease-out; } @keyframes fxBump { 0% { transform: scale(1); } 40% { transform: scale(1.35); color: #fff3a0; } 100% { transform: scale(1); } }
-.fx-title { position: absolute; left: 0; right: 0; top: 30%; text-align: center; color: #fff; font-family: var(--font-display); text-transform: uppercase; }
-.fx-title .k { display: inline-block; font-size: clamp(12px, 2.4vw, 16px); letter-spacing: .35em; color: #ffd23a; opacity: 0; animation: fxIn .35s .05s ease-out forwards, fxOut .4s 1.7s ease-in forwards; }
-.fx-title .t { display: block; font-size: clamp(30px, 7.5vw, 64px); letter-spacing: .04em; text-shadow: 0 0 22px rgba(255,61,110,.65), 0 3px 6px #000; opacity: 0; animation: fxSlam .45s .15s cubic-bezier(.2,1.4,.4,1) forwards, fxOut .4s 1.75s ease-in forwards; }
+.fx-title { position: absolute; left: 0; right: 0; top: 40%; padding: 14px 0 16px; text-align: center; background: linear-gradient(180deg, transparent, rgba(6,7,20,.6) 22%, rgba(6,7,20,.6) 78%, transparent); animation: fxOut .4s 1.85s ease-in forwards; color: #fff; font-family: var(--font-display); text-transform: uppercase; }
+.fx-title .k { display: inline-block; line-height: 1.3; font-size: clamp(12px, 2.4vw, 16px); letter-spacing: .35em; color: #ffd23a; opacity: 0; animation: fxIn .35s .05s ease-out forwards, fxOut .4s 1.7s ease-in forwards; }
+.fx-title .t { display: block; margin: 4px auto 0; padding: 0 16px; max-width: 900px; font-size: clamp(24px, 6.4vw, 54px); line-height: 1.08; letter-spacing: .03em; overflow-wrap: anywhere; text-shadow: 0 0 22px rgba(255,61,110,.65), 0 3px 6px #000; opacity: 0; animation: fxSlam .45s .15s cubic-bezier(.2,1.4,.4,1) forwards, fxOut .4s 1.75s ease-in forwards; }
 .fx-title .bar { display: block; height: 3px; margin: 10px auto 0; width: min(420px, 70vw); background: linear-gradient(90deg, transparent, #ff3d6e, #ffd23a, transparent); transform: scaleX(0); animation: fxBar .5s .25s ease-out forwards, fxOut .4s 1.8s ease-in forwards; }
 @keyframes fxIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes fxSlam { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: scale(1); } }
@@ -793,7 +793,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v140'; window.__errs = [];
+window.APP_VER = 'v141'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6217,7 +6217,7 @@ function missionLog(ev, reason, extra) {
     if (ev === 'start') { FX.pend = { ex: String((extra && extra.title) || ''), ep: state.ep, t: performance.now() };
       SECOND.used = false; SECOND.fn = null; if (TD.car) TD.used = true; MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
       MLOG.gt0 = state.time; MLOG.dmg0 = DIFF.dmg; MLOG.par = (extra && extra.par) || 150;
-      { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 2500); } }
+      { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 3800); }   /* v141: after the title card */ }
     else { if (!MLOG.open) return; MLOG.open = false; }
     const all = store.get('nf-tries') || {};
     const row = { ver: window.APP_VER, sid: MLOG.sid, ep: MLOG.ep, ch: MLOG.ch, title: String(MLOG.title).slice(0, 90), mtype: String(MLOG.type).slice(0, 20), ev,
@@ -6705,7 +6705,7 @@ const FX = { el: null, coinT: 0, pend: null };
 function fxPending() {
   const q = FX.pend; if (state.mode !== 'drive' && state.mode !== 'foot') { if (performance.now() - q.t > 120e3) FX.pend = null; return; }
   FX.pend = null; uxEnter($('hud')); if (isTouch) uxEnter($('touch')); if (MIS && MIS.online) return;
-  const mt = String((MIS && MIS.title) || ''), t0 = / · /.test(mt) && !/^Пролог/.test(mt) ? mt : q.ex, ttl = t0.replace(/^(Эпизод \d+|Миссия \d+)\s*·\s*/i, '');
+  const mt = String((MIS && MIS.title) || ''), t0 = / · /.test(mt) && !/^Пролог/.test(mt) ? mt : q.ex, ttl = t0.replace(/^((Эпизод \d+|Миссия \d+|Задание дня)\s*·\s*)+/i, '');
   const kick = q.ep >= 90 ? 'Задание дня' : q.ep === 1 ? 'Эпизод 1' : `Эпизод ${q.ep}` + (state.ch ? ` · миссия ${state.ch}` : '');
   if (ttl && !/^миссия \d+$/i.test(ttl)) fxTitle(kick, ttl);
 }
