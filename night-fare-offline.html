@@ -800,7 +800,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v142'; window.__errs = [];
+window.APP_VER = 'v143'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1067,12 +1067,15 @@ function farCullInit(pre) {
 }
 function farCull() {
   const on = !HD() && perf.level >= 5 && perf.view > 0 && state.mode !== 'preview' && state.mode !== 'select';
-  if (!on) { if (FARC.on) { FARC.on = false; for (const q of FARC.list) if (q.hid) { q.o.visible = true; q.hid = false; } } return; }
+  // v143: hidden parts are taken out of the scene (not just made invisible): three.js still walked invisible ones every frame to update
+  // their matrices — on a Mali-G52 the frame preparation took ~21 ms. Put back as they come near (no shader rebuild: they carry no lights).
+  const hide = (q) => { q.par = q.o.parent; if (q.par) q.par.remove(q.o); q.hid = true; }, show = (q) => { if (q.par && !q.o.parent) q.par.add(q.o); q.hid = false; };
+  if (!on) { if (FARC.on) { FARC.on = false; for (const q of FARC.list) if (q.hid) show(q); } return; }
   FARC.on = true; if (FARC.n++ % 15) return;
   const cx = camera.position.x, cz = camera.position.z, lim = perf.view + 25;
   for (const q of FARC.list) {
     const far = Math.hypot(q.x - cx, q.z - cz) - q.r > lim;
-    if (far && q.o.visible) { q.o.visible = false; q.hid = true; } else if (!far && q.hid) { q.o.visible = true; q.hid = false; }
+    if (far && !q.hid && q.o.parent) hide(q); else if (!far && q.hid) show(q);
   }
 }
 function render() {
@@ -1139,7 +1142,7 @@ function perfApply() {
   perf.view = L >= 6 ? 90 : L >= 5 ? 130 : L >= 3 ? 170 : L >= 2 ? 230 : 0; camera.far = perf.view || 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(perf.view ? (perf.view - 15) / 800 : 1);
   // parked cars, lamps and benches (instanced kit models, ~0.5 M triangles) stop casting shadows
   scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = L < 3; });
-  const pr = L >= 6 ? Math.min(DPR, 0.55) : L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
+  const pr = L >= 6 ? Math.min(DPR, 0.47) : L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
   if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
   if (L >= 4) composer = null;
   const lc = lightPlayerCar(); if (perf.lightCar !== lc) { const had = perf.lightCar !== undefined; perf.lightCar = lc; if (had) pcRebuild(); }
@@ -6776,6 +6779,15 @@ function missionDetail() {
     return a.join(' · ').slice(0, 190);
   } catch (e) { return null; }
 }
+
+// v143: a newcomer who drives away from the warehouse (one quit at 3 min, 314 m from it) is told to turn round — once in 15 s
+const NOVG = { t: 0, d: 0, away: 0, cd: 0 };
+function novGuide(d, dt) {
+  NOVG.t += dt; NOVG.cd = Math.max(0, NOVG.cd - dt); if (NOVG.t < 2) return; NOVG.t = 0;
+  if (NOVG.d && d > NOVG.d + 8) NOVG.away++; else if (d < NOVG.d - 4) NOVG.away = 0;
+  NOVG.d = d;
+  if (NOVG.away >= 2 && NOVG.cd <= 0) { NOVG.cd = 15; NOVG.away = 0; toast(`Склад в другой стороне — разворачивайся! Следи за зелёной стрелкой (${Math.round(d / 10) * 10} м)`, 3.4); }
+}
 function adCountdown(done) {
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
   const iv = setInterval(() => { n--; $('adCount').textContent = n; if (n <= 0) { clearInterval(iv); $('ad').hidden = true; done(); } }, 1000);
@@ -7051,7 +7063,7 @@ function updateDrive(dt) {
   $('navTurn').textContent = Math.abs(rel) > 2.2 ? 'Развернись' : NAV.pts.length === 1 ? navName : NAV.turn ? `${NAV.turn > 0 ? 'Направо' : 'Налево'} через ${m} м` : `Прямо ${m} м`;
   $('navDist').textContent = `${state.ep === 1 ? 'до склада' : navName.toLowerCase() + ':'} ${Math.round(NAV.dist / 10) * 10} м`;
   updateHeli(dt);
-  if (state.ep === 1) { if (pc.pos.distanceTo(GATE) < 11) arriveAtYard(); }
+  if (state.ep === 1) { const dG = pc.pos.distanceTo(GATE); if (dG < 11) arriveAtYard(); else if (NOVICE.on) novGuide(dG, dt); }
   else if (MIS) MIS.update(dt);
   setEngine(pc.vf, true);
 }
@@ -12160,17 +12172,22 @@ Object.assign(GEN, {
   escort(c, title, done) {
     beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
     const t = makeScripted('tail', c.route, c.car[0], c.car[1], hdg(c.car[2]), { speed: c.speed, stops: {} });
-    const mk = tMark(0, 0, 0x7aff9a, 8); let far = 0; const chase = { max: c.chase || 0 }; state.spawnT = 10;
+    // v143: the escorted car stood on a random road node — often 150–350 m from the player's start, so «Отстал» came by itself
+    // in 8 s (one player failed «Фургон с сервером» ~60 times in a day). Now the player starts right behind it, 5 s of grace,
+    // 12 s to catch up, and the car slows down while the player is behind.
+    if (pc.pos.distanceTo(t.pos) > c.far - 12) { const h = hdg(c.car[2]); placeCar(t.pos.x - Math.sin(h) * 14, t.pos.z - Math.cos(h) * 14, h); }
+    const mk = tMark(0, 0, 0x7aff9a, 8); let far = 0, grace = 5; const chase = { max: c.chase || 0 }; state.spawnT = 10;
     setObjective(`Сопровождение: ${c.name}. Не отставай дальше ${c.far} м.`);
     return { title, noFire: !c.chase, chase, navName: c.name, navGoal: () => t.pos,
       update(dt) {
         mk.position.set(t.pos.x, 0, t.pos.z); setBeam(t.pos);
-        const d = pc.pos.distanceTo(t.pos);
-        if (d > c.far) far += dt; else far = Math.max(0, far - dt * 2);
-        if (far > 8) return failChapter('Отстал', `Охраняемая машина осталась без прикрытия. Держись ближе ${c.far} м.`);
+        const d = pc.pos.distanceTo(t.pos); grace = Math.max(0, grace - dt);
+        if (t.speed < 30) t.speed = d > c.far * 0.9 ? c.speed * 0.55 : d > c.far * 0.6 ? c.speed * 0.8 : c.speed;
+        if (d > c.far && grace <= 0) far += dt; else far = Math.max(0, far - dt * 2);
+        if (far > 12 && secondSet(() => { far = 0; grace = 5; })) return failChapter('Отстал', `Охраняемая машина осталась без прикрытия. Держись ближе ${c.far} м.`);
         if (t.arrived && d < c.far + 10) done();
       },
-      hud() { const d = pc.pos.distanceTo(t.pos); return { timer: far > 0.3 ? `Догоняй: ${Math.ceil(8 - far)}` : `До охраняемой машины ${Math.round(d)} м`, bad: far > 0.3 }; } };
+      hud() { const d = pc.pos.distanceTo(t.pos); return { timer: far > 0.3 ? `Догоняй: ${Math.ceil(12 - far)}` : `До охраняемой машины ${Math.round(d)} м`, bad: far > 0.3 }; } };
   },
   fragile(c, title, done) {
     const base = GEN.deliver(c, title, done), h0 = HITS.n, upd = base.update.bind(base), hud0 = base.hud.bind(base);
@@ -14516,13 +14533,14 @@ function showDead() {
     <p class="lead">${state.ep >= 2 ? (act === 1 ? 'Такси больше не едет, а погоня уже рядом.' : 'Бой ещё не окончен.') + ' Можно продолжить с этого места, начать миссию заново или выйти в меню — прогресс сохранится.' : act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>
     <div class="btns">
       ${PROF.inv.revive > 0 ? `<button id="mChance" class="btn primary" type="button">Второй шанс (×${PROF.inv.revive})</button>` : ''}
-      <button id="mRevive" class="btn primary" type="button" ${used ? 'disabled' : ''}>${PROF.noAds ? 'Продолжить' : 'Продолжить за рекламу'}</button>
+      <button id="mRevive" class="btn primary" type="button" ${used && !NOVICE.on ? 'disabled' : ''}>${PROF.noAds ? 'Продолжить' : NOVICE.on ? 'Продолжить — бесплатно' : 'Продолжить за рекламу'}</button>
       <button id="mRetry" class="btn" type="button">${state.ep >= 2 ? 'Начать миссию заново' : 'Начать акт заново'}</button>
       <button id="mMenu" class="btn" type="button">В меню</button>
     </div>
-    <div class="note">${used ? 'Продолжение за рекламу — один раз за акт.' : 'Продолжение вернёт 60% прочности на месте.'}</div>`, {
+    <div class="note">${NOVICE.on && state.ep === 1 ? 'Первая миссия: продолжать можно бесплатно, сколько нужно.' : used ? 'Продолжение за рекламу — один раз за акт.' : 'Продолжение вернёт 60% прочности на месте.'}</div>`, {
     mChance: () => { PROF.inv.revive--; saveProfile(); hideModal(); revive(); },
-    mRevive: () => { hideModal(); showAd(() => { state.reviveUsed[rk] = true; revive(); }); },
+    // v143: a newcomer (no mission won yet) continues for free and as often as needed — the first mission must end in a win
+    mRevive: () => { hideModal(); if (NOVICE.on && state.ep === 1) { revive(); return; } showAd(() => { state.reviveUsed[rk] = true; revive(); }); },
     mRetry: () => { hideModal(); if (state.ep >= 2) startChapter(state.ch); else if (act === 1) { setupAct1(); state.mode = 'drive'; } else { setupAct2(); } state.fireLock = true; },
     mMenu: () => { hideModal(); showSelect(); },   // progress stays: the menu offers «Продолжить» from this chapter
   });
