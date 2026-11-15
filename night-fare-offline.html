@@ -177,7 +177,7 @@ body.ux-lite #modal.ux-in, body.ux-lite #modal.ux-in #modalCard, body.ux-lite .u
 .fx-lite .fx-title .t, .fx-lite .fx-big { animation-name: fxIn, fxOut; }
 @media (prefers-reduced-motion: reduce) { .fx-title .t, .fx-big, .fx-stars span { animation-name: fxIn, fxOut !important; } }
 .goal-next { margin: 10px 0 4px; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); font-size: 13px; text-align: left; } .goal-next > b { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #ffd23a; margin-bottom: 4px; } .goal-next div { padding: 2px 0; } .goal-next i { display: block; height: 4px; border-radius: 2px; margin-top: 4px; background: linear-gradient(90deg, #ffd23a var(--f), rgba(255,255,255,.12) var(--f)); }
-.dq-box { margin: 10px auto 0; max-width: 420px; background: rgba(11,13,31,.72); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 8px 12px; font-size: 13px; text-align: left; } .dq-box b { display: block; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: #ffd23a; margin-bottom: 4px; } .dq-box div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; color: #dde; } .dq-box div.ok { color: #7aff9a; } .dq-box div small { color: #ffd23a; white-space: nowrap; } .dq-box div.ok small { color: #7aff9a; }
+.dq-box { margin: 10px auto 0; max-width: 420px; background: rgba(11,13,31,.72); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 8px 12px; font-size: 13px; text-align: left; } .dq-box b { display: block; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: #ffd23a; margin-bottom: 4px; } .dq-box div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; color: #dde; } .dq-box div.ok { color: #7aff9a; } .dq-box div small { color: #ffd23a; white-space: nowrap; } .dq-box div.ok small { color: #7aff9a; } .dq-box .dq-tm { margin: 6px 0 0; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.1); color: #b9c2ff; font-size: 12px; }
 .btn.x2 { background: linear-gradient(160deg, #ffd23a, #ff9f1c); color: #1a1205; border: 0; font-weight: 800; font-size: 16px; padding: 12px 18px; box-shadow: 0 0 18px rgba(255,190,40,.45); } .btn.x2:disabled { background: rgba(255,210,58,.14); color: #ffd23a; box-shadow: none; opacity: .8; }
 .dcal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 14px 0 6px; } .dcal div { border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 7px 2px; text-align: center; font-size: 11px; line-height: 1.25; color: #aab; background: rgba(255,255,255,.04); }
 .dcal div b { display: block; font-size: 12px; color: #fff; margin-bottom: 3px; } .dcal div.got { opacity: .45; } .dcal div.now { border-color: #ffd23a; background: rgba(255,210,58,.14); color: #ffd23a; } .dcal div.big b { color: #ffd23a; }
@@ -800,7 +800,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v143'; window.__errs = [];
+window.APP_VER = 'v144'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6606,7 +6606,7 @@ function dailyOffer() {
     dlTake: () => {
       const s2 = dailyState(); if (s2.done) { hideModal(); return; }
       PROF.daily = { d: mskDate(), s: s2.streak }; if (item) PROF.inv[item] = (PROF.inv[item] || 0) + n;
-      walletAdd(c); saveProfile(); hideModal(); sfx.coin(); toast(`+${c} монет${item ? ` и ${n} ${INV_NAME[item]}` : ''}. До завтра!`, 2.6);
+      walletAdd(c); saveProfile(); hideModal(); sfx.coin(); toast(`+${c} монет${item ? ` и ${n} ${INV_NAME[item]}` : ''}. ${tomorrowText() || 'До завтра!'}`, 3.6); if (typeof dqRender === 'function') dqRender();
       if (typeof updateProfChip === 'function') updateProfChip(); if (typeof updateBoostsHud === 'function') updateBoostsHud();
     } });
   return true;
@@ -6697,18 +6697,24 @@ function dqAdd(kind, n) {
     const [name, need, coins] = DQ_KINDS[kind]; q.p[kind] = Math.min(need, (q.p[kind] || 0) + (n || 1));
     if (q.p[kind] >= need) {
       q.got[kind] = 1; PROF.coins += coins; let msg = `Задание дня выполнено: ${name}. +${coins} монет`;
-      if (q.k.every((k) => q.got[k]) && !q.got.all) { q.got.all = 1; PROF.coins += DQ_BONUS; msg += ` · все три — ещё +${DQ_BONUS}!`; setTimeout(() => fxBig(`Все задания дня! +${DQ_BONUS}`), 1000); }
+      if (q.k.every((k) => q.got[k]) && !q.got.all) { q.got.all = 1; PROF.coins += DQ_BONUS; msg += ` · все три — ещё +${DQ_BONUS}!`; setTimeout(() => fxBig(`Все задания дня! +${DQ_BONUS} · До завтра!`), 1000); }
       setTimeout(() => { toast(msg, 3.2); try { sfx.coin(); } catch (e) { /* no sound */ } }, 900); updateProfChip();
     }
     saveProfile(); if (state.mode === 'preview') dqRender();
   } catch (e) { /* never in the way of the game */ }
+}
+function tomorrowText() {
+  try { const st = dailyState(); if (!st.done) return '';
+    const [c, item, n] = LOGIN_DAYS[st.streak % 7], nm = { nitro: 'нитро', medkit: 'аптечки', shield: 'щит' };
+    return `Завтра: день ${st.streak % 7 + 1} — ${c} монет${item ? ` и ${n} ${nm[item]}` : ''} · новое задание дня${rwOn() ? ' · новый сундук' : ''}`; } catch (e) { return ''; }
 }
 function dqRender() {
   const el = $('dqBox'); if (!el) return;
   if (!PROF || !PROF.st || missionsDone() < 1) { el.hidden = true; return; }
   const q = dqToday(); el.hidden = false;
   el.innerHTML = `<b>Задания на сегодня${q.got.all ? ' — все выполнены ✓' : ` · за все три +${DQ_BONUS}`}</b>` + q.k.map((k) => { const [name, need, coins] = DQ_KINDS[k], v = q.p[k] || 0, ok = q.got[k];
-    return `<div class="${ok ? 'ok' : ''}"><span>${ok ? '✓' : '▢'} ${name}${ok ? '' : ` · ${k === 'earned' ? v.toLocaleString('ru-RU') : v}/${k === 'earned' ? need.toLocaleString('ru-RU') : need}`}</span><small>+${coins}</small></div>`; }).join('');
+    return `<div class="${ok ? 'ok' : ''}"><span>${ok ? '✓' : '▢'} ${name}${ok ? '' : ` · ${k === 'earned' ? v.toLocaleString('ru-RU') : v}/${k === 'earned' ? need.toLocaleString('ru-RU') : need}`}</span><small>+${coins}</small></div>`; }).join('')
+    + (tomorrowText() ? `<p class="dq-tm">🌙 ${tomorrowText()}</p>` : '');
 }
 
 // ---- v140: motion graphics (CSS only; nothing to download). On the lightest graphics step and with «reduce motion»:
@@ -12063,16 +12069,27 @@ const dailyNum = () => Math.floor((Date.now() + 3 * 3600e3) / 864e5);
 function dailyChapter() {
   const n = dailyNum(), kind = DAILY_KINDS[n % DAILY_KINDS.length], start = [0, 40, 'N'];
   const cfg = pickT2(kind, { x: start[0], z: start[1], h: hdg(start[2]) }, 300 + (n % 997)) || pickT2('collect', { x: 0, z: 40, h: 0 }, 1);
+  // v144: every kind of the daily gets the race's 25% extra time (the ranking is by finish time, so it stays fair), and a newcomer
+  // (fewer than 5 missions) 40% more on top and a third fewer drift points — the daily was dropped twice in a minute on 15.11
+  const nov = missionsDone() < 5, k = (cfg.type || kind) === 'race' ? 1 : 1.25;
+  if (cfg.secs) cfg.secs = Math.round(cfg.secs * k * (nov ? 1.4 : 1));
+  if (nov && cfg.score) cfg.score = Math.round(cfg.score * 0.67);
   return Object.assign(cfg, { t: `Задание дня · ${DAILY_NAMES[kind]}`, type: kind, start, coins: 0, intro: [['mark', `Задание дня: ${DAILY_NAMES[kind].toLowerCase()}. Сегодня его едут все таксисты города — время пойдёт в общий рейтинг.`], ['hero', 'Тогда без лишних слов.']] });
 }
 const DAILY = { rows: null, err: '' };
+// v144: on Пикабу the ranking goes through our server (nf-pikabu): the player's signature from Пикабу is checked there
+const pkFn = (body, ms) => Promise.race([fetch(SB_URL + '/functions/v1/nf-pikabu', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify(body) }).then((r) => r.json()), new Promise((r) => setTimeout(() => r(null), ms || 5000))]);
+const pkPlayer = () => (PK.sdk && PK.sdk.player) || null;
 async function dailyTop() {
-  if (PIKABU) return;   // on Пикабу there is no profile of ours: the day's best time stays on the device, no rating
+  if (PIKABU) {
+    try { const pl = pkPlayer(), j = await pkFn({ dailyTop: dailyDay(), me: pl && pl.isAuthorized ? String(pl.id || '') : '' }, 5000);
+      if (j && j.ok) { DAILY.rows = j.rows || []; DAILY.err = ''; } else DAILY.err = 'Рейтинг сейчас недоступен.'; } catch (e) { DAILY.err = 'Рейтинг сейчас недоступен.'; }
+    return;
+  }
   if (!cloudInit()) { DAILY.err = 'Рейтинг недоступен без связи.'; return; }
   try { const { data, error } = await CLOUD.sb.rpc('nf_daily_top', { p_day: dailyDay(), lim: 10 }); if (error) DAILY.err = 'Рейтинг сейчас недоступен.'; else { DAILY.rows = data || []; DAILY.err = ''; } } catch (e) { DAILY.err = 'Рейтинг сейчас недоступен.'; }
 }
 function dailyTopHtml() {
-  if (PIKABU) return '';
   if (DAILY.err) return `<p class="lead">${DAILY.err}</p>`;
   if (!DAILY.rows) return '<p class="lead">Загружаю рейтинг…</p>';
   if (!DAILY.rows.length) return '<p class="lead">Сегодня ещё никто не проехал. Будь первым!</p>';
@@ -12099,7 +12116,16 @@ async function dailyFinish() {
   // the summary never waits for our server longer than a few seconds (a hanging request used to leave the screen frozen)
   const within = (pr, ms) => Promise.race([pr, new Promise((r) => setTimeout(() => r({ data: null, timeout: true }), ms))]);
   if (CLOUD.user && !PROF.god && !PIKABU) { try { const { data } = await within(CLOUD.sb.rpc('nf_daily_submit', { p_day: day, p_secs: t }), 5000); const r = data && data[0]; if (r && r.place) place = `Место в рейтинге дня: <b>${r.place}</b>${r.improved ? ' — новый личный рекорд!' : ` (лучшее время ${fmtT(r.best)})`}.`; } catch (e) { place = 'Результат не отправился: нет связи.'; } }
-  else place = PIKABU ? `Твоё лучшее время сегодня: <b>${fmtT(all[day])}</b>.` : PROF.god ? 'Тестовый профиль в рейтинг не попадает.' : 'Войди в профиль, чтобы попасть в рейтинг дня.';
+  else if (PIKABU) {
+    const pl = pkPlayer();
+    if (pl && pl.isAuthorized && pl.getSignedData) {
+      try { const sig = await within(pl.getSignedData(), 4000), j = sig && !sig.timeout ? await pkFn({ daily: { day, secs: t, name: pl.name || 'Игрок' }, playerSigned: typeof sig === 'string' ? sig : (sig.signature || sig.signedData || sig.token || '') }, 5000) : null;
+        if (j && j.ok) { place = `Место в рейтинге дня: <b>${j.place}</b>${j.improved ? ' — новый личный рекорд!' : ` (лучшее сегодня — ${fmtT(j.best)})`}`; DAILY.rows = j.rows || DAILY.rows; }
+        else place = `Твоё лучшее время сегодня: <b>${fmtT(all[day])}</b>. Рейтинг сейчас недоступен.`;
+      } catch (e) { place = `Твоё лучшее время сегодня: <b>${fmtT(all[day])}</b>.`; }
+    } else place = `Твоё лучшее время сегодня: <b>${fmtT(all[day])}</b>. Войди в аккаунт Пикабу (кнопка вверху страницы), чтобы попасть в рейтинг дня.`;
+  }
+  else place = PROF.god ? 'Тестовый профиль в рейтинг не попадает.' : 'Войди в профиль, чтобы попасть в рейтинг дня.';
   await within(dailyTop(), 4000);
   showModal(`<div class="kicker">Задание дня</div><h2 class="h2">Время: ${fmtT(t)}</h2><p class="lead">${place}${first ? ' Первое прохождение за сегодня: +150 монет.' : ''}</p>${dailyTopHtml()}
     <div class="btns"><button id="dAgain" class="btn primary" type="button">Ещё раз</button><button id="dMenu" class="btn" type="button">В меню</button></div>`, {
@@ -14778,7 +14804,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
