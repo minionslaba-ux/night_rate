@@ -759,7 +759,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v138'; window.__errs = [];
+window.APP_VER = 'v139'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -813,7 +813,8 @@ const renderer = (() => {
       const msg = String((e2 && e2.message) || e2).slice(0, 160);
       try { fetch('https://xqgibyazilueurdqufso.supabase.co/rest/v1/client_errors', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: 'sb_publishable_xYdq_LMQXWj2_4iVnizVFg_So0V9D7Z', Prefer: 'return=minimal' }, body: JSON.stringify([{ ver: window.APP_VER, platform: 'stuck', browser: navigator.userAgent.slice(0, 200), msg: 'webgl refused: ' + msg, place: 'boot' }]) }).catch(() => {}); } catch (e) { /* offline */ }
       const l = document.getElementById('loading'); window.__nfMsg = true;
-      if (l) l.innerHTML = 'Браузер не дал игре видеокарту (так бывает после нескольких сбоев подряд).<br>Закрой игру полностью (смахни её), подожди полминуты и открой снова. Не помогло — перезагрузи телефон.<br><button type="button" style="margin-top:14px;padding:12px 22px;font:700 15px sans-serif;border-radius:8px;border:0;background:#ffc43d;color:#111" onclick="nfHardReload()">Попробовать ещё раз</button>';
+      if (l && !isTouch) l.innerHTML = 'Браузер не дал игре видеокарту (WebGL выключен).<br>Включите «Аппаратное ускорение» в настройках браузера (Chrome: Настройки → Система), перезапустите браузер и откройте игру снова. Если не помогло — попробуйте другой браузер.';
+      else if (l) l.innerHTML = 'Браузер не дал игре видеокарту (так бывает после нескольких сбоев подряд).<br>Закрой игру полностью (смахни её), подожди полминуты и открой снова. Не помогло — перезагрузи телефон.<br><button type="button" style="margin-top:14px;padding:12px 22px;font:700 15px sans-serif;border-radius:8px;border:0;background:#ffc43d;color:#111" onclick="nfHardReload()">Попробовать ещё раз</button>';
       throw e2;
     }
   }
