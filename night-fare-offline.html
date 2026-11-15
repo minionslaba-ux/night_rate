@@ -800,7 +800,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v141'; window.__errs = [];
+window.APP_VER = 'v142'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1119,7 +1119,7 @@ try { const o = JSON.parse(localStorage.getItem('nf-perf') || 'null'); if (o && 
 const FEW_CORES = !isTouch && (navigator.hardwareConcurrency || 4) <= 2;
 const PERF_FLOOR = OLD_IOS || LITE_MEM ? 3 : FEW_CORES && (WEAK_DESK || WEAK_GPU) ? 5 : WEAK_DESK ? 4 : FEW_CORES ? 3 : WEAK_GPU ? 1 : 0;
 const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(6, Math.max(PERF_FLOOR, PERF_SAVED)));
-const perf = { t: 0, frames: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0, view: 0, every: 1,
+const perf = { t: 0, frames: 0, tJs: 0, tDraw: 0, tN: 0, tSlow: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0, view: 0, every: 1,
   st: 0, sf: 0, low: 99, sent: false };
 function perfSave() { try { localStorage.setItem('nf-perf', JSON.stringify({ l: perf.level, v: window.APP_VER })); } catch (e) { /* storage unavailable */ } }
 function perfShadow(sz) { if (moon.shadow.mapSize.x !== sz) { moon.shadow.mapSize.setScalar(sz); if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; } } }
@@ -1155,6 +1155,7 @@ function perfReport() {
   try {
     const U = uaInfo();
     const row = { ver: window.APP_VER, app: typeof PLATFORM !== 'undefined' ? PLATFORM : '?', device: U.device, os: U.os, browser: U.browser, gpu: GPU, mem: navigator.deviceMemory || null, cores: navigator.hardwareConcurrency || null, dpr: DPR,
+      js_ms: perf.tN ? +(perf.tJs / perf.tN).toFixed(1) : null, draw_ms: perf.tN ? +(perf.tDraw / perf.tN).toFixed(1) : null, frame_ms: perf.sf ? +(perf.st / perf.sf * 1000).toFixed(1) : null, slow_pct: perf.tN ? Math.round(perf.tSlow / perf.tN * 100) : null,
       fps: Math.round(perf.sf / perf.st * 10) / 10, fps_low: Math.round(perf.low * 10) / 10, pr: renderer.getPixelRatio(), level: perf.level, gfx: GFX.pref, secs: Math.round(perf.st) };
     fetch(SB_URL + '/rest/v1/nf_fps', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([row]) }).catch(() => {});
   } catch (e) { /* no report */ }
@@ -6231,6 +6232,7 @@ function missionLog(ev, reason, extra) {
     const row = { ver: window.APP_VER, sid: MLOG.sid, ep: MLOG.ep, ch: MLOG.ch, title: String(MLOG.title).slice(0, 90), mtype: String(MLOG.type).slice(0, 20), ev,
       reason: reason ? String(reason).slice(0, 70) : null, secs: ev === 'start' ? 0 : Math.round((performance.now() - MLOG.t0) / 1000), tries: all[MLOG.key] || 0,
       device: uaInfo().device, mods: (extra && extra.mods) || (MIS && MIS.modsTxt) || null, stars: (extra && extra.stars) || null, tester: !!PROF.god };
+    if (ev !== 'start') row.detail = missionDetail();
     fetch(SB_URL + '/rest/v1/nf_missions', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' }, body: JSON.stringify([row]) }).catch(() => {});
   } catch (e) { /* no journal */ }
 }
@@ -6753,6 +6755,26 @@ function fxBig(text) { fxAdd(`<div class="fx-big">${esc(text)}</div>`, 2800); }
 function fxCount(root) {
   try { if (fxLite()) return; for (const b of root.querySelectorAll('.summary b')) { const v = parseInt(b.textContent.replace(/\s/g, ''), 10); if (!(v > 9) || /[:]/.test(b.textContent)) continue;
     const t0 = performance.now(), dur = 800; b.textContent = '0'; const step = () => { const k = Math.min(1, (performance.now() - t0) / dur), e = 1 - Math.pow(1 - k, 3); b.textContent = Math.round(v * e).toLocaleString('ru-RU'); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); } } catch (e) { /* decoration only */ }
+}
+
+// v142: where exactly a mission ended (nf_missions.detail): the act / mode, how far from the goal, health, enemies left, fps right now
+function missionDetail() {
+  try {
+    const a = [], fp = perf.last ? Math.round(perf.last) + ' к/с' : '';
+    a.push(state.mode);
+    if (state.ep === 1) {
+      a.push('акт ' + state.act);
+      if (state.act === 1 && pc) a.push('до склада ' + Math.round(pc.pos.distanceTo(GATE)) + ' м', 'машина ' + Math.round(pc.hp), 'погоня ' + enemyCars.filter((e) => !e.dead).length);
+      else if (hero) a.push('волна ' + state.wave, 'врагов ' + enemies.filter((e) => !e.dead).length, 'здоровье ' + Math.round(hero.hp));
+    } else {
+      const g = MIS && MIS.navGoal ? MIS.navGoal() : null, me = state.mode === 'foot' && hero ? hero.pos : pc && pc.pos;
+      if (g && me) a.push('до цели ' + Math.round(Math.hypot(g.x - me.x, g.z - me.z)) + ' м');
+      if (state.mode === 'foot' && hero) a.push('здоровье ' + Math.round(hero.hp)); else if (pc) a.push('машина ' + Math.round(pc.hp));
+      const foes = enemies.filter((e) => !e.dead).length + enemyCars.filter((e) => !e.dead).length; if (foes) a.push('врагов ' + foes);
+    }
+    if (fp) a.push(fp); a.push('ступень ' + perf.level);
+    return a.join(' · ').slice(0, 190);
+  } catch (e) { return null; }
 }
 function adCountdown(done) {
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
@@ -14639,6 +14661,7 @@ window.addEventListener('keydown', (e) => {
 let last = performance.now();
 function loop(now) {
   requestAnimationFrame(loop);
+  const tl0 = performance.now();
   const rawDt = (now - last) / 1000; let dt = Math.min(0.05, rawDt); last = now; dt = cineTime(dt); state.t += dt;
   if (state.invuln > 0) state.invuln -= dt;
   if (state.mode === 'drive' || state.mode === 'foot') checkPerf(rawDt);
@@ -14664,8 +14687,10 @@ function loop(now) {
   beam.material.opacity = 0.18 + Math.sin(state.t * 3) * 0.06;
   const sel = state.mode === 'select', kk = Math.min(1, dt * 4);
   keyLight.intensity += ((sel ? 1.5 : 0) - keyLight.intensity) * kk; rimLight.intensity += ((sel ? 2.4 : 0) - rimLight.intensity) * kk;
+  const tl1 = performance.now();
   if (!$('hud').hidden) updateHud(dt); else if (!$('crosshair').hidden || !$('lockOn').hidden) { $('crosshair').hidden = true; $('lockOn').hidden = true; $('hitmark').hidden = true; }
-  render();
+  const tl2 = performance.now(); render();
+  if ((state.mode === 'drive' || state.mode === 'foot') && rawDt < 2) { const tl3 = performance.now(); perf.tJs += tl2 - tl0; perf.tDraw += tl3 - tl2; perf.tN++; if (rawDt > 0.05) perf.tSlow++; }
 }
 
 $('loading').textContent = 'Загрузка города… 0%';
@@ -14735,7 +14760,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
