@@ -691,6 +691,24 @@ body.hud-s.touch-on .tbtn.flash { right: calc(120px + var(--sar)); bottom: calc(
 body.hud-s.touch-on .tbtn.horn { right: calc(12px + var(--sar)); bottom: calc(150px + var(--sab)); width: 44px; height: 44px; }
 body.hud-s.touch-on .tbtn.talk { right: calc(66px + var(--sar)); bottom: calc(150px + var(--sab)); width: 44px; height: 44px; }
 body.hud-s.touch-on .tbtn.tprof { display: none; }
+/* v150: even less on top of the picture: the task and the car bar are one see-through panel (the task folds to one line after 8 s),
+   the arrow, the speed and the bars have no panels at all (text with a shadow), the sound button moved into the pause, the pause is a small «❚❚»,
+   radio messages are plain text without a box, the star hint is not shown (the stars are in the summary anyway) */
+body.hud-s .hud-tl { gap: 0; }
+body.hud-s #objective.obj { background: rgba(11,13,31,.45); border-radius: 8px 8px 0 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.hud-s .hud-tl > .bar { background: rgba(11,13,31,.45); border: 0; border-radius: 0 0 8px 8px; padding: 0 9px 6px; box-shadow: none; }
+body.hud-s .hud-tl > .bar .bar-track { height: 4px; }
+body.hud-s #objective.obj.min > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.hud-s #nav.nav { background: none; border: 0; box-shadow: none; padding: 0; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.8); top: calc(var(--sat) + 70px); }
+body.hud-s #nav.nav svg { width: 22px; height: 22px; }
+body.hud-s #speedo.speedo { background: none; border: 0; box-shadow: none; padding: 0; top: calc(44px + var(--sat)); text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.8); }
+body.hud-s #speedo b { font-size: 20px; }
+body.hud-s .hud-btns #mute { display: none; }
+body.hud-s .hud-btns #btnPause { font-size: 0; width: 34px; height: 30px; padding: 0; background: rgba(11,13,31,.45); border-color: transparent; }
+body.hud-s .hud-btns #btnPause::before { content: "❚❚"; font-size: 12px; letter-spacing: -1px; color: #fff; }
+body.hud-s #bars.bars { top: calc(var(--sat) + 84px); width: 108px; }
+body.hud-s #bars .boss { background: none; border: 0; box-shadow: none; padding: 0; text-shadow: 0 1px 3px #000; }
+body.hud-s #toast.toast { background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; top: 24%; color: #fff; text-shadow: 0 1px 3px #000, 0 0 10px rgba(0,0,0,.9); }
 body.nofire.touch-on .tbtn.fire { display: none; }
 body.nofire.hud-s.touch-on .tbtn.drift { right: calc(12px + var(--sar)); bottom: calc(14px + var(--sab)); width: 62px; height: 62px; }
 body.nofire.hud-s.touch-on .tbtn.nitro { bottom: calc(86px + var(--sab)); } body.nofire.hud-s.touch-on .tbtn.shield { bottom: calc(86px + var(--sab)); }
@@ -844,7 +862,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v149'; window.__errs = [];
+window.APP_VER = 'v150'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6412,7 +6430,7 @@ function missionLog(ev, reason, extra) {
     if (ev === 'start') { pwrClear(); FX.pend = { ex: String((extra && extra.title) || ''), ep: state.ep, t: performance.now() };
       SECOND.used = false; SECOND.fn = null; if (TD.car) TD.used = true; MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
       MLOG.gt0 = state.time; MLOG.dmg0 = DIFF.dmg; MLOG.par = (extra && extra.par) || 150;
-      { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 3800); }   /* v141: after the title card */ }
+      { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) if (!document.body.classList.contains('hud-s')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 3800); }   /* v141: after the title card */ }
     else { if (!MLOG.open) return; MLOG.open = false; }
     const all = store.get('nf-tries') || {};
     const row = { ver: window.APP_VER, sid: MLOG.sid, ep: MLOG.ep, ch: MLOG.ch, title: String(MLOG.title).slice(0, 90), mtype: String(MLOG.type).slice(0, 20), ev,
@@ -9758,7 +9776,7 @@ function updateHud(dt) {
   if (r !== lastHp) { lastHp = r; $('hpFill').style.width = r + '%'; $('hpFill').classList.toggle('low', r < 35); }
   $('coins').textContent = state.coins; $('kills').textContent = state.carKills + state.footKills;
   $('onlStat').hidden = !ONL.on; if (ONL.on) $('onlStat').textContent = `● ${ONL.count || 1} онлайн · `;
-  if (objT && performance.now() > objT) { objT = 0; if (ONL.on) $('objective').classList.add('min'); }
+  if (objT && performance.now() > objT) { objT = 0; if (ONL.on || document.body.classList.contains('hud-s')) $('objective').classList.add('min'); }
   $('speedo').hidden = state.act !== 1;
   $('nav').hidden = !(state.act === 1 && state.mode === 'drive');
   if (state.act === 1 && pc) $('speed').textContent = Math.round(Math.abs(pc.vf || 0) * 3.3);
@@ -14563,13 +14581,14 @@ function pauseGame() {
   const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
   showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
     <p class="lead">Прогресс сохраняется по миссиям: выйдешь в меню — продолжишь с начала этой миссии.</p>
-    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button>${PLATFORM === 'max' && isTouch ? `<button id="pScreen" class="btn" type="button">${ROTF ? 'Экран: вертикально' : 'Экран: горизонтально'}</button>${ROTF ? '<button id="pFlip" class="btn" type="button">Перевернуть на 180°</button>' : ''}` : ''}<button id="pGfx" class="btn" type="button">Графика: ${HD() ? 'HD' : 'Авто'}</button><button id="pProf" class="btn" type="button">Профиль: машина, магазин</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
+    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button>${PLATFORM === 'max' && isTouch ? `<button id="pScreen" class="btn" type="button">${ROTF ? 'Экран: вертикально' : 'Экран: горизонтально'}</button>${ROTF ? '<button id="pFlip" class="btn" type="button">Перевернуть на 180°</button>' : ''}` : ''}<button id="pGfx" class="btn" type="button">Графика: ${HD() ? 'HD' : 'Авто'}</button><button id="pSnd" class="btn" type="button">Звук: ${muted ? 'выкл' : 'вкл'}</button><button id="pProf" class="btn" type="button">Профиль: машина, магазин</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
     pResume: () => { hideModal(); state.mode = pausedFrom; state.fireLock = true; },
     pView: () => { cycleView(); $('pView').textContent = 'Камера: ' + VIEW_NAMES[footView]; },
     pSeason: () => { $('pSeason').textContent = wxCyclePref(); updateWeather(0.016, focus); toast(wxLabel(), 1.6); },
     pScreen: () => { if (ROTF) ROTF.portrait(); else { try { localStorage.setItem('nf-screen', 'land'); } catch (e) { /* storage unavailable */ } location.reload(); } },
     pFlip: () => { if (ROTF) ROTF.flip(); },
     pGfx: () => { setGfx(HD() ? 'auto' : 'hd'); $('pGfx').textContent = 'Графика: ' + (HD() ? 'HD' : 'Авто'); },
+    pSnd: () => { setMuted(!muted); $('pSnd').textContent = 'Звук: ' + (muted ? 'выкл' : 'вкл'); },
     pProf: () => openProfile('garage'),
     pMenu: () => { hideModal(); missionLog('quit', 'вышел в меню'); showSelect(); },
   });
