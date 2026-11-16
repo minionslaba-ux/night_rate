@@ -135,6 +135,8 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
 .btn.daily { background: linear-gradient(160deg, #ff5ad1, #8a2be2); color: #fff; border: 0; }
 .btn.rw-btn { font-size: 14px; padding: 8px 14px; background: rgba(255,210,58,.12); border: 1px solid rgba(255,210,58,.55); color: #ffd23a; font-weight: 700; } .btn.rw-btn:disabled { opacity: .55; }
+.style-pop { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font: 800 clamp(16px, 3.2vw, 26px)/1 var(--font-display); color: #fff; text-transform: uppercase; letter-spacing: .03em; text-shadow: 0 0 14px rgba(255,61,110,.7), 0 2px 4px #000; white-space: nowrap; animation: stylePop 1.4s cubic-bezier(.2,1.4,.4,1) forwards; } .style-pop b { color: #ffd23a; } .style-pop.combo { top: 30%; color: #ffd23a; font-size: clamp(18px, 3.6vw, 30px); } .style-pop i { color: #ff5ad1; font-style: normal; }
+@keyframes stylePop { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.6); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.08); } 25% { transform: translate(-50%, 0) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -26px) scale(1); } }
 .end-extras { margin: 10px 0 2px; padding: 8px 10px; border-radius: 10px; border: 1px dashed rgba(255,210,58,.45); background: rgba(255,210,58,.06); text-align: left; } .end-extras > b { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #ffd23a; margin-bottom: 6px; } .end-extras > div { display: flex; flex-direction: column; gap: 6px; } .end-extras .btn { width: 100%; text-transform: none; letter-spacing: 0; font-size: 13px; line-height: 1.25; padding: 8px 12px; min-height: 36px; white-space: normal; }
 /* v140: UX motion — windows slide in, menu buttons one after another, HUD panels from the edges at the start of a mission */
 #modal.ux-in { animation: uxFade .2s ease-out both; } #modal.ux-in #modalCard { animation: uxCard .32s cubic-bezier(.2,1.2,.4,1) both; }
@@ -794,7 +796,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v146'; window.__errs = [];
+window.APP_VER = 'v147'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5535,6 +5537,60 @@ function updateParticles(dt) {
 const rv = () => new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
 function sparks(pos, color) { for (let i = 0; i < 5; i++) spawnP(pos, { color: color || 0xffd060, size: 0.12, vel: rv().multiplyScalar(rand(4, 10)), life: 0.25, add: true }); }
 let shake = 0;
+
+// ---- v147: visible damage (smoke from 60%, fire and sparks from 30%, debris on hard hits) and style points with combos
+// («Шакал разбит! +50», «Впритирку! +20», «Занос») — ideas from car-combat games, done the night-city way (no pedestrians).
+const DMGFX = { t: 0, et: 0, lastHit: 0 };
+function carFx(dt) {
+  styleTick(dt);
+  if (!pc || pc.dead || !pc.g.visible) return;
+  const lite = perf.level >= 5 && !HD(), hp = pc.hp, f = new V3(Math.sin(pc.h), 0, Math.cos(pc.h));
+  DMGFX.t -= dt;
+  if (hp < 60 && DMGFX.t <= 0) {
+    const hood = pc.pos.clone().addScaledVector(f, 1.5); hood.y = 1.05;
+    const heavy = hp < 30; DMGFX.t = (heavy ? 0.07 : 0.16) * (lite ? 2 : 1);
+    spawnP(hood.clone().add(new V3(rand(-0.3, 0.3), 0, rand(-0.3, 0.3))), { color: heavy ? 0x2a2a30 : 0x6a6a74, size: rand(0.35, 0.6), vel: new V3(rand(-0.6, 0.6), rand(1.6, 2.6), rand(-0.6, 0.6)).addScaledVector(pc.vel, 0.4), life: rand(0.9, 1.4), grow: 2.2, opacity: 0.75 });
+    if (heavy) { spawnP(hood.clone().add(new V3(rand(-0.25, 0.25), 0.1, rand(-0.25, 0.25))), { color: Math.random() < 0.5 ? 0xff7a1a : 0xffc23d, size: rand(0.18, 0.32), vel: new V3(rand(-0.4, 0.4), rand(1.2, 2.2), rand(-0.4, 0.4)).addScaledVector(pc.vel, 0.6), life: rand(0.25, 0.45), add: true, grow: 0.6 });
+      if (Math.random() < 0.15) sparks(hood); }
+  }
+  // the gang's damaged cars smoke too (at most 3, every 0.25 s)
+  DMGFX.et -= dt;
+  if (DMGFX.et <= 0) { DMGFX.et = lite ? 0.5 : 0.25; let k = 0;
+    for (const e of enemyCars) { if (e.dead || !e.g || !e.hp || !(e.max || 50)) continue; if (e.hp > (e.max || 50) * 0.45 || k++ >= 3) continue;
+      const q = e.pos.clone(); q.y = 1.1; spawnP(q, { color: 0x3a3a42, size: rand(0.4, 0.6), vel: new V3(rand(-0.5, 0.5), rand(1.5, 2.4), rand(-0.5, 0.5)), life: 1.1, grow: 2, opacity: 0.7 }); } }
+  styleNearMiss(dt);
+}
+// a hard hit: sparks and a few bits of the car flying off
+function hitFx(d) {
+  try { if (!pc || d < 3 || state.act !== 1) return; DMGFX.lastHit = performance.now();
+    const f = new V3(Math.sin(pc.h), 0, Math.cos(pc.h)), q = pc.pos.clone().addScaledVector(f, 1.9); q.y = 0.7;
+    sparks(q); if (d >= 6) sparks(q, 0xffffff);
+    const n = perf.level >= 5 && !HD() ? 2 : 4;
+    for (let i = 0; i < n; i++) spawnP(q.clone(), { color: [0x1a1a1f, 0xffb703, 0x8a8f99][i % 3], size: rand(0.12, 0.22), vel: new V3(rand(-5, 5), rand(3, 7), rand(-5, 5)).addScaledVector(pc.vel, 0.3), life: 1.1, grav: 20, geo: box1 });
+  } catch (e) { /* decoration only */ }
+}
+// style points: events within 4 s chain into a combo (×2 … ×5); when it ends, coins = points / 5
+const STYLE = { pts: 0, mult: 1, t: 0, near: new Map(), el: null };
+function styleEv(text, pts) {
+  if (MIS && MIS.online) return;
+  STYLE.mult = STYLE.t > 0 ? Math.min(5, STYLE.mult + 1) : 1; STYLE.t = 4; STYLE.pts += pts * STYLE.mult;
+  try { const d = document.createElement('div'); d.className = 'style-pop'; d.innerHTML = `${esc(text)} <b>+${pts}</b>${STYLE.mult > 1 ? ` <i>×${STYLE.mult}</i>` : ''}`; fxLayer().appendChild(d); setTimeout(() => d.remove(), 1500); } catch (e) { /* decoration */ }
+  if (STYLE.mult >= 2) try { sfx.coin(); } catch (e) { /* no sound */ }
+}
+function styleTick(dt) {
+  if (STYLE.t <= 0) return; STYLE.t -= dt;
+  if (STYLE.t <= 0) { const c = Math.round(STYLE.pts / 5); if (c >= 5) { addCoins(c); if (STYLE.mult >= 2) try { const d = document.createElement('div'); d.className = 'style-pop combo'; d.innerHTML = `Комбо ×${STYLE.mult} · <b>+${c} монет</b>`; fxLayer().appendChild(d); setTimeout(() => d.remove(), 1500); } catch (e) { /* decoration */ } } STYLE.pts = 0; STYLE.mult = 1; }
+}
+// «впритирку»: a city car passed within 1.4–3 m at more than ~55 km/h and no hit in the last second
+function styleNearMiss(dt) {
+  const sp = Math.hypot(pc.vel.x, pc.vel.z); if (sp < 15 || performance.now() - DMGFX.lastHit < 1000) return;
+  const now = performance.now();
+  for (const c of LIFE.cars.concat(LIFE.buses || [])) {
+    if (!c.g || !c.g.visible || !c.pos) continue;
+    const d = Math.hypot(c.pos.x - pc.pos.x, c.pos.z - pc.pos.z);
+    if (d > 1.4 && d < 3.2) { if (now - (STYLE.near.get(c) || 0) > 4000) { STYLE.near.set(c, now); styleEv('Впритирку!', 20); } }
+  }
+}
 function explode(pos, big) {
   big = big || 1;
   flash.position.set(pos.x, pos.y + 2, pos.z); flash.intensity = 5 * big;
@@ -6136,6 +6192,7 @@ function driftEnd(ok) {
   const st = PROF.st, rec = sc > (st.driftBest || 0); if (rec) { st.driftBest = sc; saveProfile(); }
   const coins = Math.min(15, Math.floor(sc / 100));
   if (coins > 0) addCoins(coins);
+  styleEv(sc >= 400 ? 'Мощный занос!' : 'Занос', Math.min(80, Math.round(sc / 10)));
   setTimeout(() => toast(rec && sc >= 400 ? `Рекорд заноса: ${sc} очков!` : `Занос: ${sc} очков`, 1.6), coins > 0 ? 700 : 0);
 }
 function driftTick(dt, drift, imp, throttle) {
@@ -6358,7 +6415,7 @@ function damagePlayer(d) {
   if (state.act === 1 && typeof ONL !== 'undefined' && ONL.on) { careWear(d); if (d >= 1.5) HITS.n++; }
   else if (d > 0) { d *= diffMult() * (NOVICE.on && state.ep === 1 ? 0.5 : 1); DIFF.dmg += d; }
   if (state.invuln > 0 || PROF.god) return;
-  if (state.act === 1) { pc.hp -= d * P.carArmor; } else { hero.hp -= d * P.footArmor; }
+  if (state.act === 1) { pc.hp -= d * P.carArmor; hitFx(d); } else { hero.hp -= d * P.footArmor; }
   hurt = Math.min(1, hurt + d / 20); shake = Math.min(1.2, shake + 0.15);
   checkPlayerDeath();
 }
@@ -6370,7 +6427,7 @@ function damageEnemyCar(e, d) {
   if (e.invuln || e.disabled) return;
   e.hp -= d;
   if (e.noExplode) { if (e.hp <= 0) { e.hp = 0; e.disabled = true; e.noTarget = true; toast(e.kind === 'van' ? 'Фургон заглох!' : e.kind === 'plane' ? 'Самолёт обездвижен!' : e.kind === 'train' ? 'Локомотив встал!' : 'Машина встала', 2); sfx.crash(12); shake = Math.min(1.2, shake + 0.4); } return; }
-  if (e.hp <= 0 && !e.dead) { e.dead = true; cineSlow(e.pos); explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); if (TASK.cur && TASK.cur.group && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'kill', payload: { id: TASK.cur.id } }); }
+  if (e.hp <= 0 && !e.dead) { e.dead = true; cineSlow(e.pos); explode(e.pos, 1.2); addWreck(e.pos, e.h); scene.remove(e.g); state.carKills++; profStat('carKills'); addCoins(25); styleEv('«Шакал» разбит!', 50); if (TASK.cur && TASK.cur.group && PARTY.ch) PARTY.ch.send({ type: 'broadcast', event: 'kill', payload: { id: TASK.cur.id } }); }
 }
 function damageEnemy(e, d) {
   if (e.armor && hero && e.pos.distanceTo(hero.pos) > 9) { d *= 0.3; if (Math.random() < 0.4) spawnP(e.pos.clone().add(new V3(0, 1.3, 0)), { color: 0x9ad0ff, size: 0.3, vel: rv().multiplyScalar(3), life: 0.25, add: true }); }
@@ -14775,7 +14832,7 @@ function loop(now) {
   ambTick(dt);
   if (state.mode === 'preview') updatePreview(dt);
   else if (state.mode === 'select') updateSelect(dt);
-  else if (state.mode === 'drive') { updateDrive(dt); state.time += dt; }
+  else if (state.mode === 'drive') { updateDrive(dt); state.time += dt; carFx(dt); }
   else if (state.mode === 'foot') { updateFoot(dt); state.time += dt; }
   else if (state.mode === 'dialog') updateDialog(dt);
   else if (state.mode === 'dying') {
@@ -14783,6 +14840,7 @@ function loop(now) {
     if (state.dyingT <= 0) showDead();
   }
   if (state.mode === 'drive' || state.mode === 'foot' || state.mode === 'dying') updateBullets(dt);
+  if (state.mode === 'foot') styleTick(dt);
   if (state.mode !== 'drive' && audio.ctx) setEngine(0, false);
   updateSignals(); updateHumans(dt); updateParticles(dt); updateWrecks(dt); updateBank(dt); updateLife(dt); updateAtmosphere(dt); try { updatePoliceLights(dt); s3Radio(dt); musicUpdate(); } catch (e) { audioFault(e); } updateCityScale(dt); updateAirport(dt); updateStation(dt); updateOnline(dt); if (finalPass) finalPass.uniforms.time.value = state.t; cineUpdate(dt); if (state.mode === 'drive' || state.mode === 'foot') updateBoosts(dt);
   updateCamera(dt);
@@ -14865,7 +14923,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
