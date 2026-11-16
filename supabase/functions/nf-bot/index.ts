@@ -587,9 +587,11 @@ async function missionsReport(days: number, short = false) {
 // пост о задании дня: в канал Telegram, на стену ВК и в канал MAX. Расписание (pg_cron) зовёт каждый день в 15:00 МСК,
 // а публикуется пост не чаще раза в 5 дней (метка dtask_last в nf_settings). Вид задания считается так же, как в игре.
 const DT_KINDS = ['race', 'collect', 'smash', 'photo', 'drift'];
-const DT_NAMES: Record<string, string> = { race: 'гонка по точкам', collect: 'сбор по району', smash: 'тараны на скорости', photo: 'фотоохота', drift: 'дрифт-шоу' };
+const DT_NAMES: Record<string, string> = { race: 'гонка по точкам', collect: 'сбор по району', smash: 'тараны на скорости', photo: 'фотоохота', drift: 'дрифт-шоу', derby: 'дерби' };
+// с 17.11.2026 в игре шесть видов (добавлено «Дерби», v148) — список тот же, что в игре
+const dtKinds = () => (new Date(Date.now() + MSK).toISOString().slice(0, 10) >= '2026-11-17' ? DT_KINDS.concat('derby') : DT_KINDS);
 async function dtaskText() {
-  const n = Math.floor((Date.now() + MSK) / 864e5), kind = DT_KINDS[n % DT_KINDS.length], y = new Date(Date.now() + MSK - 864e5).toISOString().slice(0, 10);
+  const n = Math.floor((Date.now() + MSK) / 864e5), K = dtKinds(), kind = K[n % K.length], y = new Date(Date.now() + MSK - 864e5).toISOString().slice(0, 10);
   const { data } = await db.from('nf_daily').select('user_id, secs, updated_at').eq('day', y).order('secs').order('updated_at').limit(10);
   const ids = (data || []).map((r: any) => r.user_id), { data: ps } = ids.length ? await db.from('profiles').select('id, name, is_tester').in('id', ids) : { data: [] };
   const P = new Map((ps || []).map((p: any) => [p.id, p]));
