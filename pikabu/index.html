@@ -8,7 +8,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <!-- the heaviest files of the first screen start downloading at once, before the big game script is read -->
 <link rel="preload" href="lib/three/build/three.min.js" as="script">
-<link rel="preload" href="assets/models/car.glb" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="assets/city.glb" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="assets/anims.glb" as="fetch" crossorigin="anonymous">
 <meta name="theme-color" content="#0b0d1f">
@@ -877,7 +876,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v157'; window.__errs = [];
+window.APP_VER = 'v158'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5222,7 +5221,9 @@ const NR = { ready: false, G: {}, clips: {}, H: 2.0, carInfo: null };
 // iPhone: Safari ends the tab when memory runs out at start — the four heavy people (≈50 pictures of 1024 px, 6.6 MB of files)
 // are not loaded there; the characters made of them wear the light bodies
 const NR_LITE = IOS || LITE_MEM ? { man2: 'man', man3: 'man', woman2: 'woman', woman3: 'woman' } : {};
-const NR_SRC = ['man', 'man2', 'man3', 'woman', 'woman2', 'woman3', 'michelle', 'anims', 'car'].filter((k) => !NR_LITE[k]);
+// v158: no more realistic sports car (assets/models/car.glb, 1.4 MB before the menu, 224k triangles): the player's taxi and the gangs use the
+// city's own low-poly kit cars, the same style as the streets (Пикабу: «модельки суперкаров, а игра про такси», «смотрится несобранно»)
+const NR_SRC = ['man', 'man2', 'man3', 'woman', 'woman2', 'woman3', 'michelle', 'anims'].filter((k) => !NR_LITE[k]);
 const NR_BODY = { vik: 'man', gleb: 'man', artem: 'man', timur: 'man3', savva: 'man2', rustam: 'man2', kira: 'woman', maya: 'michelle', zoya: 'woman2', nika: 'woman2', olga: 'woman3', mark: 'man3', vera: 'woman3', thug1: 'man2', thug2: 'man', thug3: 'man2', boss: 'man', crow: 'man2' };
 const NR_FEM = { woman: 1, woman2: 1, woman3: 1, michelle: 1 };
 const NR_CAST = { gleb: { hair: '#2a1c14', broad: true }, timur: { hair: '#15151a' }, artem: { hair: '#c9a35a' }, savva: { glasses: true, bald: true }, rustam: { hair: '#15121a', broad: true },
