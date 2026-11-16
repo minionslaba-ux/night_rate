@@ -854,7 +854,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v159'; window.__errs = [];
+window.APP_VER = 'v160'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -9052,6 +9052,7 @@ function startGen(ep, i, withIntro) {
     if (finished) return; finished = true;
     if (E.daily) { profStat('chapters'); for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; } clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0); dailyFinish(); return; }
     epSave(ep, i + 2); addCoins(c.coins || 150); profStat('chapters');
+    if (E.chapters[i + 1] && E.chapters[i + 1].epilogue) profEp(ep);   // v160: the finale counts the episode as done — the calm epilogue after it is a bonus, not a gate
     for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; }
     clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0);
     playDialog((c.outro || [['hero', 'Дальше.']]).map(fixLine), () => (i < E.chapters.length - 1 ? storyChoice(ep, i + 1, () => startGen(ep, i + 1, true)) : showEndGen(ep)));
@@ -15243,6 +15244,142 @@ for (const [key, cfg] of Object.entries(EP_SWAP)) {
   const [ep, ch] = key.split('-').map(Number), E = EPS[ep], old = E && E.chapters[ch - 1]; if (!old) continue;
   E.chapters[ch - 1] = Object.assign({ outro: old.outro, coins: old.coins }, cfg, { swapped: old.type });
 }
+// ---- v160: calm missions (the main story had none): talks with a choice, an ordinary taxi shift, an overheating engine ----
+Object.assign(GEN, {
+  // «Разговор в пути»: the passenger talks while the ride is calm (trust grows, drops on speed and knocks); at the end — a choice that
+  // changes the first mission of the next episode (one pursuer more or less, the same effect as the story choices)
+  talk(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.pts.map((q) => Object.assign({}, q, { v: vV(q.p) })); let leg = 0, trust = 50, hold = 0, warn = 0, hp0 = pc.hp, asked = false;
+    const show = () => { setBeam(P_[leg].v); setObjective(`${c.who} в машине. Езжай спокойно — не быстрее ${c.limit || 50} км/ч и без ударов, тогда расскажет больше. ${P_[leg].name}.`); };
+    show();
+    const ask = () => {
+      asked = true; state.mode = 'dialog';
+      showModal(`<div class="kicker">${title}</div><h2 class="h2">${c.q}</h2><p class="lead">${trust >= 60 ? (c.trustLine || 'Доверие высокое — рассказали всё.') : 'Рассказали не всё: ехал{g:|а} резковато.'}</p>
+        <div class="btns"><button id="tkA" class="btn primary" type="button">${c.a[0]}<br><small>${c.a[1]}</small></button><button id="tkB" class="btn" type="button">${c.b[0]}<br><small>${c.b[1]}</small></button></div>`.replace(/\{g:([^|}]*)\|([^}]*)\}/g, (m, a, b) => gx(a, b)), {
+        tkA: () => { hideModal(); state.choice = { ep: state.ep + 1, ch: 1, eff: 'hot' }; finish(c.aSay); },
+        tkB: () => { hideModal(); state.choice = { ep: state.ep + 1, ch: 1, eff: 'quiet' }; finish(c.bSay); },
+      });
+    };
+    const finish = (say) => { PROF.st.choices = (PROF.st.choices || 0) + 1; if (trust >= 60) addCoins(c.trustCoins || 80); saveProfile(); state.mode = 'drive'; if (say) playDialog(say.map(fixLine), () => { state.mode = 'drive'; done(); }); else done(); };
+    return { title, noFire: true, noFireMsg: 'Не при пассажире', chase: { max: 0 }, get navName() { return P_[leg].name; }, navGoal: () => P_[leg].v,
+      update(dt) {
+        if (asked) return;
+        warn -= dt; const v = kmh();
+        if (v > (c.limit || 50)) { trust = Math.max(0, trust - dt * 6); if (warn <= 0) { warn = 2.5; toast(`${c.who}: ${pick(c.fast || ['Не гони, я так не могу говорить.', 'Потише… о чём я?'])}`, 1.6); } }
+        else if (v > 8) trust = Math.min(100, trust + dt * 1.6);
+        if (pc.hp < hp0) { trust = Math.max(0, trust - (hp0 - pc.hp) * 1.5); hp0 = pc.hp; if (warn <= 0) { warn = 2.5; toast(`${c.who}: Ай! Аккуратнее!`, 1.4); } }
+        if (pc.pos.distanceTo(P_[leg].v) < 11) { arriveBrake(dt); if (kmh() < 15) { hold += dt; if (hold > 0.3) { hold = 0; const q = P_[leg]; leg++; const next = () => { state.mode = 'drive'; if (leg >= P_.length) ask(); else show(); }; if (q.say) playDialog(q.say.map(fixLine), next); else next(); } } }
+        else hold = 0;
+      },
+      hud() { return { bars: [{ label: `Доверие: ${Math.round(trust)}%`, frac: trust / 100, color: trust >= 60 ? '#4dffa6' : '#ffd23a' }], timer: `Не быстрее ${c.limit || 50} км/ч`, bad: kmh() > (c.limit || 50) }; } };
+  },
+  // «Обычная смена»: ordinary fares around the city, each passenger with a quirk; the tip shows how the ride went
+  fares(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const S = c.stops.map(([x, z, name]) => ({ v: new V3(x, 0, z), name })), Q = c.quirks || ['hurry', 'sick', 'tourist', 'quiet'];
+    const QT = { hurry: ['Опаздываю на поезд! Быстрее!', 'чаевые тают вдвое быстрее'], sick: ['Меня укачивает… только без резких поворотов.', 'удары и резкие повороты съедают чаевые'], tourist: ['Я тут впервые! Можно проехать мимо порта?', 'сначала — мимо достопримечательности'], quiet: ['Добрый вечер. Просто довезите.', 'обычная поездка'] };
+    let n = 0, left = c.secs, ride = null, hail = null, earned = 0, warn = 0, lastV = 0, lastH = pc.h;
+    const pickStop = (far) => { const ok = S.filter((s) => s.v.distanceTo(far) > (c.minDist || 150)); return pick(ok.length ? ok : S); };
+    const newHail = () => { const s = pickStop(pc.pos); const a = spawnAlly(cityLook(), s.v.x + 6, s.v.z + 6, { hp: 1e6, name: 'Пассажир', face: 0 }); hail = { s, a, mk: tMark(s.v.x, s.v.z, 0xf2c21a, 6) }; setBeam(s.v); setObjective(`Обычная смена: заказ ${n + 1} из ${c.n}. Пассажир ждёт: ${s.name}.`); };
+    newHail();
+    return { title, noFire: true, noFireMsg: 'Это обычный пассажир!', chase: { max: 0 }, get navName() { return ride ? (ride.via && !ride.viaDone ? ride.via.name : ride.to.name) : hail ? hail.s.name : ''; }, navGoal: () => (ride ? (ride.via && !ride.viaDone ? ride.via.v : ride.to.v) : hail ? hail.s.v : pc.pos),
+      update(dt) {
+        left -= dt; warn -= dt; if (left <= 0 && secondSet(() => { left = 30; })) return failChapter('Смена кончилась', `Отвезено ${n} из ${c.n}. Подъезжай к пассажиру медленно и останавливайся рядом — посадка быстрее.`);
+        const v = kmh(), vf = pc.vf || 0, acc = Math.abs(vf - lastV) / Math.max(dt, 1e-3), yaw = Math.abs(wrapA(pc.h - lastH)) / Math.max(dt, 1e-3); lastV = vf; lastH = pc.h;
+        if (!ride && hail && pc.pos.distanceTo(hail.s.v) < 10) { arriveBrake(dt); if (v < 12) { const q = Q[n % Q.length], to = pickStop(hail.s.v), via = q === 'tourist' ? pickStop(to.v) : null; scene.remove(hail.mk); hail.a.g.visible = false; ride = { q, to, via, viaDone: !via, tip: c.tip || 60, tip0: c.tip || 60, mk: tMark(to.v.x, to.v.z, 0x4dffa6, 7) }; toast(`Пассажир: ${QT[q][0]}`, 2.4); setObjective(`Заказ ${n + 1}: ${via ? `сначала мимо «${via.name}», потом ` : ''}${to.name}. Особенность: ${QT[q][1]}.`); hail = null; } return; }
+        if (!ride) return;
+        ride.tip = Math.max(0, ride.tip - dt * (ride.q === 'hurry' ? 1.2 : 0.5));
+        if (ride.q === 'sick' && (acc > 26 || yaw * Math.abs(vf) > 12)) { ride.tip = Math.max(0, ride.tip - dt * 14); if (warn <= 0) { warn = 2; toast('Пассажир: Ох… потише…', 1.2); } }
+        if (ride.via && !ride.viaDone) { setBeam(ride.via.v); if (pc.pos.distanceTo(ride.via.v) < 16) { ride.viaDone = true; toast('Турист: Как красиво! Теперь можно ехать.', 1.6); } return; }
+        setBeam(ride.to.v);
+        if (pc.pos.distanceTo(ride.to.v) < 10) { arriveBrake(dt); if (v < 12) { const fare = c.fare || 40, tip = Math.round(ride.tip), stars = tip > ride.tip0 * 0.6 ? 3 : tip > ride.tip0 * 0.25 ? 2 : 1; earned += fare + tip; addCoins(fare + tip); scene.remove(ride.mk); toast(`${'★'.repeat(stars)}${'☆'.repeat(3 - stars)} · ${fare} + ${tip} чаевых`, 2); ride = null; n++; if (n >= c.n) return done(); newHail(); } }
+      },
+      hud() { return { bars: ride ? [{ label: `Чаевые: ${Math.round(ride.tip)}`, frac: ride.tip / ride.tip0, color: '#f2c21a' }] : [], timer: `${fmt(left)} · заказ ${Math.min(n + 1, c.n)}/${c.n}`, bad: left < 25 }; } };
+  },
+  // «Перегрев»: the radiator is shot — the engine heats up with speed and knocks; at 100° it stalls for a few seconds; fountains cool it
+  overheat(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.pts.map((q) => Object.assign({}, q, { v: vV(q.p) })), cool = (c.cool || []).map(([x, z, name]) => ({ v: new V3(x, 0, z), name, mk: tMark(x, z, 0x5ad1ff, 4) }));
+    let leg = 0, heat = 30, stall = 0, left = c.secs, hold = 0, hp0 = pc.hp, warn = 0;
+    const show = () => { setBeam(P_[leg].v); setObjective(`Радиатор пробит: на скорости мотор греется. Остудить можно у ${c.coolName || 'гидрантов (синие метки)'}. ${P_[leg].name}.`); };
+    show();
+    return { title, noFire: !c.chase, chase: { max: c.chase || 0 }, get navName() { return P_[leg].name; }, navGoal: () => P_[leg].v,
+      update(dt) {
+        left -= dt; warn -= dt; if (left <= 0 && secondSet(() => { left = 25; })) { if (pc) pc.locked = false; return failChapter('Не доехали', 'Время вышло. Держи скорость около 50 — мотор почти не греется, а остановка у гидранта остужает за пару секунд.'); }
+        if (stall > 0) { stall -= dt; heat = Math.max(60, heat - dt * 6); if (stall <= 0) { pc.locked = false; toast('Завёлся! Не гони', 1.2); } return; }
+        const v = kmh(); heat += dt * (v > 50 ? (v - 50) * 0.11 : -2.2);
+        if (pc.hp < hp0) { heat += (hp0 - pc.hp) * 0.8; hp0 = pc.hp; }
+        for (const q of cool) if (pc.pos.distanceTo(q.v) < 9) { heat -= dt * 30; if (warn <= 0) { warn = 2; toast(`${q.name}: пшшш… остываем`, 1); } for (let k = 0; k < 2; k++) spawnP(pc.pos.clone().add(new V3(rand(-1, 1), 1.4, rand(-1, 1))), { color: 0xcfe8ff, size: 0.5, vel: new V3(rand(-1, 1), rand(2, 4), rand(-1, 1)), life: 0.8, opacity: 0.5 }); }
+        heat = clamp(heat, 0, 100);
+        if (heat > 75 && Math.random() < dt * 8) spawnP(pc.pos.clone().add(new V3(Math.sin(pc.h) * 1.8, 1.2, Math.cos(pc.h) * 1.8)), { color: 0xeeeeee, size: 0.6, vel: new V3(rand(-1, 1), rand(2, 3), rand(-1, 1)), life: 1, opacity: 0.5 });
+        if (heat >= 100) { stall = c.stallSecs || 4; pc.locked = true; pc.vel.multiplyScalar(0.3); sfx.crash(3); toast('Мотор закипел! Ждём, пока остынет…', 2); }
+        if (pc.pos.distanceTo(P_[leg].v) < 11) { arriveBrake(dt); if (kmh() < 15) { hold += dt; if (hold > 0.3) { hold = 0; const q = P_[leg]; leg++; if (leg >= P_.length) return done(); const next = () => { state.mode = 'drive'; show(); }; if (q.say) playDialog(q.say.map(fixLine), next); else next(); } } }
+        else hold = 0;
+      },
+      hud() { return { bars: [{ label: stall > 0 ? `Мотор остывает… ${Math.ceil(stall)} с` : `Температура мотора: ${Math.round(40 + heat * 0.8)}°`, frac: heat / 100, color: heat > 75 ? '#ff4d6d' : heat > 50 ? '#ffd23a' : '#5ad1ff' }], timer: `${fmt(left)}`, bad: heat > 80 || left < 20 }; } };
+  },
+});
+const PS_STOPS = [[-160, -120, 'Рынок'], [-80, -160, 'Трамвайное депо'], [0, -120, 'Школа'], [80, -160, 'Набережная'], [160, -120, 'Речной вокзал'], [160, 0, 'Банк'], [160, 120, 'Восточная'], [80, 160, 'Парк'], [0, 120, 'Площадь'], [-80, 160, 'Больница'], [-160, 120, 'Порт'], [-160, 0, 'Стадион'], [0, 0, 'Центр'], [80, 40, 'Кафе «Полночь»']];
+const PS_COOL = [[-80, 0, 'Гидрант'], [0, 80, 'Фонтан на площади'], [80, -80, 'Гидрант'], [-80, -80, 'Мойка'], [160, 40, 'Гидрант']];
+// the epilogues: one calm mission after each finale of episodes 3–14 (added at the end — saved progress and marks stay as they are)
+const EP_EPILOGUE = {
+  3: { t: 'Эпилог · Домой', type: 'talk', start: [-80, -40, 'N'], who: 'Лёва', limit: 50, q: 'Тетрадь у нас. Что дальше?',
+    pts: [{ p: [0, 80], name: 'Мимо площади', say: [['leva', 'В тетради — все, кто платил Вере. Полиция, таможня, даже наш диспетчер.']] }, { p: [-80, 160], name: 'Дом Лёвы' }],
+    a: ['Прижать Веру сейчас', 'в следующей миссии +1 «Шакал», +40% награды'], b: ['Сначала спрятать тетрадь', 'в следующей миссии −1 преследователь'],
+    aSay: [['leva', 'Тогда рано ложиться спать.']], bSay: [['leva', 'Спрячу в депо. Там её никто не найдёт.']], trustLine: 'Лёва рассказал всё: у Веры есть покупатель на тетрадь — гастролёры из другого города.',
+    about: 'Спокойная поездка: отвезти Лёву домой и выслушать, что он нашёл в тетради. Чем спокойнее едешь, тем больше расскажет. В конце — решение.',
+    intro: [['leva', 'Отвези меня домой. И не гони — я хочу рассказать, что в тетради.']], outro: [['hero', 'Спокойной ночи, Лёва.'], ['leva', 'Какая уж тут ночь…']] },
+  4: { t: 'Эпилог · Обычная смена', type: 'fares', start: [0, 0, 'N'], n: 3, secs: 300, stops: PS_STOPS, quirks: ['quiet', 'hurry', 'tourist'],
+    about: 'Между погонями город всё равно ждёт такси: три обычных заказа. У каждого пассажира свои причуды, а чаевые показывают, как ты довёз.',
+    intro: [['mark', 'Гастролёры ушли, а план по выручке никто не отменял. Возьми пару заказов — город должен видеть, что такси работает.'], ['hero', 'Обычная смена. Уже соскучил{g:ся|ась}.']], outro: [['mark', 'Неплохо. Таксопарк ещё жив.']] },
+  5: { t: 'Эпилог · Пробитый радиатор', type: 'overheat', start: [-80, 160, 'S'], secs: 200, cool: PS_COOL,
+    pts: [{ p: [0, 0], name: 'Центр — забрать Хозяина у адвоката' }, { p: [160, -120], name: 'Речной вокзал' }],
+    about: 'После перестрелки радиатор пробит. Довезти Хозяина до речного вокзала: на скорости мотор кипит, у гидрантов и фонтана можно остудить.',
+    intro: [['mark', 'Радиатор как решето. До вокзала доедешь, если не будешь гнать. Гидранты по пути — мои знакомые сантехники открыли.']], outro: [['hero', 'Доехали. Пар из-под капота — как из чайника.']] },
+  6: { t: 'Эпилог · Марк', type: 'talk', start: [-120, 120, 'E'], who: 'Марк', limit: 50, q: 'Марк просит не мстить Вере сгоряча. Как поступишь?',
+    pts: [{ p: [0, 80], name: 'Через площадь', say: [['mark', 'Я знал Веру двадцать лет назад. Она тогда водила такси. Как ты.']] }, { p: [-80, -40], name: 'Гараж Марка' }],
+    a: ['Найти её сегодня же', 'в следующей миссии +1 преследователь, +40% награды'], b: ['Сначала залечить раны', 'в следующей миссии −1 преследователь'],
+    aSay: [['mark', 'Упрям{g:ый|ая}. Как она.']], bSay: [['mark', 'Правильно. Злость — плохой штурман.']], trustLine: 'Марк рассказал, что Вера потеряла таксопарк из-за долгов — и с тех пор мстит городу.',
+    about: 'Марк на свободе. Отвезти его в гараж спокойно и выслушать историю Веры. В конце — решение.',
+    intro: [['mark', 'Вези медленно. У меня рёбра, а у тебя вопросы.']], outro: [['mark', 'Дома. Спасибо, что вытащил{g:|а}.']] },
+  7: { t: 'Эпилог · Утренняя смена', type: 'fares', start: [80, 40, 'N'], n: 3, secs: 300, stops: PS_STOPS, quirks: ['sick', 'quiet', 'hurry'],
+    about: 'Вера задержана, а город просыпается: три утренних заказа, и у каждого пассажира свои причуды.',
+    intro: [['radio', '…утро в Порт-Северном: на улицах снова такси…'], ['hero', 'Первая спокойная смена за неделю. Поехали.']], outro: [['mark', 'Город вспомнил, как выглядит жёлтое такси.']] },
+  8: { t: 'Эпилог · Кипящий мотор', type: 'overheat', start: [-80, -80, 'E'], secs: 200, cool: PS_COOL,
+    pts: [{ p: [160, 0], name: 'Банк — забрать Деда после разведки' }, { p: [-160, 120], name: 'Порт — мастерская Деда' }],
+    about: 'Броневик помял радиатор. Забрать Деда у банка и довезти до его мастерской в порту, не дав мотору закипеть.',
+    intro: [['ded', 'Шеф, у тебя мотор свистит, как мой чайник. Вези аккуратно — у меня в сумке инструмент на полжизни.']], outro: [['ded', 'Доехали. Подлей потом воды — и мне, и ему.']] },
+  9: { t: 'Эпилог · Ночной разговор', type: 'talk', start: [0, 0, 'S'], who: 'Дед', limit: 50, q: 'Дед уверен: Соня не предавала. Верить ей?',
+    pts: [{ p: [80, -160], name: 'Набережная', say: [['ded', 'Я тридцать лет вскрываю сейфы. И знаю, когда человек врёт. Соня — не врёт.']] }, { p: [-160, 120], name: 'Мастерская Деда' }],
+    a: ['Найти Соню силой', 'в следующей миссии +1 преследователь, +40% награды'], b: ['Дать Соне шанс объясниться', 'в следующей миссии −1 преследователь'],
+    aSay: [['ded', 'Эх, молодёжь…']], bSay: [['ded', 'Вот это по-нашему.']], trustLine: 'Дед рассказал, что Соня — дочь Гранина и забрала книгу, чтобы отец её не уничтожил.',
+    about: 'После ограбления, где в сумках оказались «куклы». Отвезти Деда домой спокойно — он знает больше, чем говорит. В конце — решение.',
+    intro: [['ded', 'Вези тихо, шеф. Я старый, мне нужно подумать вслух.']], outro: [['ded', 'Спасибо, шеф. Ступай, найди её.']] },
+  10: { t: 'Эпилог · Смена после бури', type: 'fares', start: [-80, 0, 'E'], n: 3, secs: 300, stops: PS_STOPS, quirks: ['tourist', 'sick', 'hurry'],
+    about: 'Гранин арестован, город празднует. Три заказа: туристы, гости праздника и те, кто опаздывает.',
+    intro: [['sonya', 'Город празднует. Все хотят такси. Ты — лучшее такси в городе.'], ['hero', 'Тогда за работу.']], outro: [['sonya', 'Кажется, у тебя появились постоянные клиенты.']] },
+  11: { t: 'Эпилог · Последний пар', type: 'overheat', start: [40, -160, 'N'], secs: 200, cool: PS_COOL,
+    pts: [{ p: [160, 120], name: 'Восточная — забрать Лёву' }, { p: [0, 120], name: 'Мэрия — на суд' }],
+    about: 'Вертолёт изрешетил капот. Довезти Лёву на суд в мэрию, пока мотор не закипел окончательно.',
+    intro: [['leva', 'Суд через двадцать минут. Машина дымит. Мы успеем?'], ['hero', 'Если не будем гнать — успеем.']], outro: [['leva', 'Мы на месте. Пора говорить правду.']] },
+  12: { t: 'Эпилог · Капитан', type: 'talk', start: [110, -80, 'W'], who: 'Орлова', limit: 45, q: 'Орлова просит отдать улики полиции. Отдать?',
+    pts: [{ p: [0, 0], name: 'Через центр', say: [['orlova', 'Я гонялась за тобой неделю. А ты всё это время делал мою работу.']] }, { p: [-80, -80], name: 'Гараж Марка' }],
+    a: ['Оставить улики себе', 'в следующей миссии +1 преследователь, +40% награды'], b: ['Отдать Орловой', 'в следующей миссии −1 преследователь'],
+    aSay: [['orlova', 'Как знаешь. Но я за тобой присмотрю.']], bSay: [['orlova', 'Спасибо. Обещаю, дело дойдёт до суда.']], trustLine: 'Орлова рассказала: за Кравцом стоит кто-то из аэропорта — ящики с пометкой ЧБ 007.',
+    about: 'Мэр спасён, а капитан Орлова сама садится в такси. Спокойная поездка и разговор, после которого придётся решить, кому верить.',
+    intro: [['orlova', 'Подвези, таксист. Без мигалок. Поговорим.']], outro: [['orlova', 'Хорошая ночь для разговора.']] },
+  13: { t: 'Эпилог · Пассажиры аэропорта', type: 'fares', start: [-20, 578, 'E'], n: 3, secs: 280, minDist: 90, quirks: ['hurry', 'quiet', 'sick'],
+    stops: [[-60, 760, 'Перрон'], [140, 762, 'Ангары'], [196, 664, 'Грузовой двор'], [0, 700, 'Служебные ворота'], [150, 600, 'Заправка'], [-20, 578, 'Терминал «Вылет»'], [80, 556, 'Эстакада']],
+    about: 'Самолёт Веры не взлетел, а рейсы отменены. Развезти застрявших пассажиров по аэропорту — у каждого свои причуды.',
+    intro: [['mark', 'Рейсы отменили из-за тебя. Будь добр, развези людей.'], ['hero', 'Справедливо.']], outro: [['mark', 'Аэропорт тебя запомнит. Надеюсь, по-хорошему.']] },
+  14: { t: 'Эпилог · Вокзальный пар', type: 'overheat', start: [404, -118, 'E'], secs: 200, coolName: 'водоразборных колонок',
+    cool: [[572, -232, 'Водоразборная колонка'], [700, 20, 'Колонка у депо'], [664, -246, 'Пожарный гидрант']],
+    pts: [{ p: [664, -246], name: 'Служебная дорога — забрать дежурную' }, { p: [760, -240], name: 'Пост ЭЦ' }],
+    about: 'После боя у кранов радиатор течёт. Довезти дежурную по станции до поста ЭЦ, остужая мотор у колонок.',
+    intro: [['stancia', 'Мне на пост, срочно. Только машина у вас… дымит?'], ['hero', 'Она просто волнуется.']], outro: [['stancia', 'Спасибо, таксист. Экспресс отправится по расписанию.']] },
+};
+for (const [ep, cfg] of Object.entries(EP_EPILOGUE)) { const E = EPS[+ep]; if (E && E.chapters && !E.chapters.some((x) => x.epilogue)) E.chapters.push(Object.assign({ coins: 120, epilogue: true }, cfg)); }
 window.__nightFare = { updHud: (dt) => updateHud(dt), backHint, get RADIO() { return RADIO; }, lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
