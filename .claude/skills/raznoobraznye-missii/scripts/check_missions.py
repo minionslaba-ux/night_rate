@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Проверка каталога миссий (скилл «Разнообразные миссии»).
 
-Запуск: python3 check_missions.py docs/missii-katalog.md [--min-dist 300] [--gap 3]
+Запуск: python3 check_missions.py docs/missii-katalog.md [--min-dist 300] [--gap 3] [--types вождение,бой,спокойная,головоломка | none]
 Читает все строки markdown-таблиц, где есть колонки «Глава» и «Глагол».
 Ошибки (код выхода 1):
   - в одной главе два одинаковых глагола;
@@ -49,6 +49,10 @@ def main():
     path = args[0]
     min_dist = float(args[args.index('--min-dist') + 1]) if '--min-dist' in args else 300.0
     gap = int(args[args.index('--gap') + 1]) if '--gap' in args else 3
+    need_types = TYPES
+    if '--types' in args:
+        v = args[args.index('--types') + 1]
+        need_types = [] if v == 'none' else [norm(t) for t in v.split(',') if t.strip()]
     rows = read_rows(path)
     if not rows:
         print('Нет строк каталога: нужна таблица с колонками «Глава» и «Глагол».'); return 1
@@ -93,7 +97,7 @@ def main():
         regular = [m for m in ms if norm(m.get('тип')) != 'босс']
         if len(regular) >= 4:
             have = {norm(m.get('тип')) for m in regular}
-            miss = [t for t in TYPES if t not in have]
+            miss = [t for t in need_types if t not in have]
             if miss:
                 errors.append(f'гл.{ch}: нет типов {", ".join(miss)}')
         pts = []
@@ -111,6 +115,9 @@ def main():
         if len(lens) >= 3 and len(set(lens)) == 1:
             warns.append(f'гл.{ch}: у всех миссий одинаковая длина ({lens[0]})')
     print(f'Миссий: {len(rows)}, глав: {len(order)}')
+    tc = defaultdict(int)
+    for r in rows: tc[norm(r.get('тип')) or '?'] += 1
+    print('Типы по всей игре:', ', '.join(f'{t} {n * 100 // len(rows)}%' for t, n in sorted(tc.items(), key=lambda x: -x[1])))
     print('Глаголы:', ', '.join(f'{v} ×{n}' for v, n in sorted(verb_count.items(), key=lambda x: -x[1])))
     for w in warns:
         print('  предупреждение:', w)
