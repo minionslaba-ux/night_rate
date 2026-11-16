@@ -883,7 +883,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v158'; window.__errs = [];
+window.APP_VER = 'v159'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -7242,7 +7242,7 @@ function updateDrive(dt) {
   if (APL.on && !APL.paused) { const a = apControl(dt); steerKey = 0; thrKey = a.t; js = a.s; jt = 0; }
   { const tgt = clamp(steerKey + js, -1, 1), cur = pc.steerSm || 0, fast = clamp(Math.abs(pc.vf || 0) / 30, 0, 1), turnIn = Math.abs(tgt) > Math.abs(cur) && Math.sign(tgt || cur) === Math.sign(cur || tgt);
     pc.steerSm = cur + (tgt - cur) * Math.min(1, dt * (steerKey ? (turnIn ? 14 - 8 * fast : 16) : turnIn ? 7.2 - 1.35 * fast : 10)); }   // v152: the stick turns in more gently (the faster, the gentler), lets go as fast as before
-  const throttle = clamp(thrKey + jt, -1, 1), steer = pc.steerSm;
+  const throttle = state.gasStuck ? Math.max(0.6, clamp(thrKey + jt, 0, 1)) : clamp(thrKey + jt, -1, 1), steer = pc.steerSm;   // v159: «газ заклинило» — no brakes, no reverse
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
   { const sp = Math.hypot(pc.vel.x, pc.vel.z), side = Math.abs(pc.vr || 0);
     const brake = (thrKey + jt) < -0.3 && (pc.vf || 0) > 13 ? Math.min(0.55, ((pc.vf || 0) - 13) / 18 + 0.25) : 0;
@@ -9831,7 +9831,7 @@ function updateHud(dt) {
   $('onlStat').hidden = !ONL.on; if (ONL.on) $('onlStat').textContent = `● ${ONL.count || 1} онлайн · `;
   if (objT && performance.now() > objT) { objT = 0; if (ONL.on || document.body.classList.contains('hud-s')) $('objective').classList.add('min'); }
   $('speedo').hidden = state.act !== 1;
-  $('nav').hidden = !(state.act === 1 && state.mode === 'drive');
+  $('nav').hidden = !(state.act === 1 && state.mode === 'drive') || !!(MIS && MIS.hideNav);   // v159: «Штурман» and «Туман» — no navigator at all
   if (state.act === 1 && pc) $('speed').textContent = Math.round(Math.abs(pc.vf || 0) * 3.3);
   let bars = [], timer = '', tbad = false;
   if (state.ep >= 2 && MIS && MIS.hud && (state.mode === 'drive' || state.mode === 'foot')) { const hh = MIS.hud(); bars = hh.bars || []; timer = hh.timer || ''; tbad = !!hh.bad; if (tbad && state.mode === 'drive' || tbad && state.mode === 'foot') { const sec = Math.floor(state.t); if (sec !== AMB.tick) { AMB.tick = sec; sfx.tick(); } } }
@@ -13813,7 +13813,7 @@ Object.assign(GEN, {
     const P_ = c.points.map(([x, z, n]) => ({ v: new V3(x, 0, z), n })); let i = 0, left = c.secs, beep = 0, k = 0, hint = '';
     const L = P_.map((p) => { const g = new THREE.Group(); g.position.copy(p.v); const pole = new THREE.Mesh(box1, std(0x1a1a1e)); pole.scale.set(0.3, 6, 0.3); pole.position.y = 3; g.add(pole); const l = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), basic(new THREE.Color(4, 3, 1.2))); l.position.y = 6.5; g.add(l); g.visible = false; ctAdd(g); return { g, l }; });
     setObjective(`Туман. Навигатор ослеп: ищи маяки по сигналу. Чем чаще писк и полнее шкала — тем ближе. Маяков: ${P_.length}.`);
-    return { title, fog: 1, noFire: true, chase: { max: 0 }, navName: 'Сигнал', navGoal: () => pc.pos,
+    return { title, hideNav: true, fog: 1, noFire: true, chase: { max: 0 }, navName: 'Сигнал', navGoal: () => pc.pos,
       update(dt) {
         left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Заблудились в тумане', 'Следи за подсказкой «слева / справа» и за шкалой: если она пустеет, разворачивайся.');
         arrow.visible = false; setBeam(null);
@@ -15126,6 +15126,152 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
+// ---- v159: new mechanics (skill «raznoobraznye-missii»: the main story leaned on six verbs — see docs/missii-katalog.md) ----
+Object.assign(GEN, {
+  // «Штурман»: no arrow and no beam — the passenger calls each turn by voice; a wrong turn — «не туда», and where the goal is
+  directions(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const R = c.route.map(vV), who = c.guide || 'Пассажир', goal = R[R.length - 1], mk = tMark(goal.x, goal.z, 0x4dffa6, 8);
+    let k = 0, said = -1, best = 1e9, left = c.secs, wrongT = 0, hint = '';
+    const turnAt = (i) => {
+      if (i >= R.length - 1) return 'приехали';
+      const a = i ? R[i - 1] : vV([c.start[0], c.start[1]]), b = R[i], n = R[i + 1];
+      const d = wrapA(Math.atan2(n.x - b.x, n.z - b.z) - Math.atan2(b.x - a.x, b.z - a.z));
+      return Math.abs(d) < 0.5 ? 'прямо' : d > 0 ? 'налево' : 'направо';
+    };
+    setObjective(`Навигатор сломан. ${who} знает дорогу: слушай подсказки на перекрёстках. Цель — ${c.goalName}.`);
+    return { title, hideNav: true, noFire: !c.chase, chase: { max: c.chase || 0 }, navName: 'Слушай штурмана', navGoal: () => pc.pos,
+      update(dt) {
+        left -= dt; wrongT -= dt;
+        if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успели', `Время вышло. Слушай подсказки заранее: «${who}» говорит о повороте за полквартала.`);
+        arrow.visible = false; setBeam(k >= R.length - 1 ? goal : null);
+        const p = R[k], d = pc.pos.distanceTo(p);
+        if (d < 55 && said !== k) { said = k; const t = turnAt(k); toast(k >= R.length - 1 ? `${who}: Вон там, ${c.goalName}!` : `${who}: На перекрёстке — ${t}!`, 2.2); sfx.key(); }
+        if (k < R.length - 1 && d < 13) { k++; best = 1e9; return; }
+        if (k >= R.length - 1 && d < 11) { arriveBrake(dt); if (kmh() < 20) { scene.remove(mk); return done(); } }
+        best = Math.min(best, d);
+        hint = sideWord(wrapA(Math.atan2(p.x - pc.pos.x, p.z - pc.pos.z) - pc.h));
+        if (d > best + 45 && wrongT <= 0) { wrongT = 4; best = d; toast(`${who}: Не туда! Нам ${hint}`, 2); }
+      },
+      hud() { return { timer: `${fmt(left)} · ${who}: «${k >= R.length - 1 ? 'почти приехали' : turnAt(k)}»`, bad: left < 15 }; } };
+  },
+  // «Камеры скорости»: a route by checkpoints; cameras with a limit on the way — every flash is a fine, three fines and the job is off
+  speedcam(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.pts.map((q) => ({ v: vV(q.p), name: q.name })), max = c.maxFines || 3;
+    const C = c.cams.map(([x, z, lim]) => {
+      const g = new THREE.Group(); g.position.set(x, 0, z); ctAdd(g);
+      const pole = new THREE.Mesh(box1, std(0x2a2c34)); pole.scale.set(0.25, 5, 0.25); pole.position.y = 2.5; g.add(pole);
+      const head = new THREE.Mesh(box1, std(0xe8e8e8)); head.scale.set(0.9, 0.5, 0.6); head.position.y = 5; g.add(head);
+      const lamp = new THREE.Mesh(box1, basic(new THREE.Color(0.6, 0.1, 0.1))); lamp.scale.set(0.3, 0.3, 0.1); lamp.position.set(0, 5, 0.32); g.add(lamp);
+      const ring = tMark(x, z, 0xff5a5a, 2.5);
+      return { x, z, lim, lamp, ring, fined: false, flash: 0 };
+    });
+    let i = 0, fines = 0, left = c.secs, near = null;
+    const show = () => { setBeam(P_[i].v); setObjective(`${P_[i].name} (${i + 1}/${P_.length}). На маршруте камеры скорости: у каждой свой лимит. ${max} штрафа — и всё отменяется.`); };
+    show();
+    return { title, noFire: true, noFireMsg: c.noFireMsg || 'Камеры же!', chase: { max: 0 }, get navName() { return P_[i] ? P_[i].name : ''; }, navGoal: () => (P_[i] ? P_[i].v : pc.pos),
+      update(dt) {
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) return failChapter('Не успели', 'Время вышло. Между камерами можно гнать — тормози заранее только перед ними.');
+        near = null; let nd = 1e9;
+        for (const q of C) {
+          const d = Math.hypot(pc.pos.x - q.x, pc.pos.z - q.z); if (d < nd) { nd = d; near = q; }
+          q.flash -= dt; q.lamp.material.color.setRGB(q.flash > 0 ? 6 : 0.6, q.flash > 0 ? 6 : 0.1, q.flash > 0 ? 6 : 0.1);
+          if (d < 14 && !q.fined && kmh() > q.lim) { q.fined = true; q.flash = 0.5; fines++; sfx.crash(4); scene.remove(q.ring); toast(`Вспышка! ${Math.round(kmh())} км/ч при лимите ${q.lim}. Штраф ${fines}/${max}`, 2); if (fines >= max) return failChapter(c.failTitle || 'Засветились', c.failText || 'Три штрафа — и такси уже в базе. Перед каждой камерой сбрасывай скорость до лимита.'); }
+          if (d < 14 && !q.fined && kmh() <= q.lim && !q.ok) { q.ok = true; scene.remove(q.ring); }
+          if (d > 30) q.ok = false;
+        }
+        if (pc.pos.distanceTo(P_[i].v) < 12) { i++; sfx.bell(); if (i >= P_.length) return done(); toast('Отметка', 0.8); show(); }
+      },
+      hud() {
+        const d = near ? Math.round(Math.hypot(pc.pos.x - near.x, pc.pos.z - near.z)) : 999, v = Math.round(kmh());
+        return { bars: near && d < 70 ? [{ label: `Камера через ${d} м · лимит ${near.lim} · у тебя ${v}`, frac: clamp(v / (near.lim * 1.6), 0, 1), color: v > near.lim ? '#ff4d6d' : '#4dffa6' }] : [], timer: `${fmt(left)} · штрафы ${fines}/${max}`, bad: fines >= max - 1 || left < 15 };
+      } };
+  },
+  // «Газ заклинило»: the taxi keeps accelerating and the brakes are gone — the checkpoints, then stop in the sand pile
+  nobrakes(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const P_ = c.pts.map((q) => ({ v: vV(q.p), name: q.name })), sand = vV(c.sand); let i = 0, left = c.secs, inSand = 0;
+    const pile = new THREE.Mesh(new THREE.ConeGeometry(7, 2.6, 10), std(0xc9a46a)); pile.position.set(sand.x, 1.1, sand.z); pile.scale.set(1, 1, 1.3); ctAdd(pile);
+    state.gasStuck = true; ctAdd(() => { state.gasStuck = false; });
+    const show = () => { const q = i < P_.length ? P_[i] : { v: sand, name: c.sandName || 'Куча песка' }; setBeam(q.v); setObjective(i < P_.length ? `Газ заклинило, тормозов нет! ${q.name} (${i + 1}/${P_.length}). Сбавить ход можно только поворотами и заносом.` : `Теперь — в ${c.sandName || 'кучу песка'}: только там такси остановится.`); };
+    show();
+    return { title, noFire: true, noFireMsg: 'Тут не до стрельбы — держи руль', chase: { max: c.chase || 0 }, get navName() { return i < P_.length ? P_[i].name : c.sandName || 'Песок'; }, navGoal: () => (i < P_.length ? P_[i].v : sand),
+      update(dt) {
+        left -= dt; if (left <= 0 && secondSet(() => { left = 25; })) { state.gasStuck = false; return failChapter('Бензин кончился', 'Время вышло. Срезай углы заносом — так машина теряет меньше времени и не бьётся о стены.'); }
+        if (i < P_.length) { if (pc.pos.distanceTo(P_[i].v) < 13) { i++; sfx.bell(); toast(i < P_.length ? 'Есть! Дальше' : 'Теперь в песок!', 1.2); show(); } return; }
+        const d = pc.pos.distanceTo(sand);
+        if (d < 13) { if (state.gasStuck) { state.gasStuck = false; toast('Песок! Мотор заглох', 1.4); sfx.crash(6); } arriveBrake(dt, 0.02); inSand += dt; if (inSand > 0.2 && Math.random() < 0.5) spawnP(pc.pos.clone().add(new V3(0, 0.5, 0)), { color: 0xd8b67a, size: 0.4, vel: new V3(rand(-3, 3), rand(1, 3), rand(-3, 3)), life: 0.7, opacity: 0.8 }); if (kmh() < 6) { state.gasStuck = false; return done(); } }
+      },
+      hud() { return { timer: `${fmt(left)} · газ заклинило`, bad: true }; } };
+  },
+});
+// v159: missions swapped in — the same place in the story, a different verb (docs/missii-katalog.md, check_missions.py)
+const EP_SWAP = {
+  '3-2': { t: 'Чистые номера', type: 'parking', start: [-80, -60, 'N'], secs: 170, bonus: 20,
+    about: 'Марк перебивает номера в трёх местах своей мастерской: покрасочный бокс, стенд с трафаретами и подъёмник. Поставить такси в каждую рамку ровно — один раз даже задом.',
+    spots: [{ p: [-80, -116], h: 'N', name: 'Покрасочный бокс', cars: [[-80, -124.5, 'N'], [-80, -107.5, 'N']] }, { p: [-36, -80], h: 'E', rev: true, name: 'Стенд с трафаретами — задом', cars: [[-44.5, -80, 'E'], [-27.5, -80, 'E']] }, { p: [0, -40], h: 'S', any: true, name: 'Подъёмник', cars: [[0, -48.5, 'S'], [0, -31.5, 'S']] }],
+    intro: [['mark', 'Номера перебить — полдела. Машину надо поставить точно под краскопульт, под трафарет и на подъёмник.'], ['hero', 'И всё в разных концах квартала?'], ['mark', 'Конспирация. Ставь ровно: криво — и номер поплывёт. А у трафаретов — задом, по-другому стенд не достанет.']] },
+  '4-3': { t: 'Мост', type: 'directions', start: [-80, 120, 'N'], secs: 120, chase: 2, guide: 'Соня', goalName: 'Развязка у моста',
+    route: [[-80, 80], [0, 80], [0, 0], [80, 0], [80, -80], [80, -120]],
+    about: 'Гастролёры взломали навигатор такси и ведут погоню по сигналу. Навигатор выключен — дорогу к мосту подсказывает Соня, голосом на каждом перекрёстке.',
+    intro: [['leva', 'Они видят нас через навигатор! Я его вырубил — теперь мы слепые.'], ['sonya', 'Я этот район знаю с детства. Слушай меня на перекрёстках — и не спорь.'], ['hero', 'Веди.']] },
+  '5-1': { t: 'Охота', type: 'sneak', start: [80, 40, 'N'], goal: [-160, -40], name: 'старый тоннель', quiet: 42,
+    patrols: [{ at: [0, 0, 'E'], route: [[-160, 0], [160, 0]], speed: 7, range: 24 }, { at: [-80, -40, 'N'], route: [[-80, -120], [-80, 80]], speed: 6, range: 22 }],
+    towers: [[-40, -40, 0.5, 30], [-120, -80, 0.6, 28]],
+    about: 'Награда за голову героя: весь город ищет жёлтое такси. Фары выключены — пробраться к старому тоннелю мимо патрулей охотников и прожекторов на крышах.',
+    intro: [['mark', 'Кто-то назначил награду за твою голову. Каждая машина в городе ищет жёлтое такси.'], ['hero', 'Значит, жёлтого такси сегодня нет. Фары гашу.'], ['mark', 'На крышах прожекторы, по улицам катаются охотники. Тихо и по краю — к старому тоннелю.']] },
+  '6-4': { t: 'Город без света', type: 'comfort', start: [80, 40, 'N'], limit: 45, mood: 'blackout', ouch: ['Ай… Потише, бок!', 'Осторожнее на кочках…', 'Мне сейчас… плохо…'], failTitle: 'Лёве плохо', failText: 'Слишком резко: Лёва ранен. Разгоняйся и тормози плавно, повороты — на малой скорости.',
+    pts: [{ p: [-160, 40], name: 'Больница', say: [['sonya', 'Я останусь с Лёвой. Его надо перевязать.'], ['hero', 'Двери на замок. Я вернусь.']] }, { p: [80, -120], name: 'Убежище' }],
+    about: 'Вера отключила свет во всём городе, а Лёва ранен. Довезти его до больницы плавно — без рывков и резких поворотов, в темноте.',
+    intro: [['vera2', 'Посмотрим, как ты водишь в темноте.'], ['sonya', 'У Лёвы кровь. Его нельзя трясти — вези как хрусталь.']] },
+  '7-1': { t: 'Последний заказ', type: 'nobrakes', start: [0, -20, 'N'], secs: 110, sandName: 'куча песка у стройки',
+    pts: [{ p: [0, 80], name: 'Адрес 1' }, { p: [-80, 80], name: 'Адрес 2' }], sand: [-80, 0],
+    about: 'Вера заказывает такси сама, а её люди успели испортить машину: газ заклинило, тормоза не держат. Проехать по её адресам и остановиться в куче песка у стройки.',
+    intro: [['vera2', 'Последний заказ, водитель. Два адреса. И маленький сюрприз под капотом.'], ['hero', 'Педаль… не отпускается. Тормоза — в пол!'], ['mark', 'Тормозить нечем! У стройки на Западной куча песка — только в неё. Срезай заносом!']] },
+  '8-1': { t: 'Маршрут отхода', type: 'speedcam', start: [60, 0, 'E'], secs: 150,
+    pts: [{ p: [120, 0], name: 'Банк «Гранит»' }, { p: [160, -80], name: 'Поворот у реки' }, { p: [80, -160], name: 'Тоннель' }, { p: [-80, -80], name: 'Гараж Марка' }],
+    cams: [[160, -36, 40], [124, -160, 50], [0, -160, 40], [-80, -124, 30]], failTitle: 'Такси в базе «Гранита»', failText: 'Камеры банка засняли три нарушения — охрана узнает такси в ночь ограбления. Перед камерами сбрасывай до лимита.',
+    about: 'Проехать будущий маршрут отхода от банка до гаража Марка. Камеры «Гранита» стоят на каждом повороте: превысишь — такси попадёт в базу охраны.',
+    intro: [['radio', '…банк «Гранит» объявил о покупке таксопарка «Ночной тариф» за долги. Аркадий Гранин: «Городу нужен порядок»…'], ['mark', 'Мой таксопарк. Двадцать лет.'], ['mark', 'Засеки маршрут отхода. Но камеры «Гранита» на каждом повороте: попадёшься на скорости — в ночь ограбления нас узнают.']] },
+  '9-1': { t: 'Ночь Х', type: 'pool', start: [-80, -60, 'S'], seats: 3, lostMax: 0,
+    riders: [{ name: 'Дед', at: [0, 80], to: [-80, -60], toName: 'Подстанция', t: 150 }, { name: 'Соня', at: [160, 40], to: [-80, -60], toName: 'Подстанция', t: 150 }, { name: 'Лёва', at: [-160, 0], to: [-80, -60], toName: 'Подстанция', t: 170 }],
+    about: 'Ночь ограбления. Собрать команду — Деда, Соню и Лёву — и привезти к подстанции. В каком порядке — решай сам: каждый ждёт ограниченное время.',
+    intro: [['mark', 'Ночь на понедельник. Я на рации, ты за рулём. Собери команду: Дед, Соня, Лёва. Ждать долго никто не будет.'], ['hero', 'Счётчик включён.']] },
+  '10-5': { t: 'Последний броневик', type: 'ram', start: [-20, 0, 'E'], boss: [20, 0, 'E'], route: [[80, 0], [80, -80], [0, -80], [0, -160], [-160, -160], [-160, 0], [-80, 0], [-80, 80], [0, 80], [0, 0]], speed: 17, hp: 140, escorts: 2, far: 140, name: 'Броневик Гранина',
+    about: 'Броневик с настоящими деньгами, за рулём сам Гранин. Пули его не берут — только таран в бок.',
+    intro: [['granin', 'Таксист! Сколько тебе платит Вера? Я дам вдвое больше.'], ['hero', 'Счётчик у меня уже включён, Гранин.'], ['mark', 'Броня — пули отскакивают. Бей в бок, на поворотах!']] },
+  '11-1': { t: 'Прожектор', type: 'shuttle', start: [-80, 0, 'E'], cap: 3, secs: 240, base: [40, -160], baseName: 'Тоннель',
+    heli: { invuln: true, dmg: 4, every: [3.5, 5], alt: 11 },
+    houses: [{ p: [-160, -80], name: 'Трамвайное депо', n: 3 }, { p: [-80, -160], name: 'Общежитие депо', n: 2 }, { p: [0, -80], name: 'Диспетчерская', n: 2 }, { p: [-160, -160], name: 'Мастерские', n: 3 }],
+    about: 'Вертолёт ЧВК «Сокол» обстреливает трамвайное депо, где прячется Лёва. Вывезти в тоннель десять работников депо: в такси за раз — трое.',
+    intro: [['radio', '…суд над банкиром Аркадием Граниным начнётся завтра утром в здании мэрии…'], ['zharov', 'Таксист. Я полковник Жаров, ЧВК «Сокол». Свидетелей завтра не будет — и всех, кто рядом с ними, тоже.'], ['mark', 'Он стреляет по депо! Там люди. Вози в тоннель — под землёй он их не достанет.']] },
+  '12-3': { t: 'В розыске', type: 'tow', start: [0, -40, 'S'], goal: [-80, -80], goalName: 'Гараж Марка', secs: 210, rope: 7.5, police: true, chase: 2, obj: 'Отбуксируй фургон похитителей в гараж Марка: в нём телефон с последним звонком.',
+    about: 'Вся полиция города ищет жёлтое такси, а на тросе — фургон похитителей с уликами. Дотащить его до гаража Марка, не разбив о стены.',
+    intro: [['orlova', 'Всем экипажам: жёлтое такси, тащит фургон. Перекрыть мосты.'], ['hero', 'Улики в фургоне. Без них мне никто не поверит.']] },
+  '13-6': { t: 'Грузовой двор', type: 'parking', start: [0, 700, 'E'], secs: 160, bonus: 15,
+    spots: [{ p: [60, 700], h: 'E', name: 'Под погрузчик у контейнера 1', cars: [[51.5, 700, 'E'], [68.5, 700, 'E']] }, { p: [140, 740], h: 'N', rev: true, name: 'Задом к рампе склада', cars: [[140, 731.5, 'N'], [140, 748.5, 'N']] }, { p: [40, 760], h: 'W', any: true, name: 'Под кран у ЧБ 007', cars: [[48.5, 760, 'W'], [31.5, 760, 'W']] }],
+    about: 'Грузовой двор: Марк договорился с грузчиками, но погрузчик и кран ждут ровно в своих местах. Поставить такси под погрузку три раза — накладная на груз ЧБ 007 спрятана в одном из ящиков.',
+    intro: [['mark', 'Грузчики свои. Встанешь ровно — закинут в багажник ящики с накладной. Криво — уронят.'], ['hero', 'Три места, один раз задом. Знакомо.']],
+    outro: [['leva', 'Накладная собрана. «Оборудование связи», пятьсот килограммов. Это сервер Диспетчера.'], ['sonya', 'Тот самый, с которого она вела всю сеть. Если он улетит, всё начнётся заново в другом городе.'], ['mark', 'Над полем вертолёт! Без огней, заходит со стороны залива.']] },
+  '14-5': { t: 'Депо', type: 'arena', arena: 'depot', guards: 6, waves: [4, 4], heavyFrom: 2, zone: { name: 'Поворотный круг', secs: 40, msg: 'Займи поворотный круг депо и держи его, пока Лёва снимает ключи со стрелок!' },
+    about: 'Кирпичное депо. «Стрелочники» держат ключи от стрелок на поворотном круге. Занять круг и удержать, пока Лёва их снимает.',
+    intro: [['hero', 'Краны, ямы, маневровый на ремонте. И охрана в оранжевых жилетах.'], ['leva', 'Ключи на щите поворотного круга. Мне нужно сорок секунд — дай мне их.']] },
+  '20-2': { t: 'Ласточки', type: 'speedcam', start: [2680, 160, 'E'], secs: 150, noFireMsg: 'В Париже? Нет-нет-нет',
+    pts: [{ p: [2920, 160], name: 'Улица Амели' }, { p: [2920, 490], name: 'Служебный вход музея' }, { p: [2560, 490], name: 'Реставрационная' }],
+    cams: [[2860, 160, 40], [2800, 330, 50], [2740, 490, 30]], failTitle: 'Права отберут', failText: 'Три штрафа за первую же ночь — и парижская лицензия Луки сгорит. Перед камерами сбрасывай до лимита.',
+    about: 'Первая ночь в Париже. Амели просит отвезти её к музею — мопедисты-«Ласточки» вырвали её сумку у служебного входа. Город в камерах скорости, а лицензия у такси временная.',
+    intro: [['amelie', 'Месье! Мою сумку вырвали мопедисты у музея, там ключи от реставрационной. Скорее!'], ['luka', 'Только осторожно: Париж весь в камерах. Три штрафа — и мою временную лицензию отзовут.']],
+    outro: [['amelie', 'Ключи на месте — их бросили у входа. Я Амели, реставратор музея «Рассвет». Сегодня ночью у нас украли картину. А эти мопедисты крутились у служебного входа неделю.'], ['hero', 'Значит, «Ласточки» не только по сумкам.']] },
+  '20-6': { t: 'Попутчики', type: 'directions', start: [2920, 490, 'W'], secs: 140, guide: 'Свидетельница', goalName: 'Дом, где собираются «Ласточки»',
+    route: [[2800, 490], [2560, 490], [2560, 160], [2440, 160]],
+    about: 'Свидетельница видела «Ласточек» прошлой ночью, но адреса не помнит — только дорогу. Навигатор не поможет: она подсказывает повороты на ходу.',
+    intro: [['luka', 'Она видела, куда ехали «Ласточки». Адрес не помнит — только повороты.'], ['hero', 'Тогда навигатор выключаю. Говорите, мадам.']] },
+};
+for (const [key, cfg] of Object.entries(EP_SWAP)) {
+  const [ep, ch] = key.split('-').map(Number), E = EPS[ep], old = E && E.chapters[ch - 1]; if (!old) continue;
+  E.chapters[ch - 1] = Object.assign({ outro: old.outro, coins: old.coins }, cfg, { swapped: old.type });
+}
 window.__nightFare = { updHud: (dt) => updateHud(dt), backHint, get RADIO() { return RADIO; }, lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
