@@ -880,7 +880,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v152'; window.__errs = [];
+window.APP_VER = 'v153'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -7206,12 +7206,12 @@ function updateDrive(dt) {
   let jt = 0, js = 0; const jl = Math.hypot(joy.x, joy.y);
   if (jl > 0.16) {
     const mag = Math.min(1, (jl - 0.16) / 0.7), a = Math.atan2(joy.x, -joy.y);
-    if (Math.abs(a) < 2.2) { jt = mag; const aa = Math.max(0, Math.abs(a) - 0.21), k = clamp(aa / 1.1, 0, 1); js = Math.sign(a) * Math.pow(k, 1.7); }   // v152: ±12° around «straight ahead» is straight, full lock at ~75°, a softer start (was ±8°, 66°, ^1.6 — the owner: «тяжело держать машину ровно»)
+    if (Math.abs(a) < 2.2) { jt = mag; const aa = Math.max(0, Math.abs(a) - 0.21), k = clamp(aa / 1.1, 0, 1); js = Math.sign(a) * Math.pow(k, 1.8); }   // v153: ^1.8 (~10% softer, the owner: «ещё резко»); v152: ±12° around «straight ahead» is straight, full lock at ~75°, a softer start (was ±8°, 66°, ^1.6 — the owner: «тяжело держать машину ровно»)
     else { jt = -mag * 0.85; js = clamp(joy.x * 1.2, -1, 1); }
   }
   if (APL.on && !APL.paused) { const a = apControl(dt); steerKey = 0; thrKey = a.t; js = a.s; jt = 0; }
   { const tgt = clamp(steerKey + js, -1, 1), cur = pc.steerSm || 0, fast = clamp(Math.abs(pc.vf || 0) / 30, 0, 1), turnIn = Math.abs(tgt) > Math.abs(cur) && Math.sign(tgt || cur) === Math.sign(cur || tgt);
-    pc.steerSm = cur + (tgt - cur) * Math.min(1, dt * (steerKey ? (turnIn ? 14 - 8 * fast : 16) : turnIn ? 8 - 1.5 * fast : 10)); }   // v152: the stick turns in more gently (the faster, the gentler), lets go as fast as before
+    pc.steerSm = cur + (tgt - cur) * Math.min(1, dt * (steerKey ? (turnIn ? 14 - 8 * fast : 16) : turnIn ? 7.2 - 1.35 * fast : 10)); }   // v152: the stick turns in more gently (the faster, the gentler), lets go as fast as before
   const throttle = clamp(thrKey + jt, -1, 1), steer = pc.steerSm;
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
   { const sp = Math.hypot(pc.vel.x, pc.vel.z), side = Math.abs(pc.vr || 0);
