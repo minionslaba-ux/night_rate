@@ -709,6 +709,20 @@ body.hud-s .hud-btns #btnPause::before { content: "❚❚"; font-size: 12px; let
 body.hud-s #bars.bars { top: calc(var(--sat) + 84px); width: 108px; }
 body.hud-s #bars .boss { background: none; border: 0; box-shadow: none; padding: 0; text-shadow: 0 1px 3px #000; }
 body.hud-s #toast.toast { background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; top: 24%; color: #fff; text-shadow: 0 1px 3px #000, 0 0 10px rgba(0,0,0,.9); }
+/* v151: in the small window the car bar shows only once the car is hit, «Щит» and «Нитро» only while there are some;
+   the main menu starts from the top and scrolls (it was anchored to the bottom, and on Пикабу in a phone its top with «Играть» was cut off) */
+body.hud-s.hp-full .hud-tl > .bar { display: none; }
+body.hud-s.hp-full #objective.obj { border-radius: 8px; }
+body.hud-s.touch-on .tbtn.nitro.zero, body.hud-s.touch-on .tbtn.shield.zero { display: none; }
+@media (orientation: portrait) and (max-height: 700px) {
+  .preview .pv-content { pointer-events: auto; top: calc(10px + var(--sat)); bottom: calc(40px + var(--sab)); left: max(14px, var(--sal)); right: max(14px, var(--sar)); max-width: none; overflow-y: auto; overscroll-behavior: contain; align-content: start; gap: 8px; padding-bottom: 12px; -webkit-overflow-scrolling: touch; }
+  .preview .pv-k, .preview .pv-tag { display: none; }
+  .preview .letterbox { display: none; }
+  .preview:has(.site-legal) .pv-content { bottom: calc(96px + var(--sab)); }   /* the website's legal line sits under the menu, not on it */
+  .preview .site-legal { font-size: 11px; }
+  .preview .pv-logo { font-size: 34px; }
+  .preview .pv-content .btns { animation-delay: .2s; }
+}
 body.nofire.touch-on .tbtn.fire { display: none; }
 body.nofire.hud-s.touch-on .tbtn.drift { right: calc(12px + var(--sar)); bottom: calc(14px + var(--sab)); width: 62px; height: 62px; }
 body.nofire.hud-s.touch-on .tbtn.nitro { bottom: calc(86px + var(--sab)); } body.nofire.hud-s.touch-on .tbtn.shield { bottom: calc(86px + var(--sab)); }
@@ -862,7 +876,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v150'; window.__errs = [];
+window.APP_VER = 'v151'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -9773,7 +9787,7 @@ function updateHud(dt) {
   if (state.mode === 'foot' && isTouch && toastT <= 0 && !store.get('nf-aimhint')) { store.set('nf-aimhint', true); toast('Держи «Прицел», чтобы целиться от первого лица. Кнопка «Камера» вверху меняет вид', 4); }
   const hp = state.act === 1 ? (pc ? pc.hp : 100) : (hero ? hero.hp : P.footMax);
   const r = Math.max(0, Math.round(hp / (state.act === 1 ? 100 : P.footMax) * 100));
-  if (r !== lastHp) { lastHp = r; $('hpFill').style.width = r + '%'; $('hpFill').classList.toggle('low', r < 35); }
+  if (r !== lastHp) { lastHp = r; $('hpFill').style.width = r + '%'; $('hpFill').classList.toggle('low', r < 35); document.body.classList.toggle('hp-full', r >= 100); }
   $('coins').textContent = state.coins; $('kills').textContent = state.carKills + state.footKills;
   $('onlStat').hidden = !ONL.on; if (ONL.on) $('onlStat').textContent = `● ${ONL.count || 1} онлайн · `;
   if (objT && performance.now() > objT) { objT = 0; if (ONL.on || document.body.classList.contains('hud-s')) $('objective').classList.add('min'); }
@@ -10577,7 +10591,7 @@ function updateAmmoHud() {
 const HINT = { k: '', t: 0 };
 function updateBoostsHud() {
   const I = PROF.inv, txt = `Нитро ×${I.nitro} (N) · Щит ×${I.shield} (B) · Рем ×${I.repair} · Аптечки ×${I.medkit}`;
-  if (txt !== boostsShown) { boostsShown = txt; $('boosts').textContent = txt; $('nitroN').textContent = I.nitro; $('shieldN').textContent = I.shield; }
+  if (txt !== boostsShown) { boostsShown = txt; $('boosts').textContent = txt; $('nitroN').textContent = I.nitro; $('shieldN').textContent = I.shield; $('btnNitro').classList.toggle('zero', !(I.nitro > 0)); $('btnShield').classList.toggle('zero', !(I.shield > 0)); }
   $('godBadge').hidden = !PROF.god; if (PROF.god && !$('godBadge').textContent) $('godBadge').textContent = 'ТЕСТ · бессмертие';   // the text is set only for a tester, so the page itself carries no such label updateAmmoHud();
 }
 // ---------------- profile panel ----------------
