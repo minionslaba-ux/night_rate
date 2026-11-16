@@ -876,7 +876,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v160'; window.__errs = [];
+window.APP_VER = 'v161'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -15402,6 +15402,66 @@ const EP_EPILOGUE = {
     intro: [['stancia', 'Мне на пост, срочно. Только машина у вас… дымит?'], ['hero', 'Она просто волнуется.']], outro: [['stancia', 'Спасибо, таксист. Экспресс отправится по расписанию.']] },
 };
 for (const [ep, cfg] of Object.entries(EP_EPILOGUE)) { const E = EPS[+ep]; if (E && E.chapters && !E.chapters.some((x) => x.epilogue)) E.chapters.push(Object.assign({ coins: 120, epilogue: true }, cfg)); }
+// ---- v161: «стряхнуть хвост» and the third wave of swaps (docs/missii-katalog.md) ----
+Object.assign(GEN, {
+  // a syndicate car follows the taxi along its own track; lose it unnoticed (out of its sight for N seconds, no racing nearby), then go to the goal
+  shake(c, title, done) {
+    beginDrive(c.start[0], c.start[1], hdg(c.start[2]));
+    const goal = vV(c.goal), mk = tMark(goal.x, goal.z, 0x4dffa6, 8), need = c.need || 7, maxK = c.maxKmh || 70;
+    const T = makeCar(0x16161c, false); ctAdd(T.g);
+    const crumbs = [pc.pos.clone().add(new V3(-Math.sin(pc.h) * 30, 0, -Math.cos(pc.h) * 30)), pc.pos.clone()]; let ci = 0;
+    const tp = crumbs[0].clone(); let th = pc.h, lost = 0, sus = 0, warn = 0, gone = false;
+    setObjective(`За такси увязался седан синдиката. Нельзя привести его к цели (${c.goalName}). Оторвись незаметно: скройся за углами — и не гони рядом с ним.`);
+    return { title, noFire: true, noFireMsg: 'Выстрел — и он поймёт всё', chase: { max: 0 }, get navName() { return gone ? c.goalName : 'Оторвись от хвоста'; }, navGoal: () => (gone ? goal : pc.pos),
+      update(dt) {
+        warn -= dt;
+        if (!gone) {
+          const last = crumbs[crumbs.length - 1]; if (pc.pos.distanceTo(last) > 3) crumbs.push(pc.pos.clone());
+          const d = tp.distanceTo(pc.pos), sp = clamp((d - 22) * 0.8, 0, 24) + (d > 60 ? 6 : 0);
+          let move = sp * dt;
+          while (move > 0 && ci < crumbs.length - 1) { const nx = crumbs[ci + 1], seg = tp.distanceTo(nx); if (seg <= move) { tp.copy(nx); ci++; move -= seg; } else { const k = move / seg; th = Math.atan2(nx.x - tp.x, nx.z - tp.z); tp.lerp(nx, k); move = 0; } }
+          if (ci > 200) { crumbs.splice(0, ci); ci = 0; }
+          T.g.position.set(tp.x, 0, tp.z); T.g.rotation.y = th;
+          const seen = d < 110 && los(new V3(tp.x, 1, tp.z), pc.pos);
+          if (!seen) lost += dt; else lost = Math.max(0, lost - dt * 0.6);
+          if (kmh() > maxK && d < 70) { sus += dt * 28; if (warn <= 0) { warn = 1.5; toast('Не гони — он заметит, что ты отрываешься!', 1.2); } } else sus = Math.max(0, sus - dt * 6);
+          if (sus >= 100) return failChapter(c.failTitle || 'Спугнул', c.failText || 'Хвост понял, что его заметили, и вызвал своих. Отрывайся спокойно: поворот, ещё поворот — пока он не потеряет тебя из виду.');
+          if (pc.pos.distanceTo(goal) < 30) return failChapter('Привёл хвост', `Седан синдиката видел, куда ты приехал. Сначала оторвись — потом к цели (${c.goalName}).`);
+          if (lost >= need) { gone = true; scene.remove(T.g); sfx.bell(); toast(`Хвост потерялся! Теперь — ${c.goalName}`, 2); setBeam(goal); setObjective(`Хвост отстал. Езжай: ${c.goalName}.`); }
+          return;
+        }
+        if (pc.pos.distanceTo(goal) < 11) { arriveBrake(dt); if (kmh() < 15) { scene.remove(mk); return done(); } }
+      },
+      hud() { return gone ? { timer: c.goalName } : { bars: [{ label: `Оторваться: ${Math.round(Math.min(lost, need) / need * 100)}%`, frac: Math.min(1, lost / need), color: '#4dffa6' }, { label: 'Он что-то подозревает', frac: sus / 100, color: '#ff5a5a' }], timer: 'Скройся за поворотами', bad: sus > 50 }; } };
+  },
+});
+const EP_SWAP3 = {
+  '15-5': { t: 'Запчасти', type: 'speedcam', zone: 'city', start: [-160, -40, 'S'], secs: 150, pts: [{ p: [40, 80], name: 'Магазин «Автодеталь»' }, { p: [-160, 40], name: 'Западное шоссе' }], cams: [[0, 80, 40], [-80, 80, 50], [-160, 0, 40]], failTitle: 'Права у стюардов', failText: 'Три штрафа — и стюарды кубка снимут такси с квалификации «за поведение на дорогах». Перед камерами сбрасывай до лимита.',
+    about: 'Механик нашёл в коробке передач стружку. Сгонять в город за новой — но Глянцев «случайно» сообщил стюардам о гонщике-лихаче, и на маршруте включили все камеры.',
+    intro: [['host', 'В коробке стружка. Новая ждёт в «Автодетали», магазин закрывается через пару минут.'], ['lanskaya', 'И осторожно: Глянцев нажаловался стюардам. Три штрафа в городе — и тебя снимут с квалификации.']] },
+  '16-12': { t: 'Офис', type: 'directions', start: [-150, -470, 'E'], secs: 90, guide: 'Галина', goalName: 'Офис «Периметра»', route: [[-70, -470], [0, -470], [0, -428], [50, -428]],
+    about: 'Пока охрана на пожаре, доехать до офиса «Периметра»: улицы посёлка перекопаны, навигатор врёт — Галина ведёт по памяти.',
+    intro: [['galina', 'Ключ от архива под третьим горшком с геранью. А навигатор у вас врёт: у нас всё перекопано. Я поведу.'], ['hero', 'Слушаю, Галина Аркадьевна.']] },
+  '16-15': { t: 'Возвращение', type: 'talk', start: [196, -748, 'W'], who: 'Галина', limit: 45, q: 'Галина спрашивает: что дальше с охраной посёлка?',
+    pts: [{ p: [150, -740], name: 'Дом Ивановых — вернуть ключи', say: [['galina', 'Ивановы не уедут. Сказали: раз у нас теперь такой таксист — остаёмся.']] }, { p: [-32, -547], name: 'Клуб — собрание жителей' }],
+    a: ['Выгнать «Периметр» сегодня же', 'в следующей миссии +1 преследователь, +40% награды'], b: ['Подождать суда над Суховым', 'в следующей миссии −1 преследователь'],
+    aSay: [['galina', 'Решительно. Мне нравится.']], bSay: [['galina', 'Разумно. Закон — тоже сигнализация.']], trustLine: 'Галина рассказала: Сухов звонил какому-то «Князю» в город. Похоже, это не последняя история.',
+    about: 'Утро. Отвезти Галину Аркадьевну на собрание жителей — спокойно, она всю ночь не спала — и решить, что делать с охраной посёлка.',
+    intro: [['galina', 'Ну вот и утро. Отвезите меня на собрание — и без ваших гоночных штучек. Поговорим по дороге.']] },
+  '17-3': { t: 'Переулок', type: 'ram', zone: 'lower', start: [680, -700, 'E'], boss: [820, -560, 'S'], route: [[820, -700], [820, -420], [948, -420], [948, -820], [680, -820], [680, -560], [820, -560]], speed: 15, hp: 120, escorts: 1, far: 140, name: 'Бронированный джип',
+    about: '«Охота по тарифу» началась. Въезд в узкий переулок у склада перекрывает бронированный джип «Монолита»: пули не берут — только таран в бок.',
+    intro: [['hero', 'Есть переулок у реки, туда не пролезет ни один джип.'], ['elena', 'Один уже пролез. И стоит поперёк.'], ['hero', 'Значит, вытолкнем.']] },
+  '18-1': { t: 'Мотель «Без звёзд»', type: 'shake', zone: 'lower', start: [570, -700, 'W'], goal: [456, -820], goalName: 'Мотель «Без звёзд»', need: 7, maxKmh: 70,
+    about: 'В мотеле прячется подруга Елены с копией записи. За такси увязался седан синдиката — нельзя привести его к мотелю. Оторваться незаметно, потом — к Ане.',
+    intro: [['elena', 'Аня ждёт в мотеле. Но за нами чёрный седан — уже третий квартал.'], ['hero', 'Значит, сначала прогулка. Без гонок: он не должен понять, что мы его видим.']] },
+  '20-3': { t: 'Сена', type: 'nobrakes', start: [2440, 310, 'E'], secs: 110, sandName: 'куча песка на стройке набережной', pts: [{ p: [2800, 310], name: 'Набережная у моста' }, { p: [2800, 490], name: 'Северная набережная' }], sand: [2560, 490],
+    about: 'Пока такси стояло у музея, «Ласточки» успели покопаться в моторе: газ заклинило, тормоза не держат. Катер уходит по Сене — следом по набережной и остановиться в песке стройки.',
+    intro: [['amelie', 'Вон тот катер! Без огней! Я видела, как с него грузили плоский ящик.'], ['hero', 'Педаль… газ заело! Кто-то копался в моторе, пока мы были у музея!'], ['amelie', 'На набережной стройка — там песок! Держитесь за катером, а потом — в песок!']],
+    outro: [['duval', 'Инспектор Дюваль. Пока вы тормозили песком, мы взяли катер на шлюзе. Ящик — пустой. Картины там уже нет.'], ['amelie', 'Значит, её перепрятали. Или подменили.']] },
+};
+for (const [key, cfg] of Object.entries(EP_SWAP3)) { const [ep, ch] = key.split('-').map(Number), E = EPS[ep], old = E && E.chapters[ch - 1]; if (!old) continue; E.chapters[ch - 1] = Object.assign({ outro: old.outro, coins: old.coins }, cfg, { swapped: old.type }); }
+// 12-1: the second «hold the zone» of episode 12 becomes «hold out»
+{ const c = EPS[12] && EPS[12].chapters[0]; if (c && c.type === 'arena' && c.zone) { delete c.zone; c.survive = 60; c.surviveObj = 'Отбивайся у крыльца мэрии, пока Орлова не перекроет площадь: 1:00.'; } }
 window.__nightFare = { updHud: (dt) => updateHud(dt), backHint, get RADIO() { return RADIO; }, lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
