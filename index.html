@@ -800,7 +800,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v144'; window.__errs = [];
+window.APP_VER = 'v145'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5289,6 +5289,45 @@ function nrGun() {
   g.scale.setScalar(1.6); return g;
 }
 // look (the game's): model, colors { Shirt/Main/Jacket, Pants, Hair }, noGun, ped
+// v145: the parts of one person (body, clothes, hair…) each had their own copy of the same skeleton — 107 skeletons / 7163 bones
+// recalculated every frame at step 6, more than half of the frame preparation on the CPU (Mali-G57: 27–30 ms of 42–46). Parts with the
+// same bones and the same bind matrices now share one skeleton: one update per person.
+function shareSkeleton(model) {
+  try { if (localStorage.getItem('nf-noshare')) return; } catch (e) { /* storage unavailable */ }
+  // The parts have the same bones; their bind inverses differ by one constant matrix T per part (inv_part = inv_shared · T, the same T
+  // for every bone — measured to 1e-7). Skinning is bindMatrixInverse · Σ w·(boneWorld · inv) · bindMatrix, so the part can use the
+  // shared skeleton with bindMatrix' = T · bindMatrix and its own bindMatrixInverse unchanged: the same vertices, one update per person.
+  try {
+    const seen = [], M4 = THREE.Matrix4;
+    model.traverse((o) => {
+      if (!o.isSkinnedMesh || !o.skeleton) return;
+      const k = o.skeleton;
+      for (const q of seen) {
+        if (q.bones.length !== k.bones.length || !q.bones.every((b, i) => b === k.bones[i])) continue;
+        const T = new M4().copy(q.boneInverses[0]).invert().multiply(k.boneInverses[0]), Tj = new M4();
+        let ok = true;
+        for (let j = 1; j < k.bones.length && ok; j++) { Tj.copy(q.boneInverses[j]).invert().multiply(k.boneInverses[j]); for (let e = 0; e < 16; e++) if (Math.abs(Tj.elements[e] - T.elements[e]) > 1e-4) { ok = false; break; } }
+        if (!ok) continue;
+        o.skeleton = q; o.bindMatrix.premultiply(T); return;   // bindMatrixInverse stays as it was
+      }
+      seen.push(k);
+    });
+  } catch (e) { /* keep the separate skeletons */ }
+}
+// v145: people were never culled (frustumCulled = false on every part): everyone in the city was prepared and drawn even behind the
+// camera. Now every skinned part gets one common bounding sphere — the whole figure's, 1.6× bigger (running, falling, raised arms stay
+// inside) — so a person off screen costs nothing and nobody vanishes at the edge.
+function personCull(model) {
+  try {
+    const parts = []; model.traverse((o) => { if (o.isSkinnedMesh) parts.push(o); });
+    if (!parts.length || parts.some((o) => o.geometry.userData.nfCull === false)) return;
+    let big = null;
+    for (const o of parts) { const g = o.geometry; if (!g.userData.nfSphere0) { if (!g.boundingSphere) g.computeBoundingSphere(); g.userData.nfSphere0 = g.boundingSphere.clone(); } const s0 = g.userData.nfSphere0; if (!big || s0.radius > big.radius) big = s0; }
+    if (!big || !(big.radius > 0)) return;
+    const sph = big.clone(); sph.radius *= 1.6;
+    for (const o of parts) { o.geometry.boundingSphere = sph.clone(); o.frustumCulled = true; }
+  } catch (e) { model.traverse((o) => { if (o.isMesh) o.frustumCulled = false; }); }
+}
 function nrPerson(look) {
   const fem = !!(look.face && look.face.fem) || ['kira', 'maya', 'zoya', 'olga', 'nika', 'vera'].includes(look.model);
   let base = NR_BODY[look.model] || (fem ? 'woman2' : 'man');
@@ -5297,12 +5336,12 @@ function nrPerson(look) {
   const gangDark = /^thug/.test(look.model) && !look.fac && !look.ped ? { jacket: pick(['#16161a', '#1d1d22', '#2a1418']), pants: '#141418', hair: '#15151a' } : null;
   const C = look.colors || {}, cast = look.ped ? {} : gangDark || NR_CAST[look.model] || {}, jacket = cast.jacket || C.Shirt || C.Main || C.Jacket || C.Coat || C.Black, pants = cast.pants || C.Pants || C.Trousers || C.DarkGreen, hair = cast.hair || C.Hair;
   const model = THREE.SkeletonUtils.clone(NR.G[base].scene), outer = new THREE.Group(), inner = new THREE.Group();
-  inner.add(model); outer.add(inner);
+  shareSkeleton(model); personCull(model); inner.add(model); outer.add(inner);
   let prefix = '';
   model.traverse((o) => {
     if (o.isBone && /^mixamorig/.test(o.name)) prefix = 'mixamorig';
     if (!o.isMesh) return;
-    o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); const m = o.material, id = o.name + ' ' + (m.name || '');
+    o.castShadow = true; if (!o.isSkinnedMesh) o.frustumCulled = false; o.material = o.material.clone(); const m = o.material, id = o.name + ' ' + (m.name || '');
     if (m.metalness > 0.5) m.metalness = 0.1; m.envMapIntensity = 0.6;
     if (base === 'michelle') return;
     if (/Outfit_Top|outfit_top|avaturn_look/i.test(id) && jacket) { if (base === 'man3') { m.map = null; m.color.set(jacket); } else nrTintMat(m, jacket, 0.85); }
@@ -5400,7 +5439,7 @@ function makeHuman(look, scale) {
     HUMANS.add(h); return h;
   }
   const src = ASSETS.chars[look.model] || ASSETS.chars.kira;
-  const model = THREE.SkeletonUtils.clone(src.scene);
+  const model = THREE.SkeletonUtils.clone(src.scene); shareSkeleton(model);
   model.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = true; o.frustumCulled = false;
