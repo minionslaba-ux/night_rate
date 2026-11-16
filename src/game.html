@@ -522,6 +522,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .dlg-name { display: flex; align-items: center; gap: 8px; font: 700 12px/1 var(--font-display); letter-spacing: .06em; text-transform: uppercase; margin: 4px 0 8px; }
 .dlg-name::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
 .dlg-text { font: 400 17px/1.5 var(--font-body); color: var(--text); }
+.back-hint { color: var(--taxi); margin: 2px 0 6px; }
 .next-ms { display: grid; gap: 4px; margin: 4px 0 10px; padding: 10px 12px; border-left: 3px solid var(--taxi); background: rgba(255,196,61,.08); border-radius: 0 8px 8px 0; } .next-ms small { font: 600 10px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--taxi); } .next-ms b { font-size: 15px; line-height: 1.3; } .next-ms span { font-size: 12px; color: var(--muted); }
 .dlg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
 .dlg-skip { flex: none; padding: 6px 11px; border-radius: 6px; border: 1px solid var(--hair-2); background: var(--glass-2); color: var(--text); font: 700 12px/1 var(--font-body); letter-spacing: .04em; }
@@ -853,7 +854,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v156'; window.__errs = [];
+window.APP_VER = 'v157'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -5617,7 +5618,7 @@ let shake = 0;
 // («Шакал разбит! +50», «Впритирку! +20», «Занос») — ideas from car-combat games, done the night-city way (no pedestrians).
 const DMGFX = { t: 0, et: 0, lastHit: 0 };
 function carFx(dt) {
-  styleTick(dt); pwrTick(dt);
+  styleTick(dt); pwrTick(dt); radioTick(dt);
   if (!pc || pc.dead || !pc.g.visible) return;
   const lite = perf.level >= 5 && !HD(), hp = pc.hp, f = new V3(Math.sin(pc.h), 0, Math.cos(pc.h));
   DMGFX.t -= dt;
@@ -6912,6 +6913,12 @@ function dqAdd(kind, n) {
     saveProfile(); if (state.mode === 'preview') dqRender();
   } catch (e) { /* never in the way of the game */ }
 }
+// v157: a reason to come back, on the pause, fail and wreck screens (newcomers rarely see the menu, where it used to be)
+function backHint() {
+  try { const ds = dailyState(); if (!ds.done && missionsDone() >= 1) { const [c, item, n] = LOGIN_DAYS[ds.idx]; return `🎁 В меню ждёт подарок за вход: +${c} монет${item ? ` и ${n} ${INV_NAME[item]}` : ''}`; }
+    const t = tomorrowText(); return t ? '🌙 ' + t : '🌙 Заходи завтра: подарок за вход и новое задание дня'; } catch (e) { return ''; }
+}
+const backHintHtml = () => { const t = backHint(); return t ? `<p class="note back-hint">${t}</p>` : ''; };
 function tomorrowText() {
   try { const st = dailyState(); if (!st.done) return '';
     const [c, item, n] = LOGIN_DAYS[st.streak % 7], nm = { nitro: 'нитро', medkit: 'аптечки', shield: 'щит' };
@@ -7115,7 +7122,7 @@ function skipDialog() { if (state.mode !== 'dialog' || !dlg.lines.length) return
 // ---------------- act 1: the chase ----------------
 function setupAct1() {
   heroLight.intensity = 0;
-  state.act = 1; state.spawnT = 6; state.firstChase = false; state.home = false;
+  state.act = 1; state.spawnT = 6; state.firstChase = false; state.home = false; state.cp = 0; RADIO.q = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
   clearBullets(); trail.length = 0;
   if (!pc) { const m = makeCar(0xffb703, true); pc = Object.assign(m, { pos: new V3(), vel: new V3(), h: 0 }); }
@@ -7308,7 +7315,9 @@ function updateDrive(dt) {
   updateHeli(dt);
   // v154: the last 160 m of the first mission: no new pursuers, the ones behind stop shooting (they still ram — and crash into the gate),
   // a badly hit car gets +25 once (on 16.11 three players quit 40–180 m from the yard with the car at 36–69%)
-  if (state.ep === 1 && !state.home && pc.pos.distanceTo(GATE) < 160) { state.home = true; if (pc.hp < 45) { pc.hp += 25; toast('Склад рядом! Второе дыхание: +25 прочности', 2.2); } else toast('Склад рядом — дожми!', 1.6); }
+  // v157: three marks on the way, +25 coins each (something won even by those who stop in the second minute)
+  if (state.ep === 1 && state.cp < 2) { const dG = pc.pos.distanceTo(GATE); if (state.cp === 0 && dG < 300) { state.cp = 1; addCoins(25); toast('Отметка 1/3 — так держать! +25 монет', 1.8); } else if (state.cp === 1 && dG < 230) { state.cp = 2; addCoins(25); toast('Отметка 2/3 — полпути позади! +25 монет', 1.8); } }
+  if (state.ep === 1 && !state.home && pc.pos.distanceTo(GATE) < 160) { state.home = true; state.cp = 3; addCoins(25); if (pc.hp < 45) { pc.hp += 25; toast('Отметка 3/3 — склад рядом! Второе дыхание: +25 прочности', 2.4); } else toast('Отметка 3/3 — склад рядом, дожми! +25 монет', 2); }
   if (state.ep === 1) { const dG = pc.pos.distanceTo(GATE); if (dG < 11) arriveAtYard(); else if (NOVICE.on) novGuide(dG, dt); }
   else if (MIS) MIS.update(dt);
   setEngine(pc.vf, true);
@@ -7689,7 +7698,7 @@ function failChapter(title, text) {
     showModal(`
     <div class="kicker">${state.ep === 90 ? 'Задание дня' : `Эпизод ${state.ep} · ${MIS.title}`}</div>
     <h2 class="h2 bad">${title}</h2>
-    <p class="lead">${text}</p>
+    <p class="lead">${text}</p>${backHintHtml()}
     <div class="btns"><button id="mSecond" class="btn primary" type="button">${PROF.noAds || missionsDone() < 3 ? 'Ещё шанс' : 'Ещё шанс за рекламу'} · ${timer ? '+25 секунд' : 'с этого места'}</button><button id="mRetry" class="btn" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>
     <div class="note">Ещё шанс — один раз за попытку: миссия продолжится с того же места.</div>`, {
       mSecond: () => { hideModal(); (missionsDone() < 3 ? (f) => f() : showAd)(() => { SECOND.used = missionsDone() >= 3; try { second(); } catch (e) { /* the mission moved on */ } MLOG.open = true; state.mode = SECOND.mode; toast(timer ? '+25 секунд — жми!' : 'Ещё шанс — не упусти!', 2); }); },
@@ -7701,7 +7710,7 @@ function failChapter(title, text) {
   showModal(`
     <div class="kicker">${state.ep === 90 ? 'Задание дня' : `Эпизод ${state.ep} · ${MIS.title}`}</div>
     <h2 class="h2 bad">${title}</h2>
-    <p class="lead">${text}</p>
+    <p class="lead">${text}</p>${backHintHtml()}
     <div class="btns"><button id="mRetry" class="btn primary" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>`, {
     mRetry: () => { hideModal(); startChapter(state.ch); },
     mMenu: () => { hideModal(); showSelect(); },
@@ -14593,7 +14602,7 @@ function pauseGame() {
   if (document.pointerLockElement) document.exitPointerLock();
   const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
   showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
-    <p class="lead">Прогресс сохраняется по миссиям: выйдешь в меню — продолжишь с начала этой миссии.</p>
+    ${backHintHtml()}<p class="lead">Прогресс сохраняется по миссиям: выйдешь в меню — продолжишь с начала этой миссии.</p>
     <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button>${PLATFORM === 'max' && isTouch ? `<button id="pScreen" class="btn" type="button">${ROTF ? 'Экран: вертикально' : 'Экран: горизонтально'}</button>${ROTF ? '<button id="pFlip" class="btn" type="button">Перевернуть на 180°</button>' : ''}` : ''}<button id="pGfx" class="btn" type="button">Графика: ${HD() ? 'HD' : 'Авто'}</button><button id="pSnd" class="btn" type="button">Звук: ${muted ? 'выкл' : 'вкл'}</button><button id="pProf" class="btn" type="button">Профиль: машина, магазин</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
     pResume: () => { hideModal(); state.mode = pausedFrom; state.fireLock = true; },
     pView: () => { cycleView(); $('pView').textContent = 'Камера: ' + VIEW_NAMES[footView]; },
@@ -14805,12 +14814,23 @@ function startMission() {
   // v126: a new player started by the game itself goes straight to the wheel — all of them quit during this dialog;
   // the gist of it in one line instead (the dialog stays for a start from the menu)
   if (AUTO_RIDE.skip) { AUTO_RIDE.skip = false; setTimeout(() => toast('Довези кейс до склада №7 на Северной. «Шакалы» уже выехали — жми газ!', 4.5), 400); return; }
-  playDialog([
-    ['mark', `${CH.name}, приём. Кейс у тебя в багажнике. Довези его до склада номер семь на Северной. Без остановок.`],
+  // v157: the intro no longer stops the game — the taxi goes at once and the lines come over the radio while driving
+  // (Пикабу 16.11: a third of the players left within the first minute; median time in the game 94 s)
+  radioSay([
+    ['mark', `${CH.name}, приём. Кейс в багажнике — довези до склада №7 на Северной. Без остановок.`],
     ['hero', 'Что внутри?'],
-    ['mark', 'Тариф ночной, вопросы в него не входят. И ещё: «Шакалы» знают, что груз у тебя. Они уже выехали.'],
-    ['hero', 'Тогда держись, Марк. Даже если ты в диспетчерской.'],
-  ], () => { state.mode = 'drive'; });
+    ['mark', 'Тариф ночной, вопросы в него не входят. «Шакалы» знают, что груз у тебя, — уже выехали.'],
+    ['hero', 'Тогда держись, Марк.'],
+  ]);
+}
+// radio lines over the game: one at a time, when the toast line is free; dropped when the mission changes
+const RADIO = { q: [], gap: 0 };
+function radioSay(lines) { RADIO.q = lines.slice(); RADIO.gap = 0.6; }
+function radioTick(dt) {
+  if (!RADIO.q.length || state.mode !== 'drive') return;
+  if (toastT > 0) return; RADIO.gap -= dt; if (RADIO.gap > 0) return;
+  const [who, text] = RADIO.q.shift(), w = WHO[who] || { name: '' }, nm = who === 'hero' ? (CH && CH.name) || 'Ты' : w.name.split(',')[0];
+  toast(`${nm}: ${text}`, Math.min(5.5, 1.8 + text.length * 0.045)); RADIO.gap = 0.5;
 }
 function showDead() {
   if (MIS && MIS.online) { taskFail('машина разбита'); pc.hp = 100; pc.dead = false; pc.g.visible = true; state.mode = 'drive'; return; }
@@ -14819,7 +14839,7 @@ function showDead() {
   showModal(`
     <div class="kicker">${state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ` + MIS.title : act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
     <h2 class="h2 bad">${act === 1 ? 'Машина разбита' : CH.name + ' ' + gx('ранен', 'ранена')}</h2>
-    <p class="lead">${state.ep >= 2 ? (act === 1 ? 'Такси больше не едет, а погоня уже рядом.' : 'Бой ещё не окончен.') + ' Можно продолжить с этого места, начать миссию заново или выйти в меню — прогресс сохранится.' : act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>
+    <p class="lead">${state.ep >= 2 ? (act === 1 ? 'Такси больше не едет, а погоня уже рядом.' : 'Бой ещё не окончен.') + ' Можно продолжить с этого места, начать миссию заново или выйти в меню — прогресс сохранится.' : act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>${backHintHtml()}
     <div class="btns">
       ${PROF.inv.revive > 0 ? `<button id="mChance" class="btn primary" type="button">Второй шанс (×${PROF.inv.revive})</button>` : ''}
       <button id="mRevive" class="btn primary" type="button" ${used && !NOVICE.on ? 'disabled' : ''}>${PROF.noAds ? 'Продолжить' : NOVICE.on ? 'Продолжить — бесплатно' : 'Продолжить за рекламу'}</button>
@@ -15075,6 +15095,6 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { updHud: (dt) => updateHud(dt), backHint, get RADIO() { return RADIO; }, lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
