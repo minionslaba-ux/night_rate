@@ -646,6 +646,47 @@ body.online:not(.task) .stat-line .sep { display: none; }
   .stats { padding: 4px 8px; }
   .hud-tr { gap: 4px; }
 }
+/* v149: a small upright window (the game inside the Пикабу page on a phone is ~360×475; a phone browser with its bars ~390×650):
+   the compact HUD — no minimap (the arrow shows the way), no labels, a small speed chip, coins and the profile button hidden while playing,
+   smaller buttons in two rows on the right, the radio message narrow and wrapped. The fire button hides where shooting is not allowed. */
+body.hud-s .hud-tl { top: calc(8px + var(--sat)); left: calc(8px + var(--sal)); max-width: calc(100% - 132px - var(--sal) - var(--sar)); gap: 4px; }
+body.hud-s #objective.obj { padding: 6px 9px 7px; gap: 0; font-size: 12.5px; line-height: 1.3; }
+body.hud-s #objective.obj > b { display: none; }
+body.hud-s #objText { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+body.hud-s .hud-tl > .bar { padding: 4px 8px; min-height: 0; }
+body.hud-s .hud-tl > .bar .bar-label { display: none; }
+body.hud-s .hud-tr { top: calc(8px + var(--sat)); right: calc(8px + var(--sar)); gap: 4px; grid-template-columns: none; }
+body.hud-s #minimap, body.hud-s .hud-tr .stat-line, body.hud-s .hud-tr .boosts { display: none; }
+body.hud-s .hud-btns { gap: 4px; } body.hud-s .hud-btns .hud-chip { padding: 5px 8px; font-size: 11px; }
+body.hud-s .hud-btns #btnView { display: none; }
+body.hud-s.touch-on #speedo.speedo, body.hud-s #speedo.speedo { top: calc(46px + var(--sat)); bottom: auto; right: calc(8px + var(--sar)); left: auto; transform: none; padding: 4px 8px; min-width: 0; text-align: right; }
+body.hud-s #speedo.speedo::before, body.hud-s #speedo.speedo::after { display: none; }
+body.hud-s #speedo b { font-size: 22px; display: inline; } body.hud-s #speedo small { display: inline; font-size: 9px; margin-left: 3px; }
+body.hud-s #nav.nav { top: calc(var(--sat) + 86px); left: calc(8px + var(--sal)); right: auto; transform: none; max-width: calc(100% - 132px); padding: 4px 9px 4px 5px; gap: 6px; }
+body.hud-s #nav.nav svg { width: 24px; height: 24px; } body.hud-s #nav.nav b { font-size: 13px; } body.hud-s #nav.nav span { font-size: 10px; }
+body.hud-s #bars.bars { top: calc(var(--sat) + 84px); left: auto; right: calc(8px + var(--sar)); transform: none; width: 116px; max-width: none; gap: 3px; }
+body.hud-s #bars .tmr { font-size: 13px; line-height: 1.2; }
+body.hud-s #bars .boss { font-size: 9.5px; padding: 4px 7px; } body.hud-s #bars .boss .bar-track { margin-top: 3px; height: 5px; }
+body.hud-s #toast.toast { top: 30%; max-width: calc(100% - 40px); white-space: normal; font-size: 13px !important; padding: 7px 11px !important; gap: 0; text-align: center; }
+body.hud-s #toast.toast::before { display: none; }
+body.hud-s .hint { font-size: 12px; }
+body.hud-s.touch-on .joy { width: 100px; height: 100px; left: calc(12px + var(--sal)); bottom: calc(14px + var(--sab)); }
+body.hud-s .knob { width: 44px; height: 44px; margin: -22px 0 0 -22px; }
+body.hud-s.touch-on .tbtn { font-size: 9.5px; } body.hud-s.touch-on .tbtn svg { width: 20px; height: 20px; }
+body.hud-s.touch-on .tbtn .cnt { min-width: 17px; height: 17px; font-size: 10.5px; top: -4px; right: -4px; }
+body.hud-s.touch-on .tbtn.fire { right: calc(12px + var(--sar)); bottom: calc(14px + var(--sab)); width: 70px; height: 70px; }
+body.hud-s.touch-on .tbtn.fire svg { width: 26px; height: 26px; }
+body.hud-s.touch-on .tbtn.drift, body.hud-s.touch-on .tbtn.aim { right: calc(90px + var(--sar)); bottom: calc(16px + var(--sab)); width: 54px; height: 54px; }
+body.hud-s.touch-on .tbtn.melee { right: calc(152px + var(--sar)); bottom: calc(16px + var(--sab)); width: 50px; height: 50px; }
+body.hud-s.touch-on .tbtn.nitro { right: calc(12px + var(--sar)); bottom: calc(94px + var(--sab)); width: 48px; height: 48px; }
+body.hud-s.touch-on .tbtn.shield { right: calc(66px + var(--sar)); bottom: calc(94px + var(--sab)); width: 48px; height: 48px; }
+body.hud-s.touch-on .tbtn.flash { right: calc(120px + var(--sar)); bottom: calc(94px + var(--sab)); width: 46px; height: 46px; }
+body.hud-s.touch-on .tbtn.horn { right: calc(12px + var(--sar)); bottom: calc(150px + var(--sab)); width: 44px; height: 44px; }
+body.hud-s.touch-on .tbtn.talk { right: calc(66px + var(--sar)); bottom: calc(150px + var(--sab)); width: 44px; height: 44px; }
+body.hud-s.touch-on .tbtn.tprof { display: none; }
+body.nofire.touch-on .tbtn.fire { display: none; }
+body.nofire.hud-s.touch-on .tbtn.drift { right: calc(12px + var(--sar)); bottom: calc(14px + var(--sab)); width: 62px; height: 62px; }
+body.nofire.hud-s.touch-on .tbtn.nitro { bottom: calc(86px + var(--sab)); } body.nofire.hud-s.touch-on .tbtn.shield { bottom: calc(86px + var(--sab)); }
 </style>
 </head>
 <body>
@@ -796,7 +837,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v148'; window.__errs = [];
+window.APP_VER = 'v149'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1099,6 +1140,7 @@ function resize() {
   if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); }
   if (fxaaPass) { const pr = renderer.getPixelRatio(); fxaaPass.material.uniforms.resolution.value.set(1 / (w * pr), 1 / (h * pr)); }
   camera.aspect = w / h;
+  document.body.classList.toggle('hud-s', w < h && h < 700);   // v149: the compact HUD for a small upright window
   camera.fov = w < h ? 72 : 60;
   camera.updateProjectionMatrix();
 }
@@ -11350,6 +11392,7 @@ function updateSight(dt) {
   AIM.spread = Math.max(0, AIM.spread - dt * 4); AIM.hit = Math.max(0, AIM.hit - dt);
   const ch = $('crosshair'), lk = $('lockOn'), hm = $('hitmark');
   const foot = state.mode === 'foot', drive = state.mode === 'drive' && !(MIS && MIS.noFire && state.ep >= 2);
+  document.body.classList.toggle('nofire', state.mode === 'drive' && !drive);   // v149: no fire button where shooting is not allowed
   const centre = foot && curView() !== 'top', showCh = centre || (foot && mouse.has && !isTouch);
   ch.hidden = !showCh;
   let cx = window.innerWidth / 2, cy = window.innerHeight / 2;
