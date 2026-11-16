@@ -142,6 +142,7 @@ body.cine .lb { height: 11vh; } body.cine .hud { opacity: 0; }
 .boss .bar-fill { background: var(--bc, var(--neon)); }
 .btn.daily { background: linear-gradient(160deg, #ff5ad1, #8a2be2); color: #fff; border: 0; }
 .btn.rw-btn { font-size: 14px; padding: 8px 14px; background: rgba(255,210,58,.12); border: 1px solid rgba(255,210,58,.55); color: #ffd23a; font-weight: 700; } .btn.rw-btn:disabled { opacity: .55; }
+.end-extras { margin: 10px 0 2px; padding: 8px 10px; border-radius: 10px; border: 1px dashed rgba(255,210,58,.45); background: rgba(255,210,58,.06); text-align: left; } .end-extras > b { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #ffd23a; margin-bottom: 6px; } .end-extras > div { display: flex; flex-direction: column; gap: 6px; } .end-extras .btn { width: 100%; text-transform: none; letter-spacing: 0; font-size: 13px; line-height: 1.25; padding: 8px 12px; min-height: 36px; white-space: normal; }
 /* v140: UX motion — windows slide in, menu buttons one after another, HUD panels from the edges at the start of a mission */
 #modal.ux-in { animation: uxFade .2s ease-out both; } #modal.ux-in #modalCard { animation: uxCard .32s cubic-bezier(.2,1.2,.4,1) both; }
 @keyframes uxFade { from { opacity: 0; } to { opacity: 1; } }
@@ -800,7 +801,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v145'; window.__errs = [];
+window.APP_VER = 'v146'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6404,6 +6405,7 @@ function showModal(html, handlers) {
     b.onclick = () => { hideModal(); gateOpen('end'); }; $('mDouble').insertAdjacentElement('afterend', b);
   }
   // v137: on every mission summary — what's next: the next rank (and its gift) and the next car (and how many coins are missing)
+  if ($('mDouble') && !$('endExtras')) endExtras();
   if ($('mDouble') && !$('goalNext')) { const g = goalHtml(); if (g) { const d = document.createElement('div'); d.id = 'goalNext'; d.className = 'goal-next'; d.innerHTML = g; const bt = $('modalCard').querySelector('.btns'); if (bt) bt.insertAdjacentElement('beforebegin', d); } }
   const first = $('modalCard').querySelector('button:not(:disabled)'); if (first) first.focus();
 }
@@ -6831,6 +6833,31 @@ function novGuide(d, dt) {
   if (NOVG.d && d > NOVG.d + 8) NOVG.away++; else if (d < NOVG.d - 4) NOVG.away = 0;
   NOVG.d = d;
   if (NOVG.away >= 2 && NOVG.cd <= 0) { NOVG.cd = 15; NOVG.away = 0; toast(`Склад в другой стороне — разворачивайся! Следи за зелёной стрелкой (${Math.round(d / 10) * 10} м)`, 3.4); }
+}
+
+// v146: the menu showcase (daily reward, chest, starter pack) was never seen: after a win players press «Эпизод 2 →» and never come
+// back to the menu (0 shows of any offer on Pikabu). The summary of a won mission now carries what is waiting for the player today.
+function endExtras() {
+  try {
+    if (!PROF || !PROF.st || missionsDone() < 1) return;
+    const items = [], ds = dailyState();
+    if (!ds.done) { const [c, item, n] = LOGIN_DAYS[ds.idx]; items.push(`<button id="exDaily" class="btn sm primary" type="button">🎁 Награда за вход, день ${ds.idx + 1}: +${c}${item ? ` и ${n} ${INV_NAME[item]}` : ''}</button>`); }
+    if (extrasOn() && store.get('nf-chest') !== adDay()) items.push('<button id="exChest" class="btn sm" type="button">🧰 Сундук дня — за рекламу</button>');
+    const pkStarter = PIKABU && PK_DIRECT && !PROF.god && !(PROF.pkOwn && PROF.pkOwn.starter) && missionsDone() <= 6;
+    if (pkStarter) items.push(`<button id="exStarter" class="btn sm" type="button">🚕 Стартовый набор: «Шустрик», нитро, аптечки, 2000 монет — ${(PK.prices && PK.prices.starter) || PACKS.starter.rub + ' ₽'}</button>`);
+    if (!items.length) return;
+    const d = document.createElement('div'); d.id = 'endExtras'; d.className = 'end-extras'; d.innerHTML = `<b>Сегодня для тебя</b><div>${items.join('')}</div>`;
+    const bt = $('modalCard').querySelector('.btns'); if (!bt) return; bt.insertAdjacentElement('afterend', d);
+    const done = (id, text) => { const b = $(id); if (b) { b.disabled = true; b.textContent = text; } };
+    if ($('exDaily')) $('exDaily').onclick = () => { const s2 = dailyState(); if (s2.done) return done('exDaily', '✓ Награда за сегодня получена');
+      const [c, item, n] = LOGIN_DAYS[s2.idx]; PROF.daily = { d: mskDate(), s: s2.streak }; if (item) PROF.inv[item] = (PROF.inv[item] || 0) + n;
+      walletAdd(c); saveProfile(); sfx.coin(); fxCoins(c); updateBoostsHud(); done('exDaily', `✓ +${c}${item ? ` и ${n} ${INV_NAME[item]}` : ''} · ${tomorrowText() || 'до завтра!'}`); adLog('offer', 'end daily claim'); };
+    if ($('exChest')) $('exChest').onclick = () => { if (store.get('nf-chest') === adDay()) return done('exChest', '✓ Сундук уже открыт');
+      showAd(() => { store.set('nf-chest', adDay()); adLog('offer', 'chest opened end'); const [c, item, n] = CHEST[Math.floor(Math.random() * CHEST.length)];
+        if (item) PROF.inv[item] = (PROF.inv[item] || 0) + n; walletAdd(c); saveProfile(); sfx.coin(); updateBoostsHud();
+        const nm = { nitro: 'нитро', medkit: 'аптечки', shield: 'щит', repair: 'ремкомплекта' }; fxBig(`Сундук: +${c}${item ? ` и ${n} ${nm[item]}` : ''}`); done('exChest', `✓ Сундук: +${c}${item ? ` и ${n} ${nm[item]}` : ''}`); }); };
+    if ($('exStarter')) { adLog('offer', 'pikabu starter shown end'); $('exStarter').onclick = () => { adLog('offer', 'pikabu starter click'); pkBuy('starter', 'end'); }; }
+  } catch (e) { /* the summary stays as it was */ }
 }
 function adCountdown(done) {
   $('ad').hidden = false; let n = 3; $('adCount').textContent = n;
@@ -7488,9 +7515,9 @@ function failChapter(title, text) {
     <div class="kicker">${state.ep === 90 ? 'Задание дня' : `Эпизод ${state.ep} · ${MIS.title}`}</div>
     <h2 class="h2 bad">${title}</h2>
     <p class="lead">${text}</p>
-    <div class="btns"><button id="mSecond" class="btn primary" type="button">${PROF.noAds ? 'Ещё шанс' : 'Ещё шанс за рекламу'} · ${timer ? '+25 секунд' : 'с этого места'}</button><button id="mRetry" class="btn" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>
+    <div class="btns"><button id="mSecond" class="btn primary" type="button">${PROF.noAds || missionsDone() < 3 ? 'Ещё шанс' : 'Ещё шанс за рекламу'} · ${timer ? '+25 секунд' : 'с этого места'}</button><button id="mRetry" class="btn" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>
     <div class="note">Ещё шанс — один раз за попытку: миссия продолжится с того же места.</div>`, {
-      mSecond: () => { hideModal(); showAd(() => { SECOND.used = true; try { second(); } catch (e) { /* the mission moved on */ } MLOG.open = true; state.mode = SECOND.mode; toast(timer ? '+25 секунд — жми!' : 'Ещё шанс — не упусти!', 2); }); },
+      mSecond: () => { hideModal(); (missionsDone() < 3 ? (f) => f() : showAd)(() => { SECOND.used = missionsDone() >= 3; try { second(); } catch (e) { /* the mission moved on */ } MLOG.open = true; state.mode = SECOND.mode; toast(timer ? '+25 секунд — жми!' : 'Ещё шанс — не упусти!', 2); }); },
       mRetry: () => { hideModal(); startChapter(state.ch); },
       mMenu: () => { hideModal(); showSelect(); },
     });
@@ -7528,16 +7555,19 @@ function ch1(intro) {
         // the target may be 110 m away (the lightest graphics step draws 90 m), it slows down when the player falls behind,
         // 14 s to catch up instead of 9, and a warning as soon as the target starts getting away
         const d = pc.pos.distanceTo(t.pos), far = 110 + 15 * this.ease, rate = 24 * Math.max(0.45, 1 - 0.15 * this.ease);
-        if (t.speed < 30) t.speed = d > 80 ? 10 : d > 55 ? 13 : 17;
+        // v146: 5 of the 8 players who reached this mission left after 1–2 «lost»/«spotted». Now: fallen behind — the grey car stops
+        // («встала на светофоре») and waits until the player is within 60 m; «lost» only after 40 s far away; no instant «spotted»,
+        // suspicion grows slower and falls faster
+        if (t.speed < 30) { if (d > 90) { if (!this.waiting) { this.waiting = true; toast('Серая машина встала на светофоре — догоняй, стрелка ведёт к ней', 3); } } else if (d < 60) this.waiting = false;
+          t.speed = this.waiting ? 0 : d > 55 ? 13 : 17; }
         this.grace = Math.max(0, this.grace - dt);
         if (this.grace > 0) this.sus = 0;
-        else if (d < 4) this.sus = 100;
-        else if (d < 12) this.sus += rate * dt; else this.sus = Math.max(0, this.sus - 6 * dt);
+        else if (d < 12) this.sus += rate * (d < 6 ? 0.8 : 0.5) * dt; else this.sus = Math.max(0, this.sus - 12 * dt);
         if (d > far) this.lost += dt; else this.lost = Math.max(0, this.lost - dt * 2);
         if (this.sus >= 100 && secondSet(((sp) => () => { this.sus = 0; this.lost = 0; this.grace = 4; t.speed = sp; })(t.speed))) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 12 метров.'); }
-        if (this.lost > 2 && !this.warned) { this.warned = true; toast('Серая машина уходит — прибавь газу! Стрелка ведёт к ней.', 3.2); }
+        if (this.lost > 20 && !this.warned) { this.warned = true; toast('Ты далеко от цели — возвращайся! Стрелка ведёт к ней.', 3.2); }
         if (this.lost <= 0) this.warned = false;
-        if (this.lost > 14 + this.ease && secondSet(() => { this.lost = 0; this.sus = 0; this.grace = 4; })) return failChapter('Цель потеряна', `Серая машина скрылась. Не отставай дальше ${far} метров.`);
+        if (this.lost > 40 + this.ease && secondSet(() => { this.lost = 0; this.sus = 0; this.grace = 4; })) return failChapter('Цель потеряна', `Серая машина скрылась. Не отставай дальше ${far} метров.`);
         if (t.arrived && d < 60) {
           finishChapter(1, 100, [
             ['hero', 'Порт. Контейнеры, тишина и ни одной камеры. Идеальное логово.'],
@@ -7548,7 +7578,7 @@ function ch1(intro) {
       },
       hud() {
         const d = pc.pos.distanceTo(t.pos);
-        return { bars: [{ label: 'Подозрение', frac: this.sus / 100, color: 'var(--neon)' }], timer: this.lost > 0.3 ? `Теряешь цель: ${Math.ceil(14 + this.ease - this.lost)}` : d < 12 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: this.lost > 0.3 || d < 12 };
+        return { bars: [{ label: 'Подозрение', frac: this.sus / 100, color: 'var(--neon)' }], timer: this.waiting ? 'Цель ждёт на светофоре — догоняй' : this.lost > 25 ? `Теряешь цель: ${Math.ceil(40 + this.ease - this.lost)}` : d < 12 ? 'Слишком близко!' : `Дистанция ${Math.round(d)} м`, bad: this.lost > 25 || d < 12 };
       },
     };
     setObjective(`Езжай за серой машиной «Шакалов». Держись дальше 12 м, но не отставай больше чем на ${MIS.far0 = 110 + 15 * MIS.ease} м.`);
