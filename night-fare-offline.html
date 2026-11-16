@@ -550,6 +550,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .dlg-name { display: flex; align-items: center; gap: 8px; font: 700 12px/1 var(--font-display); letter-spacing: .06em; text-transform: uppercase; margin: 4px 0 8px; }
 .dlg-name::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
 .dlg-text { font: 400 17px/1.5 var(--font-body); color: var(--text); }
+.next-ms { display: grid; gap: 4px; margin: 4px 0 10px; padding: 10px 12px; border-left: 3px solid var(--taxi); background: rgba(255,196,61,.08); border-radius: 0 8px 8px 0; } .next-ms small { font: 600 10px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--taxi); } .next-ms b { font-size: 15px; line-height: 1.3; } .next-ms span { font-size: 12px; color: var(--muted); }
 .dlg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
 .dlg-skip { flex: none; padding: 6px 11px; border-radius: 6px; border: 1px solid var(--hair-2); background: var(--glass-2); color: var(--text); font: 700 12px/1 var(--font-body); letter-spacing: .04em; }
 .dlg-next { font: 600 10px/1 var(--font-body); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
@@ -882,7 +883,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v154'; window.__errs = [];
+window.APP_VER = 'v155'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1204,7 +1205,7 @@ try { const o = JSON.parse(localStorage.getItem('nf-perf') || 'null'); if (o && 
 // down from step 2 took ~27 s of lag on every start («сильно подвисает на старте»)
 const FEW_CORES = !isTouch && (navigator.hardwareConcurrency || 4) <= 2;
 const PERF_FLOOR = OLD_IOS || LITE_MEM ? 3 : FEW_CORES && (WEAK_DESK || WEAK_GPU) ? 5 : WEAK_DESK ? 4 : FEW_CORES ? 3 : WEAK_GPU ? 1 : 0;
-const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(6, Math.max(PERF_FLOOR, PERF_SAVED)));
+const PERF_BASE = () => (HD() && !LITE_MEM ? 0 : Math.min(7, Math.max(PERF_FLOOR, PERF_SAVED)));
 const perf = { t: 0, frames: 0, tJs: 0, tDraw: 0, tN: 0, tSlow: 0, level: PERF_BASE(), applied: false, slow: 0, cool: 0, up: false, noUp: false, warned: false, shadowSkip: false, fn: 0, view: 0, every: 1,
   st: 0, sf: 0, low: 99, sent: false };
 function perfSave() { try { localStorage.setItem('nf-perf', JSON.stringify({ l: perf.level, v: window.APP_VER })); } catch (e) { /* storage unavailable */ } }
@@ -1221,15 +1222,31 @@ function perfApply() {
   moon.castShadow = L < 5;
   // step 6 (v127, still under 22 fps at step 5 — Mali phones and Chromebooks, old Intel HD): the city ends at 90 m, resolution 0.55,
   // at most 4 cars and 4 passers-by around
-  perf.cap = L >= 6 ? 4 : 99;
-  perf.view = L >= 6 ? 90 : L >= 5 ? 130 : L >= 3 ? 170 : L >= 2 ? 230 : 0; camera.far = perf.view || 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(perf.view ? (perf.view - 15) / 800 : 1);
+  perf.cap = L >= 7 ? 2 : L >= 6 ? 4 : 99;
+  // step 7 (v155, still under 15 fps at step 6 — PowerVR GE8320: 8 fps, 105–190 ms a frame on 16.11): the city ends at 70 m, resolution 0.4,
+  // 2 cars and 2 passers-by, and every lit surface drops the physically based material for a per-vertex one (same colours and textures)
+  if (L >= 7) lambertAll();
+  perf.view = L >= 7 ? 70 : L >= 6 ? 90 : L >= 5 ? 130 : L >= 3 ? 170 : L >= 2 ? 230 : 0; camera.far = perf.view || 1200; camera.updateProjectionMatrix(); sky.scale.setScalar(perf.view ? (perf.view - 15) / 800 : 1);
   // parked cars, lamps and benches (instanced kit models, ~0.5 M triangles) stop casting shadows
   scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = L < 3; });
-  const pr = L >= 6 ? Math.min(DPR, 0.47) : L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
+  const pr = L >= 7 ? Math.min(DPR, 0.4) : L >= 6 ? Math.min(DPR, 0.47) : L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
   if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
   if (L >= 4) composer = null;
   const lc = lightPlayerCar(); if (perf.lightCar !== lc) { const had = perf.lightCar !== undefined; perf.lightCar = lc; if (had) pcRebuild(); }
 }
+const LAMB = new Map();
+function toLambert(m) {
+  if (!m || !m.isMeshStandardMaterial || m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile) return m;   // custom shaders stay as they are
+  let l = LAMB.get(m);
+  if (!l) {
+    l = new THREE.MeshLambertMaterial({ map: m.map, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity, transparent: m.transparent, opacity: m.opacity, side: m.side, vertexColors: m.vertexColors, alphaTest: m.alphaTest, fog: m.fog, depthWrite: m.depthWrite, depthTest: m.depthTest });
+    l.color = m.color; l.emissive = m.emissive; l.name = m.name; l.userData = m.userData;   // the same colour objects: code that recolours the original recolours this one
+    LAMB.set(m, l);
+  }
+  return l;
+}
+function lambertAll() { if (HD()) return; scene.traverse((o) => { if (!o.isMesh || !o.material) return; if (Array.isArray(o.material)) { if (o.material.some((x) => x && x.isMeshStandardMaterial)) o.material = o.material.map(toLambert); } else if (o.material.isMeshStandardMaterial) o.material = toLambert(o.material); }); }
+setInterval(() => { if (perf.level >= 7 && !HD() && !document.hidden) lambertAll(); }, 3000);   // people and cars made later
 const lightPlayerCar = () => !HD() && (perf.level >= 5 || LITE_MEM);
 // only the player's car mesh (applyLoadout would also drop the hero — not in the middle of a mission)
 function pcRebuild() {
@@ -1270,7 +1287,8 @@ function checkPerf(raw) {
   if (perf.level === 3 && fps >= 22) { perf.slow = 0; return; }   // the last step (no post-processing at all) only when it is really bad
   if (perf.level === 4 && fps >= 26) { perf.slow = 0; return; }   // step 5 only when step 4 is still too slow
   if (perf.level === 5 && fps >= 22) { perf.slow = 0; return; }   // step 6 only when step 5 is still under 22 fps
-  if (++perf.slow < (early ? 1 : 2) || perf.level >= 6) return;
+  if (perf.level === 6 && fps >= 15) { perf.slow = 0; return; }   // v155: step 7 only when step 6 is still under 15 fps
+  if (++perf.slow < (early ? 1 : 2) || perf.level >= 7) return;
   perf.slow = 0; perf.level++; perf.cool = 1; perfApply(); perfSave();
 }
 
@@ -14874,24 +14892,31 @@ function showEnd() {
       <div><small>«Шакалов» снято</small><b>${state.footKills}</b></div>
       <div><small>Монеты</small><b>${state.coins}</b></div>
     </div>
+    <div class="next-ms"><small>Дальше · эпизод 2, миссия 1</small><b>«Хвост»: сядь на хвост серой машине «Шакалов» — она приведёт к их логову</b><span>Награда: +100 монет${goBonus ? ' · +100 бонусом, если поедешь сразу' : ''}</span></div>
     <div class="btns">
+      <button id="mEp2" class="btn primary" type="button">Дальше: «Хвост» →</button>
       <button id="mDouble" class="btn x2" type="button" ${state.doubled || !state.coins ? 'disabled' : ''}>${state.doubled ? '✓ Награда удвоена' : `🎬 Ещё +${state.coins} монет за рекламу (×2)`}</button>
-      <button id="mEp2" class="btn primary" type="button">Эпизод 2 →</button>
       <button id="mAgain" class="btn" type="button">Сменить водителя</button>
     </div>
-    ${endPathHtml(1)}
-    <div class="kicker" style="color:var(--muted)">Гараж · наборы</div>
-    <div class="garage">
-      <div class="car-card owned"><b>Такси «Комета»</b><span>Скорость 3 · броня 2</span><span class="price">В гараже</span></div>
-      <div class="car-card"><b>Перехватчик «Сокол»</b><span>Скорость 5 · броня 2</span><span class="price">1500 монет</span></div>
-      <div class="car-card"><b>Броневан «Бизон»</b><span>Скорость 2 · броня 5</span><span class="price">Набор за 149 ₽</span></div>
-    </div>
-    <div class="note">Покупка наборов появится скоро.</div>`, {
-    mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
-    mAgain: () => { hideModal(); showSelect(); },
-    mEp2: () => { hideModal(); startEpisode2(1); },
+    ${endPathHtml(1)}`, {
+    mDouble: () => { stopAuto(); hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
+    mAgain: () => { stopAuto(); hideModal(); showSelect(); },
+    mEp2: () => { stopAuto(); hideModal(); if (goBonus) { store.set('nf-go2', 1); addCoins(100); } startEpisode2(1); },
   });
+  // v155: on 16.11 13 of 26 who won the first mission never started the second; the next mission is now on top with what it is,
+  // and it starts by itself in 10 s (any other button, or the tab hidden, stops the count); +100 the first time for going on at once
+  const goBonus = !store.get('nf-go2');
+  let left = 10, auto = null;
+  const stopAuto = () => { if (auto) { clearInterval(auto); auto = null; const b = $('mEp2'); if (b) b.textContent = 'Дальше: «Хвост» →'; } };
   render();
+  const card = $('modalCard'); { const g = $('goalNext'); if (g) card.appendChild(g); } card.scrollTop = 0; setTimeout(() => { const nm = card.querySelector('.next-ms'); if (nm && nm.getBoundingClientRect().top < 0) nm.scrollIntoView({ block: 'start' }); }, 60);   // the rank/next-car box goes to the end here: the next mission and its button stay on top
+  auto = setInterval(() => {
+    const b = $('mEp2'); if (!b || state.mode !== 'end' || document.hidden) { stopAuto(); return; }
+    left--; b.textContent = `Дальше: «Хвост» → ${left}`;
+    if (left <= 0) { stopAuto(); b.click(); }
+  }, 1000);
+  card.addEventListener('pointerdown', (e) => { if (!e.target.closest('#mEp2')) stopAuto(); }, { once: true });
+  card.addEventListener('scroll', () => { if (card.scrollTop > 40) stopAuto(); }, { passive: true });
 }
 
 $('btnPlay').addEventListener('click', showSelect);
@@ -15081,7 +15106,7 @@ BOOT_LOAD.then(() => {
   if (m[1] === 'ok') { setTimeout(payClaim, 8000); setTimeout(payClaim, 25000); }   // the bank's notice may come a little after the player
 })();
 if (ROTF && ROTF.ok) ROTF.ok();   // the turned frame (MAX) started fine
-window.__nightFare = { skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
