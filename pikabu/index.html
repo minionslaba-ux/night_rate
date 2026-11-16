@@ -656,7 +656,8 @@ body.hud-s #objText { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-o
 body.hud-s .hud-tl > .bar { padding: 4px 8px; min-height: 0; }
 body.hud-s .hud-tl > .bar .bar-label { display: none; }
 body.hud-s .hud-tr { top: calc(8px + var(--sat)); right: calc(8px + var(--sar)); gap: 4px; grid-template-columns: none; }
-body.hud-s #minimap, body.hud-s .hud-tr .stat-line, body.hud-s .hud-tr .boosts { display: none; }
+body.hud-s .hud-tr .stat-line, body.hud-s .hud-tr .boosts { display: none; }
+body.hud-s #minimap { width: 92px; height: 92px; }   /* v152: the map is back (the owner: «с ней удобнее»), the speed went down */
 body.hud-s .hud-btns { gap: 4px; } body.hud-s .hud-btns .hud-chip { padding: 5px 8px; font-size: 11px; }
 body.hud-s .hud-btns #btnView { display: none; }
 body.hud-s.touch-on #speedo.speedo, body.hud-s #speedo.speedo { top: calc(46px + var(--sat)); bottom: auto; right: calc(8px + var(--sar)); left: auto; transform: none; padding: 4px 8px; min-width: 0; text-align: right; }
@@ -716,6 +717,9 @@ body.hud-s.touch-on .tbtn.nitro.zero, body.hud-s.touch-on .tbtn.shield.zero { di
   .preview .pv-logo { font-size: 34px; }
   .preview .pv-content .btns { animation-delay: .2s; }
 }
+/* v152: the speed sits at the bottom between the stick and the buttons; the pause goes under the map, the bars under the pause */
+body.hud-s.touch-on #speedo.speedo, body.hud-s #speedo.speedo { top: auto; bottom: calc(18px + var(--sab)); left: 50%; right: auto; transform: translateX(-50%); text-align: center; }
+body.hud-s #bars.bars { top: calc(var(--sat) + 154px); }
 body.nofire.touch-on .tbtn.fire { display: none; }
 body.nofire.hud-s.touch-on .tbtn.drift { right: calc(12px + var(--sar)); bottom: calc(14px + var(--sab)); width: 62px; height: 62px; }
 body.nofire.hud-s.touch-on .tbtn.nitro { bottom: calc(86px + var(--sab)); } body.nofire.hud-s.touch-on .tbtn.shield { bottom: calc(86px + var(--sab)); }
@@ -869,7 +873,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v151'; window.__errs = [];
+window.APP_VER = 'v152'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -7194,12 +7198,12 @@ function updateDrive(dt) {
   let jt = 0, js = 0; const jl = Math.hypot(joy.x, joy.y);
   if (jl > 0.16) {
     const mag = Math.min(1, (jl - 0.16) / 0.7), a = Math.atan2(joy.x, -joy.y);
-    if (Math.abs(a) < 2.2) { jt = mag; const aa = Math.max(0, Math.abs(a) - 0.14), k = clamp(aa / 1.01, 0, 1); js = Math.sign(a) * Math.pow(k, 1.6); }   // ±8° around «straight ahead» is straight
+    if (Math.abs(a) < 2.2) { jt = mag; const aa = Math.max(0, Math.abs(a) - 0.21), k = clamp(aa / 1.1, 0, 1); js = Math.sign(a) * Math.pow(k, 1.7); }   // v152: ±12° around «straight ahead» is straight, full lock at ~75°, a softer start (was ±8°, 66°, ^1.6 — the owner: «тяжело держать машину ровно»)
     else { jt = -mag * 0.85; js = clamp(joy.x * 1.2, -1, 1); }
   }
   if (APL.on && !APL.paused) { const a = apControl(dt); steerKey = 0; thrKey = a.t; js = a.s; jt = 0; }
   { const tgt = clamp(steerKey + js, -1, 1), cur = pc.steerSm || 0, fast = clamp(Math.abs(pc.vf || 0) / 30, 0, 1), turnIn = Math.abs(tgt) > Math.abs(cur) && Math.sign(tgt || cur) === Math.sign(cur || tgt);
-    pc.steerSm = cur + (tgt - cur) * Math.min(1, dt * (steerKey ? (turnIn ? 14 - 8 * fast : 16) : 9)); }
+    pc.steerSm = cur + (tgt - cur) * Math.min(1, dt * (steerKey ? (turnIn ? 14 - 8 * fast : 16) : turnIn ? 8 - 1.5 * fast : 10)); }   // v152: the stick turns in more gently (the faster, the gentler), lets go as fast as before
   const throttle = clamp(thrKey + jt, -1, 1), steer = pc.steerSm;
   const drift = keys.ShiftLeft || keys.ShiftRight || touchDrift;
   { const sp = Math.hypot(pc.vel.x, pc.vel.z), side = Math.abs(pc.vr || 0);
