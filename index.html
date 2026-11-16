@@ -883,7 +883,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v155'; window.__errs = [];
+window.APP_VER = 'v156'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1186,7 +1186,7 @@ function resize() {
   if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); }
   if (fxaaPass) { const pr = renderer.getPixelRatio(); fxaaPass.material.uniforms.resolution.value.set(1 / (w * pr), 1 / (h * pr)); }
   camera.aspect = w / h;
-  document.body.classList.toggle('hud-s', w < h && h < 700);   // v149: the compact HUD for a small upright window
+  document.body.classList.toggle('hud-s', w < h && (h < 700 || (isTouch && w < 600)));   // v149: the compact HUD for a small upright window; v156: and any phone held upright
   camera.fov = w < h ? 72 : 60;
   camera.updateProjectionMatrix();
 }
