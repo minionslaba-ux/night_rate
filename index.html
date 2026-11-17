@@ -551,6 +551,7 @@ kbd { font: 600 10px/1 var(--font-mono); color: var(--text); padding: 3px 5px; b
 .dlg-text { font: 400 17px/1.5 var(--font-body); color: var(--text); }
 .back-hint { color: var(--taxi); margin: 2px 0 6px; }
 .next-ms { display: grid; gap: 4px; margin: 4px 0 10px; padding: 10px 12px; border-left: 3px solid var(--taxi); background: rgba(255,196,61,.08); border-radius: 0 8px 8px 0; } .next-ms small { font: 600 10px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--taxi); } .next-ms b { font-size: 15px; line-height: 1.3; } .next-ms span { font-size: 12px; color: var(--muted); }
+.quick-row { display: flex; gap: 8px; flex-wrap: wrap; } .btn.quick { padding: 10px 14px; font-size: 13px; letter-spacing: .04em; background: rgba(11,13,31,.7); border: 1px solid var(--taxi); color: var(--taxi); }
 .dlg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
 .dlg-skip { flex: none; padding: 6px 11px; border-radius: 6px; border: 1px solid var(--hair-2); background: var(--glass-2); color: var(--text); font: 700 12px/1 var(--font-body); letter-spacing: .04em; }
 .dlg-next { font: 600 10px/1 var(--font-body); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
@@ -809,7 +810,7 @@ setTimeout(function () {
     <div class="kicker pv-k">Порт-Северный · 02:47</div>
     <h1 class="logo pv-logo">Ночной тариф<span>Эпизод 1. Кейс</span></h1>
     <p class="pv-tag">Город спит, а ты нет. Довези кейс через весь город, пока за тобой охотится банда «Шакалы».</p>
-    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnDaily" class="btn big daily" type="button">Задание дня</button><button id="btnRw" class="btn linkish rw-btn" type="button" hidden>🎁 +150 монет за рекламу</button><button id="btnChest" class="btn linkish rw-btn" type="button" hidden>🧰 Сундук дня — открыть за рекламу</button><button id="btnTd" class="btn linkish rw-btn td" type="button" hidden>🚗 Тест-драйв</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
+    <div class="btns"><button id="btnPlay" class="btn primary big" type="button">Играть</button><button id="btnDaily" class="btn big daily" type="button">Задание дня</button><span class="quick-row"><button id="btnShift" class="btn quick" type="button">🚕 Свободная смена</button><button id="btnDerby" class="btn quick" type="button">💥 Дерби · 1 мин</button></span><button id="btnRw" class="btn linkish rw-btn" type="button" hidden>🎁 +150 монет за рекламу</button><button id="btnChest" class="btn linkish rw-btn" type="button" hidden>🧰 Сундук дня — открыть за рекламу</button><button id="btnTd" class="btn linkish rw-btn td" type="button" hidden>🚗 Тест-драйв</button><button id="btnS3" class="btn big s3new" type="button">Новый сезон: «Охота по тарифу»</button><button id="btnCities" class="btn big s3new cities" type="button">Города мира: Париж · Лондон · Нью-Йорк</button></div>
     <p id="pvPath" class="pv-path"></p>
     <div id="dqBox" class="dq-box" hidden></div>
   </div>
@@ -883,7 +884,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v161'; window.__errs = [];
+window.APP_VER = 'v162'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6947,7 +6948,7 @@ function dqAdd(kind, n) {
 // v157: a reason to come back, on the pause, fail and wreck screens (newcomers rarely see the menu, where it used to be)
 function backHint() {
   try { const ds = dailyState(); if (!ds.done && missionsDone() >= 1) { const [c, item, n] = LOGIN_DAYS[ds.idx]; return `🎁 В меню ждёт подарок за вход: +${c} монет${item ? ` и ${n} ${INV_NAME[item]}` : ''}`; }
-    const t = tomorrowText(); return t ? '🌙 ' + t : '🌙 Заходи завтра: подарок за вход и новое задание дня'; } catch (e) { return ''; }
+    const t = tomorrowText(), fire = ds.done && ds.streak >= 2 ? `🔥 ${ds.streak} дн. подряд · ` : ''; return fire + (t ? '🌙 ' + t : '🌙 Заходи завтра: подарок за вход и новое задание дня'); } catch (e) { return ''; }
 }
 const backHintHtml = () => { const t = backHint(); return t ? `<p class="note back-hint">${t}</p>` : ''; };
 function tomorrowText() {
@@ -8042,7 +8043,7 @@ function ch6() {
 
 function startEpisode2(ch) { startEpisode(2, ch); }
 function startEpisode(ep, ch) {
-  if (!(EPS[ep] && EPS[ep].daily)) saveLast(ep, ch);
+  if (!(EPS[ep] && (EPS[ep].daily || EPS[ep].free))) saveLast(ep, ch);
   initAudio(); hideModal(); setMood('night');
   $('select').hidden = true; $('preview').hidden = true; $('hud').hidden = false; $('touch').hidden = !isTouch;
   document.body.classList.toggle('touch-on', isTouch);
@@ -8192,7 +8193,7 @@ function showEnd2() {
     mNext: () => { hideModal(); startEpisode(3, 1); },
     mAgain: () => { hideModal(); showSelect(); },
   });
-  render();
+  render(); autoNext(['mNext']);
 }
 
 // ---------------- episodes 3–7: chapters as data ----------------
@@ -9072,13 +9073,14 @@ function setMood(m) {
 }
 
 function startGen(ep, i, withIntro) {
-  const E = EPS[ep], c = E.chapters[i]; if (!E.daily) saveLast(ep, i + 1);
+  const E = EPS[ep], c = E.chapters[i]; if (!E.daily && !E.free) saveLast(ep, i + 1);
   if (E.season3) s3Vik(); clearStage(); setMood(c.mood || 'night');
-  state.ep = ep; state.ch = i + 1; if (!E.daily) epSave(ep, i + 1); state.fireLock = true;
-  const title = `Миссия ${i + 1} · ${c.t}`;
+  state.ep = ep; state.ch = i + 1; if (!E.daily && !E.free) epSave(ep, i + 1); state.fireLock = true;
+  const title = E.free ? c.t : E.daily ? `Миссия ${i + 1} · ${c.t}` : `Миссия ${i + 1} из ${E.chapters.length} · ${c.t}`;   // v162: where you are in the episode
   let finished = false;
   const done = () => {
     if (finished) return; finished = true;
+    if (E.free) { for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; } clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0); if (E.onDone) E.onDone(); return; }
     if (E.daily) { profStat('chapters'); for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; } clearBullets(); setEngine(0, false); if (pc) pc.vel.set(0, 0, 0); dailyFinish(); return; }
     epSave(ep, i + 2); addCoins(c.coins || 150); profStat('chapters');
     if (E.chapters[i + 1] && E.chapters[i + 1].epilogue) profEp(ep);   // v160: the finale counts the episode as done — the calm epilogue after it is a bonus, not a gate
@@ -9473,7 +9475,7 @@ function showEndGen(ep) {
     mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
     mAgain: () => { hideModal(); showSelect(); },
   }, endPathHandlers(ep)));
-  render();
+  render(); autoNext(['pNext', 'pOther'].concat(Object.keys(endPathHandlers(ep)).filter((k) => k.indexOf('pOpen') === 0)));
 }
 
 // ---------------- camera ----------------
@@ -10186,7 +10188,7 @@ function needCoins(price, what, alt) {
   draw();
   if (web && !PAY.checked) payCheck().then(() => { if (!$('modal').hidden && $('modal').classList.contains('over')) draw(); });
 }
-function profStat(k, n) { if (DQ_KINDS[k]) dqAdd(k, n === undefined ? 1 : n); if (k === 'chapters') { runEnd('win'); sfx.win(); } PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(loginNudge, 3000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(joinNudge, 9000); if (k === 'chapters' && store.get('nf-ref') && PROF.st.chapters >= 3) setTimeout(() => refTry(false), 6000); if (k === 'chapters' && PROF.st.chapters >= 2) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
+function profStat(k, n) { if (DQ_KINDS[k]) dqAdd(k, n === undefined ? 1 : n); if (k === 'chapters') { runEnd('win'); sfx.win(); } PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(loginNudge, 3000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(joinNudge, 9000); if (k === 'chapters' && store.get('nf-ref') && PROF.st.chapters >= 3) setTimeout(() => refTry(false), 6000); if (k === 'chapters' && PROF.st.chapters >= 3) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
 const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: 'https://t.me/nightfaregame', maxUrl: '' };
@@ -10284,7 +10286,8 @@ setTimeout(async () => {
 // Только на сайте и на телефоне, только между миссиями (со второй пройденной миссии), не чаще раза в 5 минут.
 // В мини-приложениях Telegram, ВКонтакте и MAX не показывается (в ВК по правилам — только реклама ВК), тестовому профилю — тоже.
 // Пока сайт не прошёл модерацию РСЯ, Яндекс просто ничего не покажет.
-const AD_BLOCK = 'R-A-20345213-1', AD_GAP = 4 * 60e3;   // v130: 5 → 4 min between missions; never within 3 min after a rewarded video the player chose to watch
+const AD_BLOCK = 'R-A-20345213-1', AD_GAP = 5 * 60e3;   // v162: 4 → 5 min, and from the 3rd win (an ad was where newcomers left)
+//   // v130: 5 → 4 min between missions; never within 3 min after a rewarded video the player chose to watch
 let adLoaded = false;
 const adCan = () => PLATFORM === 'web' && !PROF.god && (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window);
 function adLoad() {
@@ -14650,7 +14653,7 @@ function pauseGame() {
 // the «Профиль» button next to «Занос»: pause and open the garage (change the car, shop, or leave to the menu from the pause)
 function quickProfile() { if (state.mode === 'drive' || state.mode === 'foot') pauseGame(); if (state.mode === 'paused') openProfile('garage'); }
 // where the player stopped: the episode and chapter to continue from
-function saveLast(ep, ch) { try { localStorage.setItem('nf-last', JSON.stringify({ ep, ch })); } catch (e) { /* storage unavailable */ } cloudSaveSoon(); }
+function saveLast(ep, ch) { if (EPS[ep] && (EPS[ep].free || EPS[ep].daily)) return; try { localStorage.setItem('nf-last', JSON.stringify({ ep, ch })); } catch (e) { /* storage unavailable */ } cloudSaveSoon(); }
 function loadLast() { try { const v = JSON.parse(localStorage.getItem('nf-last')); return v && EP_NAMES[v.ep] ? v : null; } catch (e) { return null; } }
 
 // ---------------- drivers ----------------
@@ -14945,6 +14948,8 @@ $('btnS3').addEventListener('click', () => openLine(LINES[1]));
 setInterval(() => { if (state.mode === 'preview') { renderMenuPath(); mrgPlace(); } }, 3000);   // the cloud profile may arrive after the menu is up
 $('btnCities').addEventListener('click', () => openLine(LINES[2]));
 $('btnDaily').addEventListener('click', () => { initAudio(); dailyOpen(); });
+$('btnShift').addEventListener('click', () => { initAudio(); freeShift(); });
+$('btnDerby').addEventListener('click', () => { initAudio(); quickDerby(); });
 $('btnRw').addEventListener('click', () => { initAudio(); rewardCoins(); });
 $('btnChest').addEventListener('click', () => { initAudio(); chestOpen(); });
 $('btnTd').addEventListener('click', () => { initAudio(); tdStart(); });
@@ -15310,11 +15315,11 @@ Object.assign(GEN, {
     const QT = { hurry: ['Опаздываю на поезд! Быстрее!', 'чаевые тают вдвое быстрее'], sick: ['Меня укачивает… только без резких поворотов.', 'удары и резкие повороты съедают чаевые'], tourist: ['Я тут впервые! Можно проехать мимо порта?', 'сначала — мимо достопримечательности'], quiet: ['Добрый вечер. Просто довезите.', 'обычная поездка'] };
     let n = 0, left = c.secs, ride = null, hail = null, earned = 0, warn = 0, lastV = 0, lastH = pc.h;
     const pickStop = (far) => { const ok = S.filter((s) => s.v.distanceTo(far) > (c.minDist || 150)); return pick(ok.length ? ok : S); };
-    const newHail = () => { const s = pickStop(pc.pos); const a = spawnAlly(cityLook(), s.v.x + 6, s.v.z + 6, { hp: 1e6, name: 'Пассажир', face: 0 }); hail = { s, a, mk: tMark(s.v.x, s.v.z, 0xf2c21a, 6) }; setBeam(s.v); setObjective(`Обычная смена: заказ ${n + 1} из ${c.n}. Пассажир ждёт: ${s.name}.`); };
+    const newHail = () => { const s = pickStop(pc.pos); const a = spawnAlly(cityLook(), s.v.x + 6, s.v.z + 6, { hp: 1e6, name: 'Пассажир', face: 0 }); hail = { s, a, mk: tMark(s.v.x, s.v.z, 0xf2c21a, 6) }; setBeam(s.v); setObjective(c.endless ? `Свободная смена: заказ ${n + 1}. Пассажир ждёт: ${s.name}. Закончить — пауза → «В меню».` : `Обычная смена: заказ ${n + 1} из ${c.n}. Пассажир ждёт: ${s.name}.`); };
     newHail();
     return { title, noFire: true, noFireMsg: 'Это обычный пассажир!', chase: { max: 0 }, get navName() { return ride ? (ride.via && !ride.viaDone ? ride.via.name : ride.to.name) : hail ? hail.s.name : ''; }, navGoal: () => (ride ? (ride.via && !ride.viaDone ? ride.via.v : ride.to.v) : hail ? hail.s.v : pc.pos),
       update(dt) {
-        left -= dt; warn -= dt; if (left <= 0 && secondSet(() => { left = 30; })) return failChapter('Смена кончилась', `Отвезено ${n} из ${c.n}. Подъезжай к пассажиру медленно и останавливайся рядом — посадка быстрее.`);
+        if (!c.endless) left -= dt; warn -= dt; if (!c.endless && left <= 0 && secondSet(() => { left = 30; })) return failChapter('Смена кончилась', `Отвезено ${n} из ${c.n}. Подъезжай к пассажиру медленно и останавливайся рядом — посадка быстрее.`);
         const v = kmh(), vf = pc.vf || 0, acc = Math.abs(vf - lastV) / Math.max(dt, 1e-3), yaw = Math.abs(wrapA(pc.h - lastH)) / Math.max(dt, 1e-3); lastV = vf; lastH = pc.h;
         if (!ride && hail && pc.pos.distanceTo(hail.s.v) < 10) { arriveBrake(dt); if (v < 12) { const q = Q[n % Q.length], to = pickStop(hail.s.v), via = q === 'tourist' ? pickStop(to.v) : null; scene.remove(hail.mk); hail.a.g.visible = false; ride = { q, to, via, viaDone: !via, tip: c.tip || 60, tip0: c.tip || 60, mk: tMark(to.v.x, to.v.z, 0x4dffa6, 7) }; toast(`Пассажир: ${QT[q][0]}`, 2.4); setObjective(`Заказ ${n + 1}: ${via ? `сначала мимо «${via.name}», потом ` : ''}${to.name}. Особенность: ${QT[q][1]}.`); hail = null; } return; }
         if (!ride) return;
@@ -15322,9 +15327,9 @@ Object.assign(GEN, {
         if (ride.q === 'sick' && (acc > 26 || yaw * Math.abs(vf) > 12)) { ride.tip = Math.max(0, ride.tip - dt * 14); if (warn <= 0) { warn = 2; toast('Пассажир: Ох… потише…', 1.2); } }
         if (ride.via && !ride.viaDone) { setBeam(ride.via.v); if (pc.pos.distanceTo(ride.via.v) < 16) { ride.viaDone = true; toast('Турист: Как красиво! Теперь можно ехать.', 1.6); } return; }
         setBeam(ride.to.v);
-        if (pc.pos.distanceTo(ride.to.v) < 10) { arriveBrake(dt); if (v < 12) { const fare = c.fare || 40, tip = Math.round(ride.tip), stars = tip > ride.tip0 * 0.6 ? 3 : tip > ride.tip0 * 0.25 ? 2 : 1; earned += fare + tip; addCoins(fare + tip); scene.remove(ride.mk); toast(`${'★'.repeat(stars)}${'☆'.repeat(3 - stars)} · ${fare} + ${tip} чаевых`, 2); ride = null; n++; if (n >= c.n) return done(); newHail(); } }
+        if (pc.pos.distanceTo(ride.to.v) < 10) { arriveBrake(dt); if (v < 12) { const fare = c.fare || 40, tip = Math.round(ride.tip), stars = tip > ride.tip0 * 0.6 ? 3 : tip > ride.tip0 * 0.25 ? 2 : 1; earned += fare + tip; addCoins(fare + tip); scene.remove(ride.mk); toast(`${'★'.repeat(stars)}${'☆'.repeat(3 - stars)} · ${fare} + ${tip} чаевых`, 2); ride = null; n++; if (c.endless) { PROF.st.shiftRides = (PROF.st.shiftRides || 0) + 1; if (earned > (PROF.st.shiftBest || 0)) { if (PROF.st.shiftBest && !this.rec) { this.rec = true; toast('Новый рекорд смены!', 2); } PROF.st.shiftBest = earned; } saveProfile(); } if (!c.endless && n >= c.n) return done(); newHail(); } }
       },
-      hud() { return { bars: ride ? [{ label: `Чаевые: ${Math.round(ride.tip)}`, frac: ride.tip / ride.tip0, color: '#f2c21a' }] : [], timer: `${fmt(left)} · заказ ${Math.min(n + 1, c.n)}/${c.n}`, bad: left < 25 }; } };
+      hud() { return { bars: ride ? [{ label: `Чаевые: ${Math.round(ride.tip)}`, frac: ride.tip / ride.tip0, color: '#f2c21a' }] : [], timer: c.endless ? `Поездок ${n} · ${earned} монет · рекорд ${Math.max(earned, PROF.st.shiftBest || 0)}` : `${fmt(left)} · заказ ${Math.min(n + 1, c.n)}/${c.n}`, bad: !c.endless && left < 25 }; } };
   },
   // «Перегрев»: the radiator is shot — the engine heats up with speed and knocks; at 100° it stalls for a few seconds; fountains cool it
   overheat(c, title, done) {
@@ -15469,7 +15474,34 @@ const EP_SWAP3 = {
 for (const [key, cfg] of Object.entries(EP_SWAP3)) { const [ep, ch] = key.split('-').map(Number), E = EPS[ep], old = E && E.chapters[ch - 1]; if (!old) continue; E.chapters[ch - 1] = Object.assign({ outro: old.outro, coins: old.coins }, cfg, { swapped: old.type }); }
 // 12-1: the second «hold the zone» of episode 12 becomes «hold out»
 { const c = EPS[12] && EPS[12].chapters[0]; if (c && c.type === 'arena' && c.zone) { delete c.zone; c.survive = 60; c.surviveObj = 'Отбивайся у крыльца мэрии, пока Орлова не перекроет площадь: 1:00.'; } }
-window.__nightFare = { updHud: (dt) => updateHud(dt), backHint, get RADIO() { return RADIO; }, lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+
+// ---- v162: playtime — a free endless shift, a one-minute derby, the next episode starts by itself ----
+function freeShift() {
+  EPS[91] = { free: true, chapters: [{ t: 'Свободная смена', type: 'fares', endless: true, start: [0, 0, 'N'], n: 1e9, secs: 1e9, stops: PS_STOPS, quirks: ['quiet', 'hurry', 'tourist', 'sick', 'quiet', 'hurry'],
+    intro: [['mark', 'Свободная смена: вози кого хочешь и сколько хочешь. Вся выручка — твоя. Надоест — пауза, «В меню».']] }] };
+  startEpisode(91, 1);
+}
+function quickDerby() {
+  EPS[92] = { free: true, onDone: derbyDone, chapters: [{ t: 'Дерби · 1 минута', type: 'derby', start: [0, 40, 'N'], kills: 6, secs: 60, chase: 4, coins: 0, intro: [] }] };
+  startEpisode(92, 1);
+}
+function derbyDone() {
+  const t = Math.max(1, Math.round(state.time)), best = PROF.st.derbyBest || 0, rec = !best || t < best;
+  if (rec) { PROF.st.derbyBest = t; saveProfile(); }
+  state.mode = 'end'; $('hud').hidden = true; $('touch').hidden = true;
+  showModal(`<div class="kicker">Дерби · 1 минута</div><h2 class="h2 good">6 машин за ${fmt(t)}</h2><p class="lead">${rec && best ? 'Новый рекорд!' : rec ? 'Первый результат — побей его.' : `Рекорд: ${fmt(best)}.`} Каждая разбитая машина — +8 секунд и +25 монет.</p>
+    <div class="btns"><button id="dAgain2" class="btn primary" type="button">Ещё раз</button><button id="dMenu2" class="btn" type="button">В меню</button></div>`,
+    { dAgain2: () => { hideModal(); quickDerby(); }, dMenu2: () => { hideModal(); showSelect(); } });
+}
+// the end of an episode: the first «next» button counts down from 10 and presses itself; any other tap, a scroll or a hidden tab stops it
+function autoNext(ids) {
+  const card = $('modalCard'), b = ids.map((id) => $(id)).find(Boolean); if (!b || !card) return;
+  const label = b.textContent; let left = 10;
+  const stop = () => { clearInterval(iv); if (b.isConnected) b.textContent = label; };
+  const iv = setInterval(() => { if (!b.isConnected || state.mode !== 'end' || document.hidden) return stop(); left--; b.textContent = `${label} ${left}`; if (left <= 0) { stop(); b.click(); } }, 1000);
+  card.addEventListener('pointerdown', (e) => { if (e.target !== b && !b.contains(e.target)) stop(); }, { once: true });
+}
+window.__nightFare = { freeShift, quickDerby, autoNext, updHud: (dt) => updateHud(dt), backHint, get RADIO() { return RADIO; }, lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
