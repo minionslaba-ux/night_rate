@@ -884,7 +884,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v162'; window.__errs = [];
+window.APP_VER = 'v163'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6689,7 +6689,9 @@ function gpSave() {
 async function gpAd(kind) {   // 'reward' | 'fullscreen' → true when shown to the end
   const gp = GP.sdk || await gpLoad(); if (!gp || !gp.ads) return null;
   try { if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend(); } catch (e) { /* no audio */ }
-  try { adLog('try', 'gp ' + kind); const ok = kind === 'reward' ? await gp.ads.showRewardedVideo() : await gp.ads.showFullscreen(); adLog(ok ? 'shown' : 'skip', 'gp ' + kind); return !!ok; }
+  try { adLog('try', 'gp ' + kind); let late = false;
+    const ok = await Promise.race([kind === 'reward' ? gp.ads.showRewardedVideo() : gp.ads.showFullscreen(), new Promise((res) => setTimeout(() => { late = true; res(null); }, kind === 'reward' ? 90000 : 20000))]);
+    if (late) { adLog('error', 'gp ' + kind + ': нет ответа'); return null; } adLog(ok ? 'shown' : 'skip', 'gp ' + kind); return !!ok; }
   catch (e) { adLog('error', 'gp ' + kind + ': ' + String(e && e.message || e).slice(0, 120)); return null; }
   finally { try { wakeAudio(); } catch (e) { /* no audio */ } }
 }
@@ -6749,7 +6751,10 @@ async function pkAd(kind) {   // 'rewarded' | 'fullscreen' → { shown, reward }
   try { if (!(await ad.canShow())) { adLog('skip', 'pikabu ' + kind + ': недоступна'); return null; } } catch (e) { return null; }
   const wasPaused = state.mode === 'paused'; if (!wasPaused && (state.mode === 'drive' || state.mode === 'foot')) pauseGame();
   try { if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend(); } catch (e) { /* no audio */ }
-  try { adLog('try', 'pikabu ' + kind); const r = await ad.show(); adLog(r && r.rendered ? 'shown' : 'error', 'pikabu ' + kind + (r && r.reason ? ': ' + r.reason : '') + (r && 'reward' in r ? ' reward=' + r.reward : '')); return r && r.rendered ? { shown: true, reward: !!r.reward } : null; }
+  try { adLog('try', 'pikabu ' + kind);
+    // v163: an ad that never answers must not hold the game: after 20 s (fullscreen) / 90 s (rewarded) — on without it
+    let late = false; const r = await Promise.race([ad.show(), new Promise((res) => setTimeout(() => { late = true; res(null); }, kind === 'fullscreen' ? 20000 : 90000))]);
+    if (late) { adLog('error', 'pikabu ' + kind + ': нет ответа ' + (kind === 'fullscreen' ? 20 : 90) + ' с'); return null; } adLog(r && r.rendered ? 'shown' : 'error', 'pikabu ' + kind + (r && r.reason ? ': ' + r.reason : '') + (r && 'reward' in r ? ' reward=' + r.reward : '')); return r && r.rendered ? { shown: true, reward: !!r.reward } : null; }
   catch (e) { adLog('error', 'pikabu ' + kind + ': ' + String(e && e.message || e).slice(0, 120)); return null; }
   finally { try { wakeAudio(); } catch (e) { /* no audio */ } }
 }
@@ -7680,6 +7685,21 @@ function makeScripted(kind, path, x, z, h, o) {
   });
   e.g.position.copy(e.pos); e.g.rotation.y = h; enemyCars.push(e); return e;
 }
+// v163: a scripted car with lights:true (the grey car in «Хвост») obeys the city's traffic lights — players saw it run reds
+function scriptedRed(e) {
+  const fx = Math.sin(e.h), fz = Math.cos(e.h), alongZ = Math.abs(fz) > Math.abs(fx), dir = Math.sign(alongZ ? fz : fx);
+  if (Math.abs(alongZ ? fz : fx) < 0.85) return 1e9;   // turning
+  const p = alongZ ? e.pos.z : e.pos.x, side = alongZ ? e.pos.x : e.pos.z;
+  const road = ROADS.reduce((a, q) => (Math.abs(q - side) < Math.abs(a - side) ? q : a)); if (Math.abs(road - side) > 9) return 1e9;
+  let g = null; for (const q of ROADS) { const d = (q - p) * dir; if (d > 0 && (g === null || d < (g - p) * dir)) g = q; }
+  if (g === null) return 1e9;
+  const node = alongZ ? [road, g] : [g, road]; if (SIG.noNodes.has(node[0] + ',' + node[1])) return 1e9;
+  const ph = SIG.phase[alongZ ? 'ns' : 'ew']; if (ph === 'g') return 1e9;
+  const left = Math.abs(g - p) - 13.5, v = Math.abs(e.vf || 0);
+  if (left < -0.5 || left > 30) return 1e9;
+  if (ph === 'y' && left < Math.max(4, v * v / 20)) return 1e9;
+  return Math.max(0, left * 0.9);
+}
 function driveScripted(e, dt) {
   if (e.disabled || e.arrived) {
     carPhysics(e, dt, Math.abs(e.vf || 0) > 0.6 ? -1 : 0, 0, false, 10);
@@ -7697,6 +7717,7 @@ function driveScripted(e, dt) {
   const dT = Math.hypot(T.x - e.pos.x, T.z - e.pos.z);
   let want = e.wait > 0 ? 0 : e.speed * (Math.abs(diff) > 0.5 ? 0.45 : 1);
   if (dT < 22) want = Math.min(want, 12);
+  if (e.lights) { const c = scriptedRed(e); e.red = c < 1e9; want = Math.min(want, c); }
   e.wait -= dt;
   const vf = e.vf || 0, thr = vf < want - 1 ? 1 : vf > want + 1.5 ? -0.8 : 0;
   carPhysics(e, dt, thr, clamp(-diff * 2.6, -1, 1), false, e.speed + 3);
@@ -7713,7 +7734,8 @@ function finishChapter(n, coins, lines, next) {
   ep2Save(n + 1); addCoins(coins); profStat('chapters');
   for (const e of enemyCars) if (!e.script) { scene.remove(e.g); e.dead = true; }
   clearBullets(); setEngine(0, false); pc.vel.set(0, 0, 0);
-  playDialog(lines, next);
+  // v163: missions 2–6 start straight from this dialog — log their start too (before: the journal never saw them)
+  playDialog(lines, () => { next(); if (state.ep === 2 && state.ch === n + 1) missionLog('start', null, { type: 'ep2', title: 'Эпизод 2 · миссия ' + (n + 1) }); });
 }
 // v131: «ещё шанс за рекламу» after a failed mission (time out, spotted, target lost): the mission that can go on hands over how to
 // (secondSet, called right at the fail check — +25 s, or the suspicion and the distance reset); once per try, from the same spot
@@ -7758,7 +7780,7 @@ function ch1(intro) {
     for (const a of allies) scene.remove(a.g); allies.length = 0;
     beginDrive(140, -80, -PI / 2);
     const route = [[80, -80], [80, 0], [160, 0], [160, 80], [80, 80], [80, 160], [0, 160], [0, 80], [-80, 80], [-80, 0], [-80, -80], [-160, -80], [-160, 80], [-160, 160], [-120, 160]];
-    const t = makeScripted('tail', route, 104, -80, -PI / 2, { speed: 17, stops: { 2: 4, 5: 5, 8: 4, 11: 5 } });
+    const t = makeScripted('tail', route, 104, -80, -PI / 2, { speed: 17 }); t.lights = true;
     MIS = {
       title: 'Миссия 1 · Хвост', noFire: true, chase: null, sus: 0, lost: 0, target: t, navName: 'Серая машина',
       // v129: softer for those who fail it (on Pikabu: 8 tries on a phone, «spotted» 2 s after a restart — the car starts 36 m
@@ -7779,7 +7801,7 @@ function ch1(intro) {
           t.speed = this.waiting ? 0 : d > 55 ? 13 : 17; }
         this.grace = Math.max(0, this.grace - dt);
         if (this.grace > 0) this.sus = 0;
-        else if (d < 12) this.sus += rate * (d < 6 ? 0.8 : 0.5) * dt; else this.sus = Math.max(0, this.sus - 12 * dt);
+        else if (d < 12) { this.sus += rate * (d < 6 ? 0.8 : 0.5) * (t.red ? 0.4 : 1) * dt; if (t.red && !this.redHint) { this.redHint = true; toast('Красный — встань подальше, не прижимайся', 2.4); } } else this.sus = Math.max(0, this.sus - 12 * dt);
         if (d > far) this.lost += dt; else this.lost = Math.max(0, this.lost - dt * 2);
         if (this.sus >= 100 && secondSet(((sp) => () => { this.sus = 0; this.lost = 0; this.grace = 4; t.speed = sp; })(t.speed))) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 12 метров.'); }
         if (this.lost > 20 && !this.warned) { this.warned = true; toast('Ты далеко от цели — возвращайся! Стрелка ведёт к ней.', 3.2); }
@@ -10189,7 +10211,7 @@ function needCoins(price, what, alt) {
   draw();
   if (web && !PAY.checked) payCheck().then(() => { if (!$('modal').hidden && $('modal').classList.contains('over')) draw(); });
 }
-function profStat(k, n) { if (DQ_KINDS[k]) dqAdd(k, n === undefined ? 1 : n); if (k === 'chapters') { runEnd('win'); sfx.win(); } PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(loginNudge, 3000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(joinNudge, 9000); if (k === 'chapters' && store.get('nf-ref') && PROF.st.chapters >= 3) setTimeout(() => refTry(false), 6000); if (k === 'chapters' && PROF.st.chapters >= 3) setTimeout(adBetween, 1500); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
+function profStat(k, n) { if (DQ_KINDS[k]) dqAdd(k, n === undefined ? 1 : n); if (k === 'chapters') { runEnd('win'); sfx.win(); } PROF.st[k] = (PROF.st[k] || 0) + (n === undefined ? 1 : n); saveProfile(); checkAch(); if (k === 'chapters' && PROF.st.chapters === 1) setTimeout(loginNudge, 3000); if (k === 'chapters' && PROF.st.chapters === 2) setTimeout(joinNudge, 9000); if (k === 'chapters' && store.get('nf-ref') && PROF.st.chapters >= 3) setTimeout(() => refTry(false), 6000); if (k === 'chapters' && PROF.st.chapters >= 3) AD_PEND = Date.now(); if (k === 'chapters') setTimeout(pushAsk, PROF.st.chapters === 1 ? 26000 : 20000); if (k === 'chapters' || k === 'fares') setTimeout(pushStateSend, 2000); }
 // ---------------- our communities: players join themselves (no platform lets a game add people) ----------------
 // The VK group is offered on the website and inside VK (one tap via VK's own dialog); a Telegram channel and MAX will be added when they exist.
 const COMMUNITY = { vkGroup: 242985713, vkUrl: 'https://vk.ru/club242985713', tgUrl: 'https://t.me/nightfaregame', maxUrl: '' };
@@ -10322,6 +10344,16 @@ function adLog(ev, note) {
   try { const U = uaInfo(); fetch(SB_URL + '/rest/v1/nf_ads', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Prefer: 'return=minimal' },
     body: JSON.stringify([{ ver: window.APP_VER, net: PLATFORM, ev, note: note ? String(note).slice(0, 190) : null, device: U.device, browser: U.browser }]) }).catch(() => {}); } catch (e) { /* no log */ }
 }
+// v163: on Pikabu ~5 of 22 fullscreen ads shown right after a win (over the story dialog) never answered and the game «froze»
+// (afk.BOT after «Хвост»). Now the ad waits for a calm moment: an end screen or the menu, the tab in view; never in play or a dialog
+let AD_PEND = 0;
+setInterval(() => {
+  if (!AD_PEND || document.hidden) return;
+  if (Date.now() - AD_PEND > 20 * 60e3) { AD_PEND = 0; return; }
+  const calm = (typeof $ === 'function' && $('modal') && !$('modal').hidden && !['drive', 'foot', 'dialog', 'cine'].includes(state.mode)) || ['preview', 'select'].includes(state.mode);
+  if (!calm) return;
+  AD_PEND = 0; adBetween();
+}, 1500);
 function adBetween() {
   if (Date.now() - (store.get('nf-rw-at') || 0) < 3 * 60e3) return;
   if (PIKABU) { if (PK_DIRECT) pkBetween(); else gpBetween(); return; }
@@ -15502,7 +15534,7 @@ function autoNext(ids) {
   const iv = setInterval(() => { if (!b.isConnected || state.mode !== 'end' || document.hidden) return stop(); left--; b.textContent = `${label} ${left}`; if (left <= 0) { stop(); b.click(); } }, 1000);
   card.addEventListener('pointerdown', (e) => { if (e.target !== b && !b.contains(e.target)) stop(); }, { once: true });
 }
-window.__nightFare = { freeShift, quickDerby, autoNext, updHud: (dt) => updateHud(dt), backHint, get RADIO() { return RADIO; }, lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
+window.__nightFare = { get AD_PEND() { return AD_PEND; }, scriptedRed, get SIGP() { return SIG.phase; }, freeShift, quickDerby, autoNext, updHud: (dt) => updateHud(dt), backHint, get RADIO() { return RADIO; }, lambertAll, get LAMB() { return LAMB; }, showEnd1: () => showEnd(), skipDialog, get dlg() { return dlg; }, updDlg: (dt) => updateDialog(dt), PWR, pwrTick, pwrTake, pwrClear, dailyKinds, STYLE, styleEv, carFx, damagePlayer, dailyFinish, dailyChapterT: () => dailyChapter(), get perfObj() { return perf; }, perfReport, missionDetail, FARC, fxCoins, fxStars, fxBig, menuNudge, dailyState, TD, tdEnd, extrasUpdate, dqRender, dqToday, walletAdd, dqAdd, get SHADERS() { return { psc: !!PSC, ms: window.__shadersMs, warm: window.__warm }; }, JERSEY, autoFirstRide, setPerfLevel(L) { perf.level = L; perfApply(); }, get REV() { return { q: REV.q ? REV.q.length : null, ms: window.__revealMs }; }, CITIES, showAd, profStat, showModal, get gateState() { return { gatePlace, gateOffered }; }, DRIFTX: { SKID, DRIFT }, storyChoice, dailyOpen, dailyStart, get PERF() { return { gpu: GPU, weak: WEAK_GPU, phone: PHONE, gfx: GFX.pref, pr: renderer.getPixelRatio(), level: perf.level, comp: !!composer, bloom: !!(bloomPass && bloomPass.enabled), sm: moon.shadow.mapSize.x, skip: perf.shadowSkip, fps: perf.st ? +(perf.sf / perf.st).toFixed(1) : 0, low: +perf.low.toFixed(1), sent: perf.sent, win: perf.win, last: perf.last, slow: perf.slow, cool: perf.cool, hd: HD() }; }, get AUDIO() { return audio; }, get PICKUPS() { return pickups; }, get COLLIDERS() { return colliders; }, freeSpotT: (x, z) => freeSpot(x, z, 1), arenaDef: (a) => arenaDef(a), reachD: (x, z, r) => { const q = new V3(); const free = (px, pz) => { for (let a = -1; a < 8; a++) { q.set(px + (a < 0 ? 0 : Math.cos(a * PI / 4) * r), 0.5, pz + (a < 0 ? 0 : Math.sin(a * PI / 4) * r)); if (inColliders(q)) return false; } return true; }; for (let d = 0; d <= 12; d += 0.25) for (let k = 0; k < (d ? 24 : 1); k++) { const px = x + Math.cos(k / 24 * PI * 2) * d, pz = z + Math.sin(k / 24 * PI * 2) * d; if (free(px, pz)) return d; } return 99; }, sfx, skid: (k, kick) => skid(k, kick), get LOGINX() { return { nfPublic, pollSleep, pollKick, cloudInit }; }, get PATHX() { return { LINES, nextStep, epOpen, epDone, missionsDone, missionsTotal, renderMenuPath, showEndGen, showEnd2, checkRank, rankAt }; }, get CITY() { return CITY; }, get CT() { return CT; }, bullets, damageEnemy, get S3T() { return S3.targets; }, get S3() { return S3; }, MUS, initAudio, LOW, DRY, LCOLS, LOWP, INT, NR, LIFE, colliders, render, CONTS, GLBC, applyLoadout, POLM, POLICE, inColliders, setObjective, WEAPONS, WPN, curW, makeHuman, PLATFORM, showEndGen, VIL, zoneTasks, zoneTaskStart, useAmmo, buyAmmo, ITEMS, NAV, GOAL, get TR() { return TR; }, TRK, updNav: updateNav, startMission, DIFF, diffMult, diffKey, runEnd, failChapter, finishChapter, adBetween, pushAsk, pushCan, get CARE() { return CARE; }, careState, careAct, careTow, careUpdate, damagePlayer, get SIG() { return SIG; }, joinNudge, scene, WX, wxCyclePref, genTask2, HITS, TMARKS, renderTasks, sfx, audioSwap, get audio() { return audio; }, get muted() { return muted; }, setView, pauseGame, get HELI() { return HELI; }, damageHeli, get PROF() { return PROF; }, LIFE, KIT, BANKX, setVault, showSelect, setMood, beam, EPS, startGen, startEpisode, sim(n, dt) { for (let i = 0; i < n; i++) { state.t += dt; if (state.mode === 'drive') { if (i % 6 === 0 && MIS && MIS.navGoal) updateNav(pc.pos, state.ep === 1 ? GOAL : MIS.navGoal()); updateDrive(dt); } else if (state.mode === 'foot') updateFoot(dt); else break; updateBullets(dt); } }, get spawnQueue() { return spawnQueue; }, get MIS() { return MIS; }, startEpisode2, startChapter, allies, pickups, keys, joy, mouse, get showFig() { return showFig; }, get camera() { return camera; }, pv, renderer, state, get pc() { return pc; }, get hero() { return hero; }, get CH() { return CH; }, get P() { return P; }, enemies, enemyCars, advanceDialog, selectChar, GATE, DOOR, showDead, BOTS, JOBS, TASK, genTask, taskStart, taskDone, CLOUD, PARTY, partySync, ONL, startOnline, onlinePos, cycleView, get carView() { return carView; }, get aimHeld() { return aimHeld; }, curView: () => curView(), get viewYaw() { return viewYaw; }, get touchFire() { return touchFire; }, openProfile, resize, gateNext, renderGate, makeCar, KIT, CARS, applyLoadout, buildNine, ASSETS };
 })();
 </script>
 </body>
