@@ -855,7 +855,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v163'; window.__errs = [];
+window.APP_VER = 'v164'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -956,7 +956,7 @@ const WEAK_GPU = isTouch && (/Mali-(G31|G51|G52|G57|T\d)|Adreno \(TM\) ([345]\d\
 // old Apple devices (iOS 16 and older, or a 9.7-inch iPad 768×1024): 1000+ draw calls a frame is more than their processor can feed
 const OLD_IOS = IOS && ((IOS_VER > 0 && IOS_VER <= 16) || (Math.min(screen.width, screen.height) <= 768 && Math.max(screen.width, screen.height) <= 1024));
 const PHONE = isTouch && (Math.min(screen.width, screen.height) < 600 || IOS);
-const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 || LITE_MEM ? 1 : isTouch ? (WEAK_GPU || OLD_IOS ? 1.25 : 1.5) : 1.75), PR_HD = Math.min(DPR, 2);
+const DPR = window.devicePixelRatio || 1, PR_BASE = Math.min(DPR, CRASH >= 2 || LITE_MEM ? 1 : isTouch ? (WEAK_GPU || OLD_IOS ? 1.25 : 1.5) : 1.75), PR_HD = Math.min(DPR, IOS && Math.min(screen.width, screen.height) < 600 ? 1.5 : 2);   // v164: iPhone in HD at 2× drew 19–35 fps (41% slow frames); 1.5× is still sharp
 const HD = () => GFX.pref === 'hd';
 if (CRASH >= 1) setTimeout(() => toast('Игра перезапустилась после сбоя: включена облегчённая графика. Вернуть HD можно в паузе.', 5), 6000);
 renderer.setPixelRatio(HD() ? PR_HD : PR_BASE);
@@ -7771,7 +7771,10 @@ function ch1(intro) {
           t.speed = this.waiting ? 0 : d > 55 ? 13 : 17; }
         this.grace = Math.max(0, this.grace - dt);
         if (this.grace > 0) this.sus = 0;
-        else if (d < 12) { this.sus += rate * (d < 6 ? 0.8 : 0.5) * (t.red ? 0.4 : 1) * dt; if (t.red && !this.redHint) { this.redHint = true; toast('Красный — встань подальше, не прижимайся', 2.4); } } else this.sus = Math.max(0, this.sus - 12 * dt);
+        // v164: on Pikabu both «spotted» fails came at 5–6 m with a battered car — players rammed the grey car. First time too close:
+        // a clear warning and 2 s to back off; at half suspicion one more warning
+        else if (d < 12 && !this.closeHint && !t.red) { this.closeHint = true; this.grace = 2; toast('Не прижимайся и не тарань — спугнёшь! Держись в 15–60 м', 3.2); }
+        else if (d < 12) { if (this.sus > 50 && !this.susHint) { this.susHint = true; toast('Подозрение растёт — отстань!', 2.4); } this.sus += rate * (d < 6 ? 0.8 : 0.5) * (t.red ? 0.4 : 1) * dt; if (t.red && !this.redHint) { this.redHint = true; toast('Красный — встань подальше, не прижимайся', 2.4); } } else this.sus = Math.max(0, this.sus - 12 * dt);
         if (d > far) this.lost += dt; else this.lost = Math.max(0, this.lost - dt * 2);
         if (this.sus >= 100 && secondSet(((sp) => () => { this.sus = 0; this.lost = 0; this.grace = 4; t.speed = sp; })(t.speed))) { t.speed = 40; return failChapter('Тебя заметили', '«Шакалы» поняли, что за ними хвост, и ушли переулками. Держись дальше 12 метров.'); }
         if (this.lost > 20 && !this.warned) { this.warned = true; toast('Ты далеко от цели — возвращайся! Стрелка ведёт к ней.', 3.2); }
