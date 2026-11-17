@@ -855,7 +855,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v164'; window.__errs = [];
+window.APP_VER = 'v165'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1281,7 +1281,7 @@ sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
 })();
 
 // lights: cool moonlight with shadows, soft sky/ground fill, a flash light for shots and explosions
-const hemi = new THREE.HemisphereLight(0x8090ff, 0x3a2a30, 0.7);
+const hemi = new THREE.HemisphereLight(0x8090ff, 0x3a2a30, 1.05);   // v165: 0.7 → 1.05, the road was flat black
 scene.add(hemi);
 const moon = new THREE.DirectionalLight(0xa8b8ff, 0.7);
 moon.castShadow = true;
@@ -2797,7 +2797,7 @@ function cityMats() {
   CITY_MATS = {
     trim: [S({ roughness: 0.9, envMapIntensity: 0.3 }), true], roof: [S({ roughness: 0.95, envMapIntensity: 0.2 }), false],
     metal: [S({ roughness: 0.4, metalness: 0.7, envMapIntensity: 0.8 }), true], neon: [KIT.neonMat || Bm({}), false],
-    asph: [S({ map: asphaltTex, color: 0x9a9aa2, roughness: 0.85, envMapIntensity: 0.6 }), false],
+    asph: [S({ map: asphaltTex, color: 0xb0c0d4, roughness: 0.85, envMapIntensity: 0.6 }), false],
     glassA: [S({ map: airGlassTex, emissiveMap: airGlassTex, emissive: new THREE.Color(0.42, 0.38, 0.32), color: 0x8a90a0, roughness: 0.15, metalness: 0.55, envMapIntensity: 1.6 }), false],
     glass: [S({ map: airGlassTex, emissiveMap: airGlassTex, emissive: new THREE.Color(0.36, 0.4, 0.5), color: 0x6a7c9a, roughness: 0.12, metalness: 0.6, envMapIntensity: 1.8 }), true],
     stone: [S({ map: stoneTex, roughness: 0.85, envMapIntensity: 0.4 }), true], brick: [S({ map: brickWallTex, roughness: 0.9, envMapIntensity: 0.3 }), true],
@@ -3481,7 +3481,7 @@ function updateStation(dt) {
 
 function buildWorld() {
   // asphalt with puddles (low roughness patches reflect the city)
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(720, 486), new THREE.MeshStandardMaterial({ map: asphaltTex, roughnessMap: puddleTex, roughness: 1, metalness: 0.0, envMapIntensity: 0.9, color: 0x9a9aa2 }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(720, 486), new THREE.MeshStandardMaterial({ map: asphaltTex, roughnessMap: puddleTex, roughness: 1, metalness: 0.0, envMapIntensity: 0.9, color: 0xb0c0d4 }));
   ground.rotation.x = -PI / 2; ground.position.set(0, 0, -67); ground.receiveShadow = true; scene.add(ground); KIT.groundMat = ground.material;
   putB(B.water, G.box, 0, -1.6, 310, 900, 0.2, 260, 0, col(0xffffff));
   boxB(B.trim, -360, -1.6, 176, 360, 0.15, 182, { col: col(0x55525a) });
@@ -3607,7 +3607,7 @@ function buildWorld() {
   meshB(B.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, envMapIntensity: 0.2 }), false);
   meshB(B.metal, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.7, envMapIntensity: 0.8 }), true);
   KIT.neonMat = meshB(B.neon, new THREE.MeshBasicMaterial({ vertexColors: true }), false).material;
-  meshB(B.asph, new THREE.MeshStandardMaterial({ map: asphaltTex, vertexColors: true, color: 0x9a9aa2, roughness: 0.85, envMapIntensity: 0.6 }), false);
+  meshB(B.asph, new THREE.MeshStandardMaterial({ map: asphaltTex, vertexColors: true, color: 0xb0c0d4, roughness: 0.85, envMapIntensity: 0.6 }), false);
   meshB(B.glassA, new THREE.MeshStandardMaterial({ map: airGlassTex, emissiveMap: airGlassTex, emissive: new THREE.Color(0.42, 0.38, 0.32), color: 0x8a90a0, vertexColors: true, roughness: 0.15, metalness: 0.55, envMapIntensity: 1.6 }), false);
   meshB(B.stone, new THREE.MeshStandardMaterial({ map: stoneTex, vertexColors: true, roughness: 0.85, envMapIntensity: 0.4 }), true);
   meshB(B.brick, new THREE.MeshStandardMaterial({ map: brickWallTex, vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true);
@@ -4471,7 +4471,7 @@ function buildAtmosphere() {
   // volumetric-looking cones: one instanced mesh, additive, brighter at the lamp head and fading to the ground
   const coneTex = canvasTex(4, 128, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0.0)'); gr.addColorStop(0.06, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
   const geo = new THREE.CylinderGeometry(0.35, 3.4, 7.0, 20, 1, true); geo.translate(0, -3.5, 0);
-  const mat = new THREE.MeshBasicMaterial({ map: coneTex, color: new THREE.Color(0.26, 0.19, 0.11), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true });
+  const mat = new THREE.MeshBasicMaterial({ map: coneTex, color: new THREE.Color(0.26, 0.19, 0.11).multiplyScalar(0.55), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true });
   // a cone fades out when the camera is inside or right next to it, instead of washing the whole frame white
   nearFade(mat, 3, 12);
   ATMO.coneMat = mat;
@@ -4479,6 +4479,24 @@ function buildAtmosphere() {
   const m4 = new THREE.Matrix4();
   LAMP_HEADS.forEach(([x, y, z], i) => { m4.makeTranslation(x, y - 0.1, z); cones.setMatrixAt(i, m4); });
   cones.frustumCulled = false; cones.renderOrder = 3; scene.add(cones); ATMO.cones = cones;
+  // v165: wet asphalt — each lamp leaves a long soft reflection on the road that stretches toward the viewer (as on a rainy street).
+  // One instanced quad per lamp; the vertex shader turns it to the camera along the ground, so it costs almost nothing
+  const stTex = canvasTex(32, 128, (g, w, h) => { const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.setTransform(1, 0, 0, h / w, 0, 0); g.fillStyle = gr; g.fillRect(0, 0, w, w); });
+  const stGeo = new THREE.PlaneGeometry(1, 1); stGeo.rotateX(-PI / 2);
+  const stMat = new THREE.MeshBasicMaterial({ map: stTex, color: new THREE.Color(0.34, 0.25, 0.14), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: true });
+  stMat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', `
+      vec3 ctr = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+      vec2 toCam = cameraPosition.xz - ctr.xz; float dc = max(length(toCam), 0.001); vec2 fw = toCam / dc; vec2 sd = vec2(fw.y, -fw.x);
+      float len = clamp(dc * 0.22, 3.0, 9.0); vSf = smoothstep(8.0, 22.0, dc);
+      vec3 wp = ctr + vec3(sd.x * position.x * 1.2 + fw.x * (position.z * len + len * 0.5 - 1.0), 0.06, sd.y * position.x * 1.2 + fw.y * (position.z * len + len * 0.5 - 1.0));
+      vec4 mvPosition = viewMatrix * vec4(wp, 1.0); gl_Position = projectionMatrix * mvPosition;`);
+    sh.vertexShader = 'varying float vSf;\n' + sh.vertexShader; sh.fragmentShader = 'varying float vSf;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.rgb *= vSf;');
+  };
+  stMat.customProgramCacheKey = () => 'wetStreak';
+  const streaks = new THREE.InstancedMesh(stGeo, stMat, LAMP_HEADS.length);
+  LAMP_HEADS.forEach(([x, y, z], i) => { m4.makeTranslation(x, 0, z); streaks.setMatrixAt(i, m4); });
+  streaks.frustumCulled = false; streaks.renderOrder = 2; scene.add(streaks); ATMO.streaks = streaks; ATMO.streakMat = stMat;
   // a slow layer of moonlit clouds under the sky dome
   const cloudTex = canvasTex(1024, 512, (g, w, h) => {
     g.clearRect(0, 0, w, h);
@@ -4511,8 +4529,8 @@ function updateAtmosphere(dt) {
 }
 function atmoMood(m) {
   if (!ATMO.coneMat) return;
-  ATMO.cones.visible = m !== 'blackout';
-  ATMO.coneMat.color.setRGB(0.26, 0.19, 0.11).multiplyScalar(m === 'dawn' ? 0.25 : 1);
+  ATMO.cones.visible = m !== 'blackout'; if (ATMO.streaks) ATMO.streaks.visible = m !== 'blackout' && m !== 'dawn';
+  ATMO.coneMat.color.setRGB(0.26, 0.19, 0.11).multiplyScalar(0.55 * (m === 'dawn' ? 0.25 : 1));
   ATMO.clouds.material.color.setRGB(1.1, 1.0, 1.25).multiplyScalar(m === 'dawn' ? 1.6 : m === 'blackout' ? 0.6 : 1);
 }
 
