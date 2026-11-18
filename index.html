@@ -884,7 +884,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v168'; window.__errs = [];
+window.APP_VER = 'v169'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6216,14 +6216,14 @@ let touchFire = false, touchDrift = false;
 window.addEventListener('keydown', (e) => {
   if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) { if (e.code === 'Escape' && ONL.on) toggleChat(false); return; }
   if (ONL.on && state.mode === 'drive' && !e.repeat && (e.code === 'Enter' || e.code === 'KeyT')) { e.preventDefault(); toggleChat(true); return; }
-  if (ONL.on && !e.repeat && e.code === 'KeyH') onlineHonkMine();
+  if (ONL.on && !e.repeat && e.code === 'KeyH' && state.mode !== 'foot') onlineHonkMine();
   if (ONL.on && !e.repeat && e.code === 'KeyG') talk(true);
   if (!ONL.on && !e.repeat && e.code === 'KeyG') s3Flash();
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (state.mode === 'dialog' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) advanceDialog();
   if (!e.repeat && e.code === 'KeyN') useBoost('nitro');
-  if (!e.repeat && e.code === 'KeyQ' && (state.mode === 'foot' || state.mode === 'drive')) useKit();
+  if (!e.repeat && ((e.code === 'KeyQ' && state.mode === 'drive') || (e.code === 'KeyH' && state.mode === 'foot'))) useKit();   // v169: on foot Q/E turn, the medkit is H
   if (!e.repeat && e.code === 'KeyJ' && state.mode === 'drive') useBoost('auto');
   if (!e.repeat && e.code === 'KeyR' && (state.mode === 'drive' || state.mode === 'foot')) buyAmmo();
   if (!e.repeat && e.code === 'KeyB') useBoost('shield');
@@ -6279,7 +6279,7 @@ $('btnFire').addEventListener('pointermove', (e) => {
 ['pointerup', 'pointercancel'].forEach((ev) => $('btnFire').addEventListener(ev, (e) => { if (e.pointerId === fireLook.id) fireLook.id = null; }));
 const fireHeld = () => mouse.down || keys.Space || keys.KeyF || touchFire;
 let touchMelee = false;
-const meleeHeld = () => keys.KeyE || touchMelee;
+const meleeHeld = () => keys.KeyC || touchMelee;   // v169: E turns on foot, the punch moved to C
 function doMelee() {
   const now = state.t, combo = now - (hero.lastMelee || -9) < 1.0 ? ((hero.combo || 0) + 1) % 3 : 0, kick = combo === 2;
   hero.lastMelee = now; hero.combo = combo; hero.meleeCd = kick ? 0.6 : 0.36;
@@ -7532,11 +7532,15 @@ function spawnEnemy(x, z, boss, cfg) {
   return e;
 }
 const aimPlane = new THREE.Plane(new V3(0, 1, 0), -1.0), ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), aimPt = new V3();
+const QE_HINT = { done: false };
 function updateFoot(dt) {
   const mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.x;
   const mz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + joy.y;
   const look3 = curView() !== 'top';
   if (look3) viewTurnFallback(dt);
+  // v169: Q / E turn the view on foot (a player on Pikabu: «на компе в перестрелке можно только вперёд, назад и вбок»)
+  if (look3) { const qe = (keys.KeyQ ? 1 : 0) - (keys.KeyE ? 1 : 0); if (qe) viewYaw += qe * dt * 2.6; }
+  if (look3 && !isTouch && !QE_HINT.done && state.mode === 'foot') { QE_HINT.done = true; if (!store.get('nf-qe-hint')) { store.set('nf-qe-hint', 1); setTimeout(() => { if (state.mode === 'foot') toast('Поворот — Q / E или мышью (кликни по экрану)', 3.2); }, 1200); } }
   const mv = look3 ? viewMove(mx, mz) : new V3(mx, 0, mz); if (mv.length() > 1) mv.normalize();
   const vel = mv.clone().multiplyScalar(9);
   hero.pos.addScaledVector(vel, dt); collideCircle(hero.pos, vel, 0.6);
@@ -9997,7 +10001,7 @@ function updateHud(dt) {
   if (boss) bars = bars.concat([{ label: boss.name || 'Бригадир «Шакалов»', frac: boss.hp / boss.max }]);
   if (HELI && !HELI.crash && !HELI.invuln && (state.mode === 'drive' || state.mode === 'foot')) bars = bars.concat([{ label: HELI.name, frac: HELI.hp / HELI.max, color: '#c0ff6a' }]);
   renderBars(bars, timer, tbad);
-  { const I = PROF.inv, ht = state.act === 1 ? `WASD — руль · Shift — занос · пробел — огонь · N — нитро ×${I.nitro} · B — щит ×${I.shield}` : `WASD — бег · ${footView === 'top' ? 'мышь — прицел' : 'мышь — обзор'} · клик — огонь · E — удар · V — камера · B — щит ×${I.shield}`;
+  { const I = PROF.inv, ht = state.act === 1 ? `WASD — руль · Shift — занос · пробел — огонь · N — нитро ×${I.nitro} · B — щит ×${I.shield}` : `WASD — бег · ${footView === 'top' ? 'мышь — прицел' : 'мышь — обзор'} · ${footView === 'top' ? '' : 'Q/E — поворот · '}клик — огонь · C — удар · H — аптечка · V — камера · B — щит ×${I.shield}`;
     if ($('hint').textContent !== ht) $('hint').textContent = ht;
     // the key hint shows for 10 s after a mission starts or you leave/enter the car, then gets out of the way
     const hk = state.ep + ':' + state.ch + ':' + state.act; if (HINT.k !== hk) { HINT.k = hk; HINT.t = state.t; } document.body.classList.toggle('hint-off', state.t - HINT.t > 10); }
