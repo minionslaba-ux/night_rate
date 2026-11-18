@@ -855,7 +855,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v169'; window.__errs = [];
+window.APP_VER = 'v170'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -1020,7 +1020,7 @@ const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 1200);
 camera.position.set(0, 80, 140);
 
 // post-processing: HDR scene -> bloom -> ACES tone map + sRGB + vignette
-let composer = null, bloomPass = null, finalPass = null, fxaaPass = null;
+let composer = null, bloomPass = null, finalPass = null, fxaaPass = null, LITE_PR = 1;
 const FinalShader = {
   uniforms: { tDiffuse: { value: null }, exposure: { value: 1.05 }, time: { value: 0 }, speed: { value: 0 }, dof: { value: 0 }, vig: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -1049,18 +1049,21 @@ const FinalShader = {
     '}',
   ].join('\n'),
 };
-function setupPost() {
+function setupPost(lite) {
   if (!THREE.EffectComposer || !THREE.UnrealBloomPass || !THREE.ShaderPass) return;
   try {
     const gl2 = renderer.capabilities.isWebGL2;
-    const msaa = gl2 && (!isTouch || HD()); const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: msaa ? 4 : 0 });
+    // v170: lite steps too — 4× MSAA is nearly free on phone (tile) GPUs at 0.47–0.8 resolution
+    const msaa = gl2 && (lite || !isTouch || HD()); const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: msaa ? 4 : 0 });
     composer = new THREE.EffectComposer(renderer, rt);
     composer.addPass(new THREE.RenderPass(scene, camera));
-    bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.55, 0.95);
-    composer.addPass(bloomPass);
+    // v170: «lite» (perf steps 4–6, weak phones and laptops at 0.47–0.8 resolution) — no bloom, but the same colour grade and FXAA:
+    // before, these steps drew the raw scene with no edge smoothing at all, and the low resolution made every edge a staircase
+    bloomPass = null; if (!lite) { bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.55, 0.95); composer.addPass(bloomPass); }
+    composer.lite = !!lite;
     finalPass = new THREE.ShaderPass(FinalShader); composer.addPass(finalPass);
     // smooth edges: phones render without MSAA, so FXAA runs last on the graded image
-    if (THREE.FXAAShader && !msaa) { fxaaPass = new THREE.ShaderPass(THREE.FXAAShader); composer.addPass(fxaaPass); }
+    fxaaPass = null; if (THREE.FXAAShader && !msaa) { fxaaPass = new THREE.ShaderPass(THREE.FXAAShader); composer.addPass(fxaaPass); }
   } catch (e) { composer = null; }
 }
 setupPost();
@@ -1158,8 +1161,10 @@ function resize() {
   if (w === RS.w && h === RS.h && pr === RS.pr) return;   // nothing changed: keep the GPU buffers
   RS.w = w; RS.h = h; RS.pr = pr; RS.pending = false;
   renderer.setSize(w, h, false);
-  if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); }
-  if (fxaaPass) { const pr = renderer.getPixelRatio(); fxaaPass.material.uniforms.resolution.value.set(1 / (w * pr), 1 / (h * pr)); }
+  const ipr = composer && composer.lite ? LITE_PR : renderer.getPixelRatio();
+  if (composer) { composer.setPixelRatio(ipr); composer.setSize(w, h); }
+  if (fxaaPass) { const pr = renderer.getPixelRatio();   // v170: FXAA works on the stretched (screen-size) picture, where the steps are
+    fxaaPass.material.uniforms.resolution.value.set(1 / (w * pr), 1 / (h * pr)); }
   camera.aspect = w / h;
   document.body.classList.toggle('hud-s', w < h && (h < 700 || (isTouch && w < 600)));   // v149: the compact HUD for a small upright window; v156: and any phone held upright
   camera.fov = w < h ? 72 : 60;
@@ -1204,8 +1209,13 @@ function perfApply() {
   // parked cars, lamps and benches (instanced kit models, ~0.5 M triangles) stop casting shadows
   scene.traverse((o) => { if (o.userData.kitShadow) o.castShadow = L < 3; });
   const pr = L >= 7 ? Math.min(DPR, 0.4) : L >= 6 ? Math.min(DPR, 0.47) : L >= 5 ? Math.min(DPR, 0.7) : L >= 4 && isTouch ? Math.min(DPR, 0.8) : L >= 2 ? Math.min(DPR, 1) : perf.up ? PR_HD : PR_BASE;
-  if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
-  if (L >= 4) composer = null;
+  // v170: on steps 4–6 the scene is still drawn at the low resolution, but into the post-processing buffer; the last pass (FXAA) stretches
+  // it smoothly over a canvas at up to 1× — before, the browser blew the low-resolution canvas up into visible square pixels
+  const lite = L >= 4 && L < 7; LITE_PR = pr;
+  const cpr = lite ? Math.min(DPR, 1) : pr;
+  if (Math.abs(renderer.getPixelRatio() - cpr) > 0.01) { renderer.setPixelRatio(cpr); resize(); }
+  if (L >= 7) composer = null; else if (lite && !(composer && composer.lite)) { composer = null; setupPost(true); }
+  if (lite) { RS.pr = 0; resize(); }
   const lc = lightPlayerCar(); if (perf.lightCar !== lc) { const had = perf.lightCar !== undefined; perf.lightCar = lc; if (had) pcRebuild(); }
 }
 const LAMB = new Map();
@@ -9585,7 +9595,7 @@ function showEndGen(ep) {
   profEp(ep);
   const E = EPS[ep];
   state.mode = 'end'; setEngine(0, false); $('hud').hidden = true; $('touch').hidden = true;
-  const t = Math.round(state.time);
+  const t = Math.round(state.time), kills = state.carKills;
   const render = () => showModal(`
     <div class="kicker">Эпизод ${ep} пройден</div>
     <h2 class="h2 good">${E.endTitle}</h2>
@@ -9599,9 +9609,11 @@ function showEndGen(ep) {
     <div class="btns">
       <button id="mDouble" class="btn x2" type="button" ${state.doubled || !state.coins ? 'disabled' : ''}>${state.doubled ? '✓ Награда удвоена' : `🎬 Ещё +${state.coins} монет за рекламу (×2)`}</button>
       ${endPathBtns(ep)}
+      ${SHARE_BTN('mShare')}
       <button id="mAgain" class="btn" type="button">В меню</button>
     </div>
     ${endPathHtml(ep)}`, Object.assign({
+    mShare: () => shareRecord('episode', `${gx('Прошёл', 'Прошла')} эпизод ${ep} «${EP_NAMES[ep] || E.endTitle}» в «Ночном тарифе» за ${fmt(t)} 🚕${kills ? ` Машин «Шакалов» разбито: ${kills}.` : ''} А ты?`),
     mDouble: () => { hideModal(); showAd(() => { state.doubled = true; walletAdd(state.coins); state.coins *= 2; render(); }); },
     mAgain: () => { hideModal(); showSelect(); },
   }, endPathHandlers(ep)));
@@ -9724,7 +9736,7 @@ function cineUpdate(dt) {
   CINE.speed += (Math.min(1, sp) - CINE.speed) * k; CINE.dof += (0 - CINE.dof) * k;   // no lens blur in dialogs: the scene behind stays sharp CINE.vig += ((bars ? 0.35 : 0) + (CINE.slow > 0 ? 0.3 : 0) - CINE.vig) * k;
   CINE.bloom = Math.max(0, CINE.bloom - dt * 1.6);
   speedLines(state.mode === 'drive' && state.act === 1 && pc ? clamp((Math.abs(pc.vf || 0) - 16) / 16, 0, 1) * (carView === 'cab' ? 0.6 : 1) + (state.nitroT > 0 ? 0.45 : 0) : 0, dt);
-  if (finalPass) { finalPass.uniforms.speed.value = CINE.speed; finalPass.uniforms.dof.value = CINE.dof; finalPass.uniforms.vig.value = CINE.vig; }
+  if (finalPass) { const lite = composer && composer.lite; finalPass.uniforms.speed.value = lite ? 0 : CINE.speed; finalPass.uniforms.dof.value = lite ? 0 : CINE.dof; finalPass.uniforms.vig.value = CINE.vig; }
   if (bloomPass) bloomPass.strength = 0.8 + CINE.bloom;
 }
 function updateCamera(dt) {
@@ -10112,6 +10124,18 @@ function refCopy() {
   const ok = () => { profMsg = PLATFORM === 'web' ? 'Ссылка скопирована — отправь её другу.' : 'Код скопирован — отправь его другу.'; renderProfile(); };
   try { navigator.clipboard.writeText(t).then(ok, () => { profMsg = t; renderProfile(); }); } catch (e) { profMsg = t; renderProfile(); }
 }
+// v170: «Поделиться рекордом» — after the derby, in the free shift's pause and at the end of an episode. VK — the share box,
+// Telegram — the share link, elsewhere — the system share sheet, or the text is copied (Pikabu's frame often blocks the share sheet)
+function shareRecord(kind, text) {
+  const url = refLink() || 'https://nightfaregame.com/', full = text + ' ' + url;
+  try { trace('share ' + kind); } catch (e) { /* no trace */ }
+  const copy = () => { const done = () => toast('Скопировано — вставь другу или в чат', 2.4); try { navigator.clipboard.writeText(full).then(done, () => toast(full, 5)); } catch (e) { toast(full, 5); } };
+  if (PLATFORM === 'vk') { vkBridge('VKWebAppShare', { link: url }, 60000).then((r) => { if (!r) copy(); }); return; }
+  if (PLATFORM === 'tg' && window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) { Telegram.WebApp.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text)); return; }
+  if (navigator.share) { navigator.share({ title: 'Ночной тариф', text, url }).catch((e) => { if (!e || e.name !== 'AbortError') copy(); }); return; }
+  copy();
+}
+const SHARE_BTN = (id) => `<button id="${id}" class="btn" type="button">📣 Поделиться</button>`;
 function friendsHtml() {
   const S = store.get('nf-ref'), how = '<p class="note">Друг заходит по твоей ссылке (или вводит твой код здесь, во вкладке «Друзья»), входит в профиль и проходит 3 миссии — вам обоим по <b>500 монет</b>. До 50 друзей.</p>';
   let mine;
@@ -14766,8 +14790,8 @@ function setGfx(v) {
   GFX.pref = v; GFX.chosen = true; try { localStorage.setItem('nf-gfx', v); } catch (e) { /* storage unavailable */ }
   PERF_SAVED = 0; try { localStorage.removeItem('nf-perf'); } catch (e) { /* storage unavailable */ }
   perf.up = false; perf.noUp = false; perf.warned = false; perf.t = 0; perf.frames = 0; perf.slow = 0; perf.cool = 1; perf.level = PERF_BASE();
-  if (!composer) setupPost(); if (bloomPass) bloomPass.enabled = true; renderer.shadowMap.autoUpdate = true; perf.shadowSkip = false;
-  renderer.setPixelRatio(HD() ? PR_HD : PR_BASE); resize();
+  if (!composer || composer.lite) setupPost(); if (bloomPass) bloomPass.enabled = true; renderer.shadowMap.autoUpdate = true; perf.shadowSkip = false;
+  renderer.setPixelRatio(HD() ? PR_HD : PR_BASE); RS.pr = 0; resize();
   perfShadow(HD() ? (isTouch ? 2048 : 4096) : isTouch ? 1024 : 2048); perfApply();
   toast(HD() ? 'Графика HD: полное разрешение и чёткие тени. Сглаживание и подробные машины — после перезапуска игры' : 'Графика: авто — игра сама подбирает качество под устройство', 3.2);
 }
@@ -14778,7 +14802,7 @@ function pauseGame() {
   const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? epHead() : 'Эпизод 1';
   showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
     ${backHintHtml()}<p class="lead">Прогресс сохраняется по миссиям: выйдешь в меню — продолжишь с начала этой миссии.</p>
-    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button>${PLATFORM === 'max' && isTouch ? `<button id="pScreen" class="btn" type="button">${ROTF ? 'Экран: вертикально' : 'Экран: горизонтально'}</button>${ROTF ? '<button id="pFlip" class="btn" type="button">Перевернуть на 180°</button>' : ''}` : ''}<button id="pGfx" class="btn" type="button">Графика: ${HD() ? 'HD' : 'Авто'}</button><button id="pSnd" class="btn" type="button">Звук: ${muted ? 'выкл' : 'вкл'}</button><button id="pProf" class="btn" type="button">Профиль: машина, магазин</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
+    <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button>${state.ep === 91 && MIS && MIS.sE ? SHARE_BTN('pShare') : ''}<button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button>${PLATFORM === 'max' && isTouch ? `<button id="pScreen" class="btn" type="button">${ROTF ? 'Экран: вертикально' : 'Экран: горизонтально'}</button>${ROTF ? '<button id="pFlip" class="btn" type="button">Перевернуть на 180°</button>' : ''}` : ''}<button id="pGfx" class="btn" type="button">Графика: ${HD() ? 'HD' : 'Авто'}</button><button id="pSnd" class="btn" type="button">Звук: ${muted ? 'выкл' : 'вкл'}</button><button id="pProf" class="btn" type="button">Профиль: машина, магазин</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
     pResume: () => { hideModal(); state.mode = pausedFrom; state.fireLock = true; },
     pView: () => { cycleView(); $('pView').textContent = 'Камера: ' + VIEW_NAMES[footView]; },
     pSeason: () => { $('pSeason').textContent = wxCyclePref(); updateWeather(0.016, focus); toast(wxLabel(), 1.6); },
@@ -14788,6 +14812,7 @@ function pauseGame() {
     pSnd: () => { setMuted(!muted); $('pSnd').textContent = 'Звук: ' + (muted ? 'выкл' : 'вкл'); },
     pProf: () => openProfile('garage'),
     pMenu: () => { hideModal(); missionLog('quit', 'вышел в меню'); showSelect(); },
+    pShare: () => shareRecord('shift', `Моя смена в «Ночном тарифе»: ${MIS.sN} ${MIS.sN === 1 ? 'поездка' : MIS.sN < 5 ? 'поездки' : 'поездок'}, ${MIS.sE} монет 🚕${MIS.sE >= (PROF.st.shiftBest || 0) ? ' Рекорд!' : ''} Сможешь больше?`),
   });
 }
 // the «Профиль» button next to «Занос»: pause and open the garage (change the car, shop, or leave to the menu from the pause)
@@ -15467,7 +15492,7 @@ Object.assign(GEN, {
         if (ride.q === 'sick' && (acc > 26 || yaw * Math.abs(vf) > 12)) { ride.tip = Math.max(0, ride.tip - dt * 14); if (warn <= 0) { warn = 2; toast('Пассажир: Ох… потише…', 1.2); } }
         if (ride.via && !ride.viaDone) { setBeam(ride.via.v); if (pc.pos.distanceTo(ride.via.v) < 16) { ride.viaDone = true; toast('Турист: Как красиво! Теперь можно ехать.', 1.6); } return; }
         setBeam(ride.to.v);
-        if (pc.pos.distanceTo(ride.to.v) < 10) { arriveBrake(dt); if (v < 12) { const fare = c.fare || 40, tip = Math.round(ride.tip), stars = tip > ride.tip0 * 0.6 ? 3 : tip > ride.tip0 * 0.25 ? 2 : 1; earned += fare + tip; addCoins(fare + tip); scene.remove(ride.mk); toast(`${'★'.repeat(stars)}${'☆'.repeat(3 - stars)} · ${fare} + ${tip} чаевых`, 2); ride = null; n++; if (c.endless) { PROF.st.shiftRides = (PROF.st.shiftRides || 0) + 1; if (earned > (PROF.st.shiftBest || 0)) { if (PROF.st.shiftBest && !this.rec) { this.rec = true; toast('Новый рекорд смены!', 2); } PROF.st.shiftBest = earned; } saveProfile(); } if (!c.endless && n >= c.n) return done(); newHail(); } }
+        if (pc.pos.distanceTo(ride.to.v) < 10) { arriveBrake(dt); if (v < 12) { const fare = c.fare || 40, tip = Math.round(ride.tip), stars = tip > ride.tip0 * 0.6 ? 3 : tip > ride.tip0 * 0.25 ? 2 : 1; earned += fare + tip; addCoins(fare + tip); scene.remove(ride.mk); toast(`${'★'.repeat(stars)}${'☆'.repeat(3 - stars)} · ${fare} + ${tip} чаевых`, 2); ride = null; n++; if (c.endless) { this.sN = n; this.sE = earned; PROF.st.shiftRides = (PROF.st.shiftRides || 0) + 1; if (earned > (PROF.st.shiftBest || 0)) { if (PROF.st.shiftBest && !this.rec) { this.rec = true; toast('Новый рекорд смены!', 2); } PROF.st.shiftBest = earned; } saveProfile(); } if (!c.endless && n >= c.n) return done(); newHail(); } }
       },
       hud() { return { bars: ride ? [{ label: `Чаевые: ${Math.round(ride.tip)}`, frac: ride.tip / ride.tip0, color: '#f2c21a' }] : [], timer: c.endless ? `Поездок ${n} · ${earned} монет · рекорд ${Math.max(earned, PROF.st.shiftBest || 0)}` : `${fmt(left)} · заказ ${Math.min(n + 1, c.n)}/${c.n}`, bad: !c.endless && left < 25 }; } };
   },
@@ -15630,8 +15655,9 @@ function derbyDone() {
   if (rec) { PROF.st.derbyBest = t; saveProfile(); }
   state.mode = 'end'; $('hud').hidden = true; $('touch').hidden = true;
   showModal(`<div class="kicker">Дерби · 1 минута</div><h2 class="h2 good">6 машин за ${fmt(t)}</h2><p class="lead">${rec && best ? 'Новый рекорд!' : rec ? 'Первый результат — побей его.' : `Рекорд: ${fmt(best)}.`} Каждая разбитая машина — +8 секунд и +25 монет.</p>
-    <div class="btns"><button id="dAgain2" class="btn primary" type="button">Ещё раз</button><button id="dMenu2" class="btn" type="button">В меню</button></div>`,
-    { dAgain2: () => { hideModal(); quickDerby(); }, dMenu2: () => { hideModal(); showSelect(); } });
+    <div class="btns"><button id="dAgain2" class="btn primary" type="button">Ещё раз</button>${SHARE_BTN('dShare2')}<button id="dMenu2" class="btn" type="button">В меню</button></div>`,
+    { dAgain2: () => { hideModal(); quickDerby(); }, dMenu2: () => { hideModal(); showSelect(); },
+      dShare2: () => shareRecord('derby', `${gx('Разбил', 'Разбила')} 6 машин за ${fmt(t)} в «Ночном тарифе» 💥${rec ? ' Это мой рекорд.' : ''} Побьёшь?`) });
 }
 // the end of an episode: the first «next» button counts down from 10 and presses itself; any other tap, a scroll or a hidden tab stops it
 function autoNext(ids) {
