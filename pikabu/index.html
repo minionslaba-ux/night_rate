@@ -877,7 +877,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v167'; window.__errs = [];
+window.APP_VER = 'v168'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6590,7 +6590,7 @@ function missionLog(ev, reason, extra) {
     if (ev === 'start') { pwrClear(); FX.pend = { ex: String((extra && extra.title) || ''), ep: state.ep, t: performance.now() };
       SECOND.used = false; SECOND.fn = null; if (TD.car) TD.used = true; MLOG.t0 = performance.now(); MLOG.open = true; MLOG.type = (extra && extra.type) || ''; MLOG.title = (extra && extra.title) || (MIS && MIS.title) || ''; MLOG.ep = state.ep; MLOG.ch = state.ep >= 2 ? state.ch : state.act; MLOG.key = diffKey();
       MLOG.gt0 = state.time; MLOG.dmg0 = DIFF.dmg; MLOG.par = (extra && extra.par) || 150;
-      { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && (state.mode === 'drive' || state.mode === 'foot')) if (!document.body.classList.contains('hud-s')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 3800); }   /* v141: after the title card */ }
+      { const st = (PROF.stars || {})[MLOG.ep + ':' + MLOG.ch]; setTimeout(() => { if (MLOG.open && !freeEp(MLOG.ep) && (state.mode === 'drive' || state.mode === 'foot')) if (!document.body.classList.contains('hud-s')) toast(`★ пройти · ★ быстрее ${fmtT(MLOG.par)} · ★ почти без урона${st ? ` · у тебя ${starsLine(st)}${st.t ? ', рекорд ' + fmtT(st.t) : ''}` : ''}`, 3.4); }, 3800); }   /* v141: after the title card */ }
     else { if (!MLOG.open) return; MLOG.open = false; }
     const all = store.get('nf-tries') || {};
     const row = { ver: window.APP_VER, sid: MLOG.sid, ep: MLOG.ep, ch: MLOG.ch, title: String(MLOG.title).slice(0, 90), mtype: String(MLOG.type).slice(0, 20), ev,
@@ -6605,9 +6605,12 @@ function missionLog(ev, reason, extra) {
 const PAR_BY_TYPE = { arena: 150, deliver: 110, escape: 130, stop: 120, tail: 160, hunt: 140, storm: 170, helichase: 160, train: 130, plane: 140 };
 function missionPar(c) { return Math.round((c && c.par) || (c && c.secs ? c.secs * 0.65 : PAR_BY_TYPE[c && c.type] || 150)); }
 const fmtT = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec) % 60).padStart(2, '0')}`;
+// v168: the free shift (91) and the derby (92) are not story episodes — no «Эпизод 91» in titles, no stars for a time par
+const freeEp = (ep) => !!(EPS[ep] && EPS[ep].free);
+const epHead = () => state.ep === 90 ? 'Задание дня' : freeEp(state.ep) ? (MIS && MIS.title) || '' : `Эпизод ${state.ep} · ${MIS.title}`;
 function starsLine(st) { return '★'.repeat(st.s || 0) + '☆'.repeat(3 - (st.s || 0)); }
 function missionStars() {
-  if (!MLOG.open || (MIS && MIS.online)) return null;
+  if (!MLOG.open || (MIS && MIS.online) || freeEp(MLOG.ep)) return null;
   const t = Math.max(1, state.time - (MLOG.gt0 || 0)), dmg = DIFF.dmg - (MLOG.dmg0 || 0), fast = t <= MLOG.par, clean = dmg <= 20;
   const s = 1 + (fast ? 1 : 0) + (clean ? 1 : 0), key = MLOG.ep + ':' + MLOG.ch;
   PROF.stars = PROF.stars || {}; const old = PROF.stars[key] || { s: 0, t: 0 }, rec = !old.t || t < old.t;
@@ -7098,7 +7101,7 @@ function fxPending() {
   const q = FX.pend; if (state.mode !== 'drive' && state.mode !== 'foot') { if (performance.now() - q.t > 120e3) FX.pend = null; return; }
   FX.pend = null; uxEnter($('hud')); if (isTouch) uxEnter($('touch')); if (MIS && MIS.online) return;
   const mt = String((MIS && MIS.title) || ''), t0 = / · /.test(mt) && !/^Пролог/.test(mt) ? mt : q.ex, ttl = t0.replace(/^((Эпизод \d+|Миссия \d+|Задание дня)\s*·\s*)+/i, '');
-  const kick = q.ep >= 90 ? 'Задание дня' : q.ep === 1 ? 'Эпизод 1' : `Эпизод ${q.ep}` + (state.ch ? ` · миссия ${state.ch}` : '');
+  const kick = freeEp(q.ep) ? (q.ep === 91 ? 'Без сюжета' : 'Быстрая игра') : q.ep >= 90 ? 'Задание дня' : q.ep === 1 ? 'Эпизод 1' : `Эпизод ${q.ep}` + (state.ch ? ` · миссия ${state.ch}` : '');
   if (ttl && !/^миссия \d+$/i.test(ttl)) fxTitle(kick, ttl);
 }
 const fxLite = () => (typeof perf !== 'undefined' && perf.level >= 6 && !HD()) || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -7870,7 +7873,7 @@ function failChapter(title, text) {
   if (second) {
     const timer = /Не успел|Не уложился|Время/.test(title + text);
     showModal(`
-    <div class="kicker">${state.ep === 90 ? 'Задание дня' : `Эпизод ${state.ep} · ${MIS.title}`}</div>
+    <div class="kicker">${epHead()}</div>
     <h2 class="h2 bad">${title}</h2>
     <p class="lead">${text}</p>${backHintHtml()}
     <div class="btns"><button id="mSecond" class="btn primary" type="button">${PROF.noAds || missionsDone() < 3 ? 'Ещё шанс' : 'Ещё шанс за рекламу'} · ${timer ? '+25 секунд' : 'с этого места'}</button><button id="mRetry" class="btn" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>
@@ -7882,7 +7885,7 @@ function failChapter(title, text) {
     return;
   }
   showModal(`
-    <div class="kicker">${state.ep === 90 ? 'Задание дня' : `Эпизод ${state.ep} · ${MIS.title}`}</div>
+    <div class="kicker">${epHead()}</div>
     <h2 class="h2 bad">${title}</h2>
     <p class="lead">${text}</p>${backHintHtml()}
     <div class="btns"><button id="mRetry" class="btn primary" type="button">Начать миссию заново</button><button id="mMenu" class="btn" type="button">В меню</button></div>`, {
@@ -9728,7 +9731,7 @@ function cineUpdate(dt) {
   // a title card the first time a chapter goes live
   const live = (state.mode === 'drive' || state.mode === 'foot') && state.ep >= 2 && MIS && MIS.title && !MIS.online && !ONL.on;
   const key = live ? state.ep + ':' + state.ch : CINE.key;
-  if (live && key !== CINE.key) { CINE.key = key; cineTitle(`Эпизод ${state.ep} · ${EP_NAMES[state.ep] || ''}`, MIS.title); }
+  if (live && key !== CINE.key) { CINE.key = key; cineTitle(state.ep === 91 ? 'Без сюжета · вся выручка твоя' : freeEp(state.ep) ? 'Быстрая игра' : `Эпизод ${state.ep} · ${EP_NAMES[state.ep] || ''}`, MIS.title); }
   if (state.mode === 'preview' || state.mode === 'select') CINE.key = '';
   CINE.titleT = Math.max(0, CINE.titleT - dt);
   const bars = state.mode === 'dialog' && CINE.dlg;   // the title card no longer hides the HUD: the map and the task are there from the first second
@@ -14790,7 +14793,7 @@ function pauseGame() {
   if (state.mode !== 'drive' && state.mode !== 'foot') return;
   pausedFrom = state.mode; state.mode = 'paused'; setEngine(0, false);
   if (document.pointerLockElement) document.exitPointerLock();
-  const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ${MIS.title}` : 'Эпизод 1';
+  const ttl = MIS && MIS.online ? `Открытый город · комната ${ONL.room}` : state.ep >= 2 && MIS ? epHead() : 'Эпизод 1';
   showModal(`<div class="kicker">${ttl}</div><h2 class="h2">Пауза</h2>
     ${backHintHtml()}<p class="lead">Прогресс сохраняется по миссиям: выйдешь в меню — продолжишь с начала этой миссии.</p>
     <div class="btns"><button id="pResume" class="btn primary" type="button">Продолжить</button><button id="pView" class="btn" type="button">Камера: ${VIEW_NAMES[footView]}</button><button id="pSeason" class="btn" type="button">${WX.pref === 'auto' ? 'Время года: по календарю' : 'Время года: ' + SEASONS[WX.pref]}</button>${PLATFORM === 'max' && isTouch ? `<button id="pScreen" class="btn" type="button">${ROTF ? 'Экран: вертикально' : 'Экран: горизонтально'}</button>${ROTF ? '<button id="pFlip" class="btn" type="button">Перевернуть на 180°</button>' : ''}` : ''}<button id="pGfx" class="btn" type="button">Графика: ${HD() ? 'HD' : 'Авто'}</button><button id="pSnd" class="btn" type="button">Звук: ${muted ? 'выкл' : 'вкл'}</button><button id="pProf" class="btn" type="button">Профиль: машина, магазин</button><button id="pMenu" class="btn" type="button">В меню</button></div>`, {
@@ -15027,7 +15030,7 @@ function showDead() {
   state.mode = 'dead'; setEngine(0, false); runEnd('death', state.act === 1 ? 'машина' : 'пешком');
   const act = state.act, rk = state.ep >= 2 ? 'c' + state.ch : act, used = state.reviveUsed[rk];
   showModal(`
-    <div class="kicker">${state.ep >= 2 && MIS ? `Эпизод ${state.ep} · ` + MIS.title : act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
+    <div class="kicker">${state.ep >= 2 && MIS ? epHead() : act === 1 ? 'Акт 1 · Погоня' : 'Акт 2 · Склад №7'}</div>
     <h2 class="h2 bad">${act === 1 ? 'Машина разбита' : CH.name + ' ' + gx('ранен', 'ранена')}</h2>
     <p class="lead">${state.ep >= 2 ? (act === 1 ? 'Такси больше не едет, а погоня уже рядом.' : 'Бой ещё не окончен.') + ' Можно продолжить с этого места, начать миссию заново или выйти в меню — прогресс сохранится.' : act === 1 ? '«Шакалы» уже тормозят рядом. Кейс ещё у тебя.' : 'Двор ещё держат «Шакалы». Кейс пока у тебя.'}</p>${backHintHtml()}
     <div class="btns">
