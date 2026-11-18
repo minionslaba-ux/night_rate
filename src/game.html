@@ -855,7 +855,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v165'; window.__errs = [];
+window.APP_VER = 'v166'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -865,8 +865,11 @@ window.APP_VER = 'v165'; window.__errs = [];
 <script src="lib/three/build/three.min.js"></script>
 <script>/* the game's own copy first (a foreign server may hang); the CDN only if it failed */ if (!window.THREE) document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"><\/script>');</script>
 <script src="lib/supabase.js"></script>
-<script>/* the game's own copy first; the CDNs only if it failed */ if (!window.supabase) document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"><\/script>');</script>
-<script>if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"><\/script>');</script>
+<script>/* v166: the game's own copy first; if it failed, the CDNs in the background — never document.write: a CDN that hangs
+   froze the start on «Загрузка города…» (Android 10, Chrome 150, 17.11 — twice). The server parts call cloudInit() later anyway */
+if (!window.supabase) (function () { var u = ['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js', 'https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js'], i = 0;
+  function next() { if (window.supabase || i >= u.length) return; var sc = document.createElement('script'); sc.async = true; sc.src = u[i++]; sc.onerror = next; document.head.appendChild(sc); }
+  next(); })();</script>
 <script src="lib/three/examples/js/postprocessing/EffectComposer.js"></script>
 <script src="lib/three/examples/js/postprocessing/RenderPass.js"></script>
 <script src="lib/three/examples/js/shaders/CopyShader.js"></script>
