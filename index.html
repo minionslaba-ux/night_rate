@@ -2717,6 +2717,49 @@ function hipRoof(b, x0, z0, x1, z1, y, h, inset, per, colr, flatCol) {
   quadB(b, a, d, D, A, [0, 0, U(z1 - z0), 1], colr);    // -x side
   if (x1 - inset > x0 + inset && z1 - inset > z0 + inset) boxB(B.roof, x0 + inset, t - 0.05, z0 + inset, x1 - inset, t, z1 - inset, { col: flatCol || col(0x2a2c30), sides: false });
 }
+// v167 — foliage: the crowns were smooth balls of one colour (lollipops). In the shader, no new downloads: the surface is pushed in and
+// out by 3D noise of the world position (a lumpy crown; position-only, so merged pieces do not crack apart), leaf clumps light and
+// dark with gaps between them, the underside and the inside darker, and the autumn glow only on the lit clumps.
+const NOISE3_GLSL = `float h3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float n3(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y),
+               mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), f.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
+`;
+function leafDetail(m) {
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = NOISE3_GLSL + 'varying vec3 vWPl; varying vec3 vWNl;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      {
+        vec4 wq = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          wq = instanceMatrix * wq;
+        #endif
+        vec3 wp = (modelMatrix * wq).xyz;
+        vec3 dsp = vec3(n3(wp * 0.55), n3(wp * 0.55 + 17.3), n3(wp * 0.55 + 31.7)) - 0.5;
+        dsp += (vec3(n3(wp * 1.4 + 5.1), n3(wp * 1.4 + 9.7), n3(wp * 1.4 + 2.3)) - 0.5) * 0.45;
+        transformed += dsp * 1.1;
+      }`).replace('#include <project_vertex>', `#include <project_vertex>
+      {
+        vec4 wq2 = vec4(transformed, 1.0); vec3 wn2 = objectNormal;
+        #ifdef USE_INSTANCING
+          wq2 = instanceMatrix * wq2; wn2 = mat3(instanceMatrix) * wn2;
+        #endif
+        vWPl = (modelMatrix * wq2).xyz; vWNl = normalize(mat3(modelMatrix) * wn2);
+      }`);
+    sh.fragmentShader = NOISE3_GLSL + 'varying vec3 vWPl; varying vec3 vWNl;\nfloat leafK = 1.0;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      {
+        float cl = n3(vWPl * 2.6) * 0.6 + n3(vWPl * 7.0) * 0.4;
+        float clump = smoothstep(0.25, 0.75, cl);
+        float under = smoothstep(-0.8, 0.7, normalize(vWNl).y);
+        leafK = mix(0.6, 1.12, clump) * mix(0.55, 1.0, under);
+        vec3 c = diffuseColor.rgb * leafK;
+        float l = dot(c, vec3(0.299, 0.587, 0.114));
+        c = mix(vec3(l), c, 0.92) * mix(vec3(0.92, 1.0, 0.92), vec3(1.06, 1.0, 0.9), clump);
+        diffuseColor.rgb = c;
+      }`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      totalEmissiveRadiance *= leafK * 0.75;`);
+  };
+  m.customProgramCacheKey = () => 'leafDetail';
+}
 // a street tree: a trunk and a crown of three overlapping balls
 function cTree(x, z, s, tint) {
   const k = s || 1, c = tint || col(0x2c4e2c);
@@ -3711,6 +3754,7 @@ function buildWorld() {
   KIT.walkMat = (meshB(B.walk, new THREE.MeshStandardMaterial({ map: pavingTex, vertexColors: true, color: 0x9a948c, roughness: 0.6, envMapIntensity: 0.9 }), false) || {}).material;
   KIT.grassMat = (meshB(B.grass, new THREE.MeshStandardMaterial({ map: grassTex, vertexColors: true, roughness: 1 }), false) || {}).material;
   KIT.leafMat = (meshB(B.leaf, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.3 }), true) || {}).material;
+  if (KIT.leafMat) leafDetail(KIT.leafMat);   // v167: lumpy crowns with leaf clumps instead of smooth lollipops
   meshB(B.mark, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), false);
   meshB(B.container, new THREE.MeshStandardMaterial({ map: ribTex, vertexColors: true, roughness: 0.6, metalness: 0.3 }), true);
   meshB(B.wood, new THREE.MeshStandardMaterial({ map: woodTex, vertexColors: true, roughness: 0.85 }), true);
