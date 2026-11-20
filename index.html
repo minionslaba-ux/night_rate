@@ -221,6 +221,8 @@ body.ux-lite #modal.ux-in, body.ux-lite #modal.ux-in #modalCard, body.ux-lite .u
 /* Touch controls */
 .touch { position: fixed; inset: 0; pointer-events: none; }
 .joy { position: absolute; left: calc(22px + var(--sal)); bottom: calc(22px + var(--sab)); width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.07); border: 2px solid var(--line); pointer-events: auto; touch-action: none; }
+.go-hint { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); z-index: 30; pointer-events: none; padding: 12px 20px; border-radius: 14px; background: rgba(255,196,40,.94); color: #1a1408; font: 800 20px/1.25 system-ui, sans-serif; text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,.5); animation: goPulse 1s ease-in-out infinite; max-width: calc(100% - 32px); }
+@keyframes goPulse { 0%,100% { transform: translateX(-50%) scale(1); opacity: 1; } 50% { transform: translateX(-50%) scale(1.07); opacity: .85; } }
 .joy-zone { position: absolute; left: 0; bottom: 0; width: 46%; height: 62%; pointer-events: auto; touch-action: none; }
 .joy.float { opacity: 1; transition: none; }
 .knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: rgba(255,196,61,.75); }
@@ -783,6 +785,7 @@ setTimeout(function () {
   <div id="cabArrow" class="cab-arrow" hidden><svg id="cabArrowI" viewBox="-50 -50 100 100" aria-hidden="true"><path d="M0 -44 L34 -4 L14 -4 L14 40 L-14 40 L-14 -4 L-34 -4 Z" fill="#4dffa6" fill-opacity=".85" stroke="#0b0d1f" stroke-opacity=".7" stroke-width="4" stroke-linejoin="round"/></svg></div>
   <div id="speedo" class="speedo"><b id="speed">0</b><small>км/ч</small></div>
   <div id="toast" class="toast" hidden></div>
+  <div id="goHint" class="go-hint" hidden></div>
   <div id="driftHud" class="drift-hud" hidden></div>
   <div id="hint" class="hint"></div>
 </div>
@@ -884,7 +887,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v172'; window.__errs = [];
+window.APP_VER = 'v173'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6721,7 +6724,7 @@ let hurt = 0;
 const NOVICE = { on: false };   // the first ride of a player with no mission won (see startMission)
 function damagePlayer(d) {
   if (state.act === 1 && typeof ONL !== 'undefined' && ONL.on) { careWear(d); if (d >= 1.5) HITS.n++; }
-  else if (d > 0) { d *= diffMult() * (NOVICE.on && state.ep === 1 ? 0.5 : 1); DIFF.dmg += d; }
+  else if (d > 0) { d *= diffMult() * (NOVICE.on && state.ep === 1 ? 0.5 : 1) * (MIS && MIS.dmgK || 1); DIFF.dmg += d; }
   if (state.invuln > 0 || PROF.god) return;
   if (state.act === 1) { pc.hp -= d * P.carArmor; hitFx(d); } else { hero.hp -= d * P.footArmor; }
   hurt = Math.min(1, hurt + d / 20); shake = Math.min(1.2, shake + 0.15);
@@ -6754,6 +6757,7 @@ function toast(text, sec) { const el = $('toast'); el.textContent = text; el.hid
 let objT = 0;   // когда (performance.now)  свернуть подсказку задания в одну строку (в открытом городе)
 function setObjective(t) { $('objText').textContent = t; $('objective').classList.remove('min'); objT = performance.now() + 8000; }
 function showModal(html, handlers) {
+  goHintShow(false);
   const wasHidden = $('modal').hidden; $('modalCard').innerHTML = html; $('modal').hidden = false; $('modal').classList.remove('over'); fxCount($('modalCard')); if (wasHidden) uxEnter($('modal'), 'ux-in');
   for (const id in handlers) { const b = $(id); if (b) b.addEventListener('click', handlers[id]); }
   // a guest on the website: under the mission summary, a short button to keep the progress (opens the sign-in)
@@ -7204,6 +7208,15 @@ function novGuide(d, dt) {
   if (NOVG.away >= 2 && NOVG.cd <= 0) { NOVG.cd = 15; NOVG.away = 0; toast(`Склад в другой стороне — разворачивайся! Следи за зелёной стрелкой (${Math.round(d / 10) * 10} м)`, 3.4); }
 }
 
+// v173: 9 of 28 players who quit the first mission early never moved the car — a big pulsing hint after 4 s standing still
+var GOH = { t: 0, on: false };   // var: showModal/clearStage may run before this line at boot
+function goHintShow(on) { const el = $('goHint'); if (!el || !GOH || GOH.on === on) return; GOH.on = on; if (on) el.textContent = isTouch ? 'Газ: тяни джойстик слева вверх ▲' : 'Газ: жми W или ↑'; el.hidden = !on; }
+function goHintTick(dt) {
+  if (state.mode !== 'drive' || pc.dead) { GOH.t = 0; return goHintShow(false); }
+  if (Math.abs(pc.vf) > 2) { GOH.t = 0; return goHintShow(false); }
+  GOH.t += dt; if (GOH.t > 4) { if (!GOH.on) trace('gohint'); goHintShow(true); }
+}
+
 // v146: the menu showcase (daily reward, chest, starter pack) was never seen: after a win players press «Эпизод 2 →» and never come
 // back to the menu (0 shows of any offer on Pikabu). The summary of a won mission now carries what is waiting for the player today.
 function endExtras() {
@@ -7315,7 +7328,7 @@ function skipDialog() { if (state.mode !== 'dialog' || !dlg.lines.length) return
 // ---------------- act 1: the chase ----------------
 function setupAct1() {
   heroLight.intensity = 0;
-  state.act = 1; state.spawnT = 6; state.firstChase = false; state.home = false; state.cp = 0; RADIO.q = [];
+  state.act = 1; state.spawnT = 6; state.firstChase = false; state.home = false; state.cp = 0; state.rescue = false; if (GOH) GOH.t = 0; goHintShow(false); RADIO.q = [];
   for (const e of enemyCars) scene.remove(e.g); enemyCars.length = 0;
   clearBullets(); trail.length = 0;
   if (!pc) { const m = makeCar(0xffb703, true); pc = Object.assign(m, { pos: new V3(), vel: new V3(), h: 0 }); }
@@ -7511,12 +7524,16 @@ function updateDrive(dt) {
   // v157: three marks on the way, +25 coins each (something won even by those who stop in the second minute)
   if (state.ep === 1 && state.cp < 2) { const dG = pc.pos.distanceTo(GATE); if (state.cp === 0 && dG < 300) { state.cp = 1; addCoins(25); toast('Отметка 1/3 — так держать! +25 монет', 1.8); } else if (state.cp === 1 && dG < 230) { state.cp = 2; addCoins(25); toast('Отметка 2/3 — полпути позади! +25 монет', 1.8); } }
   if (state.ep === 1 && !state.home && pc.pos.distanceTo(GATE) < 160) { state.home = true; state.cp = 3; addCoins(25); if (pc.hp < 45) { pc.hp += 25; toast('Отметка 3/3 — склад рядом! Второе дыхание: +25 прочности', 2.4); } else toast('Отметка 3/3 — склад рядом, дожми! +25 монет', 2); }
+  // v173: one rescue per first mission: the car almost wrecked → Марк on the radio, +50 (9 cars wrecked on the way, 13–20.11)
+  if (state.ep === 1 && !state.rescue && pc.hp > 0 && pc.hp < 22) { state.rescue = true; pc.hp = Math.min(100, pc.hp + 50); sfx.coin(); radioSay([['mark', 'Держись! Скинул тебе ремкомплект — машина подлатана, +50 прочности. Больше не дам.']]); RADIO.gap = 0; }
+  if (state.ep === 1) goHintTick(dt);
   if (state.ep === 1) { const dG = pc.pos.distanceTo(GATE); if (dG < 11) arriveAtYard(); else if (NOVICE.on) novGuide(dG, dt); }
   else if (MIS) MIS.update(dt);
   setEngine(pc.vf, true);
 }
 
 function arriveAtYard() {
+  goHintShow(false);
   pc.vel.set(0, 0, 0); arrow.visible = false; setEngine(0, false);
   const nCh = enemyCars.length;
   for (const e of enemyCars) { explode(e.pos, NOVICE.on ? 1 : 0.6); scene.remove(e.g); } enemyCars.length = 0; clearBullets();
@@ -7721,7 +7738,7 @@ const LOOKS = {
 // ---- stage helpers ----
 let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
-  doorSign(false);
+  doorSign(false); goHintShow(false);
   if (ONL.on) leaveRoom();
   removeHeli(); AIR.on = false; STA.on = false; TRK.on = false; VIL.on = false; LOW.on = false; CITY = null; if (typeof ctClear === 'function') ctClear(); if (typeof S3 !== 'undefined' && S3) s3Clear(); if (pc) pc.locked = false; state.lightsOff = false; TR.field = []; TR.count = 0; if (TRKX.lights.length) trkLights(0); tMarksClear();
   for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
@@ -8085,7 +8102,8 @@ function ch3() {
   const CAFE = new V3(160, 0, -120), PARK = new V3(0, 0, 40);
   setBeam(CAFE);
   MIS = {
-    title: 'Миссия 3 · Пассажир', leg: 1, chase: { max: 2 }, kills0: 0, need: 4, timer: 0, navName: 'Кафе на Восточной',
+    // v173: was 4 kills vs 3 pursuers at full damage — 1 of 7 players passed; now 2 kills, 2 pursuers, 60% damage
+    title: 'Миссия 3 · Пассажир', leg: 1, chase: { max: 2 }, kills0: 0, need: 2, timer: 0, dmgK: 0.6, navName: 'Кафе на Восточной',
     navGoal() {
       if (this.leg === 3) return PARK;
       if (this.leg === 2) { let b = null, bd = 1e9; for (const e of enemyCars) if (!e.dead && !e.script) { const d = e.pos.distanceTo(pc.pos); if (d < bd) { bd = d; b = e; } } return b ? b.pos : pc.pos; }
@@ -8093,10 +8111,10 @@ function ch3() {
     },
     update(dt) {
       if (this.leg === 1 && pc.pos.distanceTo(CAFE) < 11) {
-        this.leg = 2; this.kills0 = state.carKills; this.chase.max = 3; this.navName = 'Кафе на Восточной';
+        this.leg = 2; this.kills0 = state.carKills; this.chase.max = 2; this.navName = 'Кафе на Восточной';
         pc.vel.set(0, 0, 0); setBeam(null); state.spawnT = 2;
         playDialog([
-          ['leva', 'Гони! Они на соседней улице, три машины!'],
+          ['leva', 'Гони! Они на соседней улице, две машины!'],
           ['hero', 'Пристегнись. И держи свою тетрадь крепче.'],
           ['leva', 'Вера ждёт у фонтана в парке. Но с хвостом туда нельзя: сбрось их!'],
         ], () => { state.mode = 'drive'; setObjective(`Отбейся от погони: сбей ${this.need} машины «Шакалов».`); });
