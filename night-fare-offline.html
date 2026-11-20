@@ -884,7 +884,7 @@ setTimeout(function () {
 </div>
 
 <script>
-window.APP_VER = 'v171'; window.__errs = [];
+window.APP_VER = 'v172'; window.__errs = [];
 (function () {
   function add(m, p) { if (window.__errs.length < 8) window.__errs.push({ m: String(m).slice(0, 300), p: String(p || '').slice(0, 160) }); if (window.__errFlush) window.__errFlush(); }
   addEventListener('error', function (e) { if (e && e.message) add(e.message, (e.filename || '').split('/').pop() + ':' + (e.lineno || 0)); });
@@ -6405,6 +6405,22 @@ function navFinish(pos) {
     if (dot < 0.7) NAV.turn = cr > 0 ? 1 : -1;
   }
 }
+// v172: the warehouse door after the yard fight — 3 players in 3 days cleared the yard and never found the door. A big «ВХОД»
+// sign over it (seen through walls), the door counts from 8 m instead of 4, and every 12 s a hint with the distance
+let DOOR_SIGN = null, doorHintT = 0;
+function doorSign(on) {
+  if (!on) { if (DOOR_SIGN) { scene.remove(DOOR_SIGN); DOOR_SIGN = null; } return; }
+  if (DOOR_SIGN) return;
+  const tex = canvasTex(512, 256, (g, w, h) => { g.fillStyle = 'rgba(255,210,58,0.95)'; g.beginPath(); g.roundRect ? g.roundRect(16, 16, w - 32, 150, 28) : g.rect(16, 16, w - 32, 150); g.fill();
+    g.fillStyle = '#111'; g.font = 'bold 104px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('ВХОД', w / 2, 94);
+    g.fillStyle = 'rgba(255,210,58,0.95)'; g.beginPath(); g.moveTo(w / 2 - 60, 176); g.lineTo(w / 2 + 60, 176); g.lineTo(w / 2, 246); g.closePath(); g.fill(); });
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false }));
+  sp.scale.set(5.2, 2.6, 1); sp.position.set(DOOR.x, 4.6, DOOR.z + 1.5); sp.renderOrder = 999; scene.add(sp); DOOR_SIGN = sp; doorHintT = 6;
+}
+function doorHint(dt) {
+  if (!DOOR_SIGN || !hero) return; DOOR_SIGN.position.y = 4.6 + Math.sin(state.t * 3) * 0.25;
+  doorHintT -= dt; if (doorHintT <= 0) { doorHintT = 12; const d = Math.round(hero.pos.distanceTo(DOOR)); if (d > 8) toast(`Вход в склад — ${d} м: иди к жёлтой табличке «ВХОД»`, 2.6); }
+}
 function setBeam(v) { beam.visible = !!v; if (v) beam.position.set(v.x, 45, v.z); }
 
 // ---------------- physics helpers ----------------
@@ -7545,6 +7561,7 @@ function spawnEnemy(x, z, boss, cfg) {
 const aimPlane = new THREE.Plane(new V3(0, 1, 0), -1.0), ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), aimPt = new V3();
 const QE_HINT = { done: false };
 function updateFoot(dt) {
+  doorHint(dt);
   const mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.x;
   const mz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + joy.y;
   const look3 = curView() !== 'top';
@@ -7660,9 +7677,9 @@ function updateFoot(dt) {
         setObjective('Останови бригадира «Шакалов». Аптечка во дворе.');
       });
     } else if (state.wave === 2) {
-      state.wave = 3; setBeam(DOOR); setObjective('Войди на склад и отдай кейс.'); toast('Двор чист', 1.6);
-    } else if (state.wave === 3 && hero.pos.distanceTo(DOOR) < 4) {
-      state.wave = 4; setBeam(null);
+      state.wave = 3; setBeam(DOOR); doorSign(true); setObjective('Войди на склад и отдай кейс — дверь под табличкой «ВХОД».'); toast('Двор чист', 1.6);
+    } else if (state.wave === 3 && hero.pos.distanceTo(DOOR) < 8) {
+      state.wave = 4; setBeam(null); doorSign(false);
       if (NOVICE.on) { playDialog([
         ['vera', `Браво, ${CH.name}. Кейс пустой — груз это ты. Нам нужен был водитель, который проедет через весь город и выживет.`],
         ['hero', 'Кто меня сдал?'],
@@ -7705,6 +7722,7 @@ const LOOKS = {
 // ---- stage helpers ----
 let stageCols = []; // colliders that belong to one chapter only
 function clearStage() {
+  doorSign(false);
   if (ONL.on) leaveRoom();
   removeHeli(); AIR.on = false; STA.on = false; TRK.on = false; VIL.on = false; LOW.on = false; CITY = null; if (typeof ctClear === 'function') ctClear(); if (typeof S3 !== 'undefined' && S3) s3Clear(); if (pc) pc.locked = false; state.lightsOff = false; TR.field = []; TR.count = 0; if (TRKX.lights.length) trkLights(0); tMarksClear();
   for (const c of stageCols) { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); } stageCols = [];
@@ -7980,7 +7998,7 @@ function chVera(intro) {
   clearStage(); state.ch = 1; ep2Save(1);
   const go = () => {
     for (const a of allies) scene.remove(a.g); allies.length = 0;
-    const cfg = { start: [140, -80, 'W'], limit: 50, k: 0.6, failTitle: 'Вере плохо', failText: 'Слишком резко. Разгоняйся и тормози плавно, повороты — на малой скорости, не быстрее 50 км/ч.',
+    const cfg = { start: [140, -80, 'W'], limit: 50, k: 0.6, speedCap: 14.5, soft: true, failTitle: 'Вере плохо', failText: 'Слишком резко. Разгоняйся и тормози плавно, повороты — на малой скорости, не быстрее 50 км/ч.',
       ouch: ['Эй, полегче!', 'Я не мешок с картошкой.', 'Потише на поворотах!'],
       pts: [
         { p: [0, -80], name: 'Центральная', say: [
@@ -7990,7 +8008,8 @@ function chVera(intro) {
         { p: [-120, 160], name: 'Порт' },
       ] };
     MIS = GEN.comfort(cfg, 'Миссия 1 · Вера в машине', () => {
-      finishChapter(1, 100, [
+      const bonus = Math.round(MIS.comfort); if (bonus > 0) toast(`Мягкая езда: +${bonus} монет`, 2);
+      finishChapter(1, 100 + bonus, [
         ['hero', 'Порт. Контейнеры, тишина и ни одной камеры. Идеальное логово.'],
         ['vera', 'Где-то там их накладные. Найди их.'],
         ['hero', 'Пешком так пешком.'],
@@ -8219,9 +8238,9 @@ function ch6() {
           setObjective('Победи Ворона.');
         });
       } else if (this.stage === 3 && this.boss && this.boss.dead && aliveFoes() === 0 && !spawnQueue.length) {
-        this.stage = 4; setBeam(DOOR); toast('Ворон повержен', 2); setObjective('Войди на склад. Диспетчер внутри.');
-      } else if (this.stage === 4 && hero.pos.distanceTo(DOOR) < 4) {
-        this.stage = 5; setBeam(null); addCoins(300);
+        this.stage = 4; setBeam(DOOR); doorSign(true); toast('Ворон повержен', 2); setObjective('Войди на склад. Диспетчер внутри.');
+      } else if (this.stage === 4 && hero.pos.distanceTo(DOOR) < 8) {
+        this.stage = 5; setBeam(null); doorSign(false); addCoins(300);
         playDialog([
           ['hero', 'Склад пустой. Только рация на столе.'],
           ['vera', `Браво. Ты снова ${gx('сделал', 'сделала')} всё ровно так, как я рассчитала.`],
@@ -13102,7 +13121,8 @@ Object.assign(GEN, {
     let leg = 0, comfort = 100, lastV = 0, lastH = pc.h, ouch = 0, hold = 0;
     const start = () => { setBeam(P_[leg].v); setObjective(`Довези плавно: ${P_[leg].name}. Не быстрее ${c.limit} км/ч, без рывков и резких поворотов.`); };
     start();
-    return { title, noFire: true, noFireMsg: 'С пассажиркой не стреляют', chase: { max: 0 }, get navName() { return P_[leg].name; }, navGoal: () => P_[leg].v,
+    // v172: c.speedCap — the car itself does not go faster; c.soft — no fail, the shaking only costs the bonus (c.soft: «Вера в машине», the 2nd mission of the game)
+    return { title, speedCap: c.speedCap, get comfort() { return comfort; }, noFire: true, noFireMsg: 'С пассажиркой не стреляют', chase: { max: 0 }, get navName() { return P_[leg].name; }, navGoal: () => P_[leg].v,
       update(dt) {
         const v = pc.vf || 0, acc = (v - lastV) / Math.max(dt, 1e-3), yaw = wrapA(pc.h - lastH) / Math.max(dt, 1e-3), lat = Math.abs(yaw * v);
         lastV = v; lastH = pc.h; ouch -= dt;
@@ -13110,11 +13130,12 @@ Object.assign(GEN, {
         if (pc.hp < (this.hp0 === undefined ? (this.hp0 = pc.hp) : this.hp0)) { pen += (this.hp0 - pc.hp) * 12; this.hp0 = pc.hp; }
         if (pen > 6 && ouch <= 0) { ouch = 1.6; toast(pick(c.ouch || ['Ой! Потише!', 'Аккуратнее, прошу…', 'Мне нехорошо…']), 1.2); }
         this.dbg = [Math.round(acc), Math.round(lat), Math.round(kmh())]; comfort = Math.max(0, comfort - pen * dt * (c.k || 1));
-        if (comfort <= 0) return failChapter(c.failTitle || 'Пассажирке плохо', c.failText || 'Слишком резко. Разгоняйся и тормози плавно, повороты — на малой скорости.');
+        if (comfort <= 0 && c.soft) { comfort = 0; if (!this.zeroHint) { this.zeroHint = true; toast('Вера морщится — бонуса за мягкую езду не будет. Но довезти всё равно надо', 2.6); } }
+        else if (comfort <= 0) return failChapter(c.failTitle || 'Пассажирке плохо', c.failText || 'Слишком резко. Разгоняйся и тормози плавно, повороты — на малой скорости.');
         if (pc.pos.distanceTo(P_[leg].v) < 11 && kmh() < 20) { hold += dt; if (hold > 0.35) { hold = 0; const q = P_[leg]; leg++; if (leg >= P_.length) return done(); if (q.say) playDialog(q.say.map(fixLine), () => { state.mode = 'drive'; start(); }); else { toast(`${q.name} — приехали`, 1.2); start(); } } }
         else hold = 0;
       },
-      hud() { return { bars: [{ label: `Комфорт пассажирки: ${Math.round(comfort)}%`, frac: comfort / 100, color: comfort < 35 ? '#ff4d6d' : '#7ad6ff' }], timer: `Не быстрее ${c.limit} км/ч`, bad: kmh() > c.limit }; } };
+      hud() { return { bars: [{ label: c.soft ? `Бонус за мягкую езду: +${Math.round(comfort)}` : `Комфорт пассажирки: ${Math.round(comfort)}%`, frac: comfort / 100, color: comfort < 35 ? '#ff4d6d' : '#7ad6ff' }], timer: `Не быстрее ${c.limit} км/ч`, bad: kmh() > c.limit }; } };
   },
   // lights off: slip past the security patrols and searchlights to the goal without being seen
   sneak(c, title, done) {
